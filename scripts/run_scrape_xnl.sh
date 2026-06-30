@@ -10,20 +10,23 @@ BOOKINGS_DST="${WWW_ROOT_DIR}/bookings.html"
 LOCK_FILE="${REPO_ROOT}/output/scrape_xnl.lock"
 BROWSER_SESSION_DIR="${REPO_ROOT}/browser_session"
 RSYNC_SCRIPT="${SCRIPT_DIR}/pond-rsync.sh"
+PLOT_SCRIPT_MODULE="pond/booking-plot.py"
 VENV_ACTIVATE="/home/jeremy/projects/heating/dev/ve312heat/bin/activate"
 PYTHON_BIN="${PYTHON_BIN:-python}"
 HEADLESS_FLAG=""
 RUN_RSYNC=0
+RUN_PLOT=0
 SCRAPE_ARGS=()
 USER_DATA_DIR="${BROWSER_SESSION_DIR}"
 
 usage() {
   cat <<'EOF'
-Usage: run_scrape_xnl.sh [--headless|--no-headless] [--rsync] [scrape_xnl options]
+Usage: run_scrape_xnl.sh [--headless|--no-headless] [--plot] [--rsync] [scrape_xnl options]
 
 Options:
   --headless     Run browser in headless mode.
   --no-headless  Force browser to run with UI.
+  --plot         Generate booking plots for Men's, Mixed, and Ladies after scraping.
   --rsync        Run scripts/pond-rsync.sh after successful scrape.
   -h, --help     Show this help message.
 
@@ -41,6 +44,9 @@ while (($#)); do
       ;;
     --rsync)
       RUN_RSYNC=1
+      ;;
+    --plot)
+      RUN_PLOT=1
       ;;
     -h|--help)
       usage
@@ -109,6 +115,12 @@ fi
 
 cp "${BOOKINGS_SRC}" "${BOOKINGS_DST}"
 echo "Copied ${BOOKINGS_SRC} -> ${BOOKINGS_DST}"
+
+if [[ ${RUN_PLOT} -eq 1 ]]; then
+  "${PYTHON_BIN}" "${PLOT_SCRIPT_MODULE}" --venue "Men's"
+  "${PYTHON_BIN}" "${PLOT_SCRIPT_MODULE}" --venue "Mixed"
+  "${PYTHON_BIN}" "${PLOT_SCRIPT_MODULE}" --venue "Ladies"
+fi
 
 if [[ ${RUN_RSYNC} -eq 1 ]]; then
   if [[ ! -x "${RSYNC_SCRIPT}" ]]; then
