@@ -80,10 +80,36 @@ def extract_ticket_count(availability_str):
     """Extract number of tickets from availability string.
     Examples: "56 Tickets" -> 56, "Fully Booked" -> 0, "1 Ticket" -> 1
     """
-    if availability_str.lower() == "fully booked":
+    return availability_to_count(availability_str)
+
+
+def availability_to_count(availability_value):
+    """Convert availability text/value into an integer ticket count."""
+    if availability_value is None:
         return 0
-    match = re.search(r'(\d+)', availability_str)
+    if isinstance(availability_value, (int, float)):
+        return max(int(availability_value), 0)
+
+    text = str(availability_value).strip()
+    if not text:
+        return 0
+    if text.lower() == "fully booked":
+        return 0
+
+    match = re.search(r"(\d+)", text)
     return int(match.group(1)) if match else 0
+
+
+def availability_to_display(availability_value):
+    """Convert numeric CSV availability into human-readable table text."""
+    text = "" if availability_value is None else str(availability_value).strip()
+    if re.fullmatch(r"\d+", text):
+        count = int(text)
+        if count == 0:
+            return "Fully Booked"
+        suffix = "Ticket" if count == 1 else "Tickets"
+        return f"{count} {suffix}"
+    return text
 
 
 def resolve_output_path(output_dir, file_arg):
@@ -161,14 +187,18 @@ def write_html_report(all_slots, date_sequence, html_output, source_url):
                     continue
                 f.write(f"<tr><td><b>{html_lib.escape(t)}</b></td>")
                 for v in venues:
-                    avail = table[date][t].get(v)
-                    if avail is None:
+                    avail_raw = table[date][t].get(v)
+                    if avail_raw is None:
                         f.write('<td class="empty">—</td>')
-                    elif avail.lower() == "fully booked":
+                        continue
+
+                    avail = availability_to_display(avail_raw)
+                    ticket_count = availability_to_count(avail_raw)
+
+                    if ticket_count <= 0:
                         f.write('<td class="fully-booked">Fully Booked</td>')
                     else:
                         max_capacity = 650 if v == "Lido" else 120
-                        ticket_count = extract_ticket_count(avail)
                         ratio = (ticket_count / max_capacity) if ticket_count > 0 else 0
                         percentage = ratio * 100
                         if ratio < (1 / 6):
@@ -317,7 +347,7 @@ def scrape_bookings(
                     "time": s.get("time", ""),
                     "location": s.get("location", ""),
                     "duration": s.get("duration", ""),
-                    "availability": s.get("availability", ""),
+                    "availability": availability_to_count(s.get("availability", "")),
                 }
                 for s in sorted(
                     all_slots,
@@ -333,7 +363,7 @@ def scrape_bookings(
         shutil.copyfile(csv_output, archive_csv)
 
         print(f"\nTotal slots parsed: {len(all_slots)}")
-        available_count = sum(1 for s in all_slots if s["availability"].lower() != "fully booked")
+        available_count = sum(1 for s in all_slots if availability_to_count(s.get("availability")) > 0)
         print(f"Available slots: {available_count}")
         print(f"Saved: {csv_output}, {html_output}")
         print(f"Archived CSV: {archive_csv}")

@@ -108,6 +108,16 @@
 			<br/>
 			<p>Here is a chart of the temperatures over the last few days. </p>
 			<img src="./pond-temps.png" height=300 >
+		</div>
+
+		<div id="bookings"></div>
+		<script>
+			$(function(){
+				$("#bookings").load("./bookings.html");
+			});
+		</script>
+
+		<div id="tempCommentary">
 
 			<h2>May 1st 2025</h2>
 			<p>
@@ -209,13 +219,6 @@
 			<p>The lifeguards' thermometer often reads a degree or two lower than our sensors; we use DS18B20 sensors which have a tolerance of +/- 0.5C.</p>
 			
 		</div>
-
-		<div id="bookings"></div>
-		<script>
-			$(function(){
-				$("#bookings").load("./bookings.html");
-			});
-		</script>
 
 
 		<br/>

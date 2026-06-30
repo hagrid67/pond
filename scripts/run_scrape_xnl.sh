@@ -9,19 +9,22 @@ BOOKINGS_SRC="${OUTPUT_DIR}/bookings.html"
 BOOKINGS_DST="${WWW_ROOT_DIR}/bookings.html"
 LOCK_FILE="${REPO_ROOT}/output/scrape_xnl.lock"
 BROWSER_SESSION_DIR="${REPO_ROOT}/browser_session"
+RSYNC_SCRIPT="${SCRIPT_DIR}/pond-rsync.sh"
 VENV_ACTIVATE="/home/jeremy/projects/heating/dev/ve312heat/bin/activate"
 PYTHON_BIN="${PYTHON_BIN:-python}"
 HEADLESS_FLAG=""
+RUN_RSYNC=0
 SCRAPE_ARGS=()
 USER_DATA_DIR="${BROWSER_SESSION_DIR}"
 
 usage() {
   cat <<'EOF'
-Usage: run_scrape_xnl.sh [--headless|--no-headless] [scrape_xnl options]
+Usage: run_scrape_xnl.sh [--headless|--no-headless] [--rsync] [scrape_xnl options]
 
 Options:
   --headless     Run browser in headless mode.
   --no-headless  Force browser to run with UI.
+  --rsync        Run scripts/pond-rsync.sh after successful scrape.
   -h, --help     Show this help message.
 
 All other options are passed through to pond.scrape_xnl.
@@ -35,6 +38,9 @@ while (($#)); do
       ;;
     --no-headless)
       HEADLESS_FLAG=""
+      ;;
+    --rsync)
+      RUN_RSYNC=1
       ;;
     -h|--help)
       usage
@@ -103,3 +109,11 @@ fi
 
 cp "${BOOKINGS_SRC}" "${BOOKINGS_DST}"
 echo "Copied ${BOOKINGS_SRC} -> ${BOOKINGS_DST}"
+
+if [[ ${RUN_RSYNC} -eq 1 ]]; then
+  if [[ ! -x "${RSYNC_SCRIPT}" ]]; then
+    echo "Error: rsync script not executable: ${RSYNC_SCRIPT}" >&2
+    exit 1
+  fi
+  "${RSYNC_SCRIPT}"
+fi
