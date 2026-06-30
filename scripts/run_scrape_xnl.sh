@@ -7,8 +7,59 @@ OUTPUT_DIR="${REPO_ROOT}/output"
 WWW_ROOT_DIR="${REPO_ROOT}/www-root"
 BOOKINGS_SRC="${OUTPUT_DIR}/bookings.html"
 BOOKINGS_DST="${WWW_ROOT_DIR}/bookings.html"
+LOCK_FILE="${REPO_ROOT}/output/scrape_xnl.lock"
+BROWSER_SESSION_DIR="${REPO_ROOT}/browser_session"
 VENV_ACTIVATE="/home/jeremy/projects/heating/dev/ve312heat/bin/activate"
 PYTHON_BIN="${PYTHON_BIN:-python}"
+HEADLESS_FLAG=""
+SCRAPE_ARGS=()
+USER_DATA_DIR="${BROWSER_SESSION_DIR}"
+
+usage() {
+  cat <<'EOF'
+Usage: run_scrape_xnl.sh [--headless|--no-headless] [scrape_xnl options]
+
+Options:
+  --headless     Run browser in headless mode.
+  --no-headless  Force browser to run with UI.
+  -h, --help     Show this help message.
+
+All other options are passed through to pond.scrape_xnl.
+EOF
+}
+
+while (($#)); do
+  case "$1" in
+    --headless)
+      HEADLESS_FLAG="--headless"
+      ;;
+    --no-headless)
+      HEADLESS_FLAG=""
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    --user-data-dir)
+      SCRAPE_ARGS+=("$1")
+      shift
+      if (($# == 0)); then
+        echo "Error: --user-data-dir requires a value." >&2
+        exit 1
+      fi
+      USER_DATA_DIR="$1"
+      SCRAPE_ARGS+=("$1")
+      ;;
+    --user-data-dir=*)
+      USER_DATA_DIR="${1#*=}"
+      SCRAPE_ARGS+=("$1")
+      ;;
+    *)
+      SCRAPE_ARGS+=("$1")
+      ;;
+  esac
+  shift
+done
 
 if [[ ! -f "${VENV_ACTIVATE}" ]]; then
   echo "Error: Virtual environment activate script not found at ${VENV_ACTIVATE}" >&2
@@ -28,8 +79,22 @@ fi
 
 mkdir -p "${OUTPUT_DIR}" "${WWW_ROOT_DIR}"
 
+exec 9>"${LOCK_FILE}"
+if ! flock -n 9; then
+  echo "Another scrape_xnl run is already in progress; skipping." >&2
+  exit 0
+fi
+
+if [[ -e "${USER_DATA_DIR}/SingletonLock" ]]; then
+  if pgrep -fa "(chromium|chrome).*(--user-data-dir=${USER_DATA_DIR}|${USER_DATA_DIR})" >/dev/null 2>&1; then
+    echo "Browser profile is already in use (${USER_DATA_DIR}); skipping." >&2
+    exit 0
+  fi
+  rm -f "${USER_DATA_DIR}/SingletonLock" "${USER_DATA_DIR}/SingletonSocket" "${USER_DATA_DIR}/SingletonCookie"
+fi
+
 cd "${REPO_ROOT}"
-"${PYTHON_BIN}" -m pond.scrape_xnl --output-dir "${OUTPUT_DIR}" "$@"
+"${PYTHON_BIN}" -m pond.scrape_xnl --output-dir "${OUTPUT_DIR}" ${HEADLESS_FLAG:+"${HEADLESS_FLAG}"} "${SCRAPE_ARGS[@]}"
 
 if [[ ! -f "${BOOKINGS_SRC}" ]]; then
   echo "Error: Scrape finished but '${BOOKINGS_SRC}' was not created." >&2
