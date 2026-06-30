@@ -24,6 +24,30 @@ def format_date_nice(day_name, date_text):
     
     return f"{day_abbr}, {date_text}"
 
+
+def format_date_machine(date_text, reference_dt=None):
+    """Format date as yyyy-mmdd for CSV output.
+
+    Example: "30th Jun" -> "2026-0630"
+    """
+    reference_dt = reference_dt or datetime.now()
+    match = re.search(r"(\d+)(?:st|nd|rd|th)?\s+([A-Za-z]+)", date_text)
+    if not match:
+        return date_text
+
+    day = int(match.group(1))
+    month_text = match.group(2)[:3].title()
+    parsed = datetime.strptime(f"{day:02d} {month_text}", "%d %b")
+    candidate = parsed.replace(year=reference_dt.year)
+
+    # Handle year rollover when scraping dates around New Year.
+    if candidate.month == 1 and reference_dt.month == 12:
+        candidate = candidate.replace(year=reference_dt.year + 1)
+    elif candidate.month == 12 and reference_dt.month == 1:
+        candidate = candidate.replace(year=reference_dt.year - 1)
+
+    return candidate.strftime("%Y-%m%d")
+
 def calculate_end_time(start_time_str, duration_str):
     """Calculate end time given start time and duration.
     start_time_str: "10:30"
@@ -97,7 +121,8 @@ def write_html_report(all_slots, date_sequence, html_output, source_url):
     venues = ["Men's", "Ladies", "Mixed", "Lido"]
     table = defaultdict(lambda: defaultdict(dict))
     for s in all_slots:
-        table[s["date"]][s["time"]][s["location"]] = s["availability"]
+        date_label = s.get("date_display") or s.get("date", "")
+        table[date_label][s["time"]][s["location"]] = s["availability"]
 
     dates = [d for d in date_sequence if d in table]
     all_times = sorted(set(t for d in table.values() for t in d.keys()))
@@ -225,6 +250,7 @@ def scrape_bookings(
             soup_date = BeautifulSoup(selected_date, "html.parser")
             date_text = soup_date.get_text().strip()
             formatted_date = format_date_nice(day_name, date_text)
+            machine_date = format_date_machine(date_text)
             if formatted_date not in date_sequence:
                 date_sequence.append(formatted_date)
             print(f"Processing: {formatted_date}")
@@ -266,7 +292,8 @@ def scrape_bookings(
                 time_end = calculate_end_time(time_start, duration) or "??:??"
                 all_slots.append(
                     {
-                        "date": formatted_date,
+                        "date": machine_date,
+                        "date_display": formatted_date,
                         "time": f"{time_start}-{time_end}",
                         "location": location,
                         "duration": duration,
@@ -281,13 +308,20 @@ def scrape_bookings(
             f.write("\n".join(html_strings))
 
         with open(csv_output, "w", newline="", encoding="utf-8") as f:
-            date_index = {d: i for i, d in enumerate(date_sequence)}
-            writer = csv.DictWriter(f, fieldnames=["date", "time", "location", "duration", "availability"])
+            fieldnames = ["date", "time", "location", "duration", "availability"]
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerows(
-                sorted(
+                {
+                    "date": s.get("date", ""),
+                    "time": s.get("time", ""),
+                    "location": s.get("location", ""),
+                    "duration": s.get("duration", ""),
+                    "availability": s.get("availability", ""),
+                }
+                for s in sorted(
                     all_slots,
-                    key=lambda s: (date_index.get(s["date"], 999), s["time"], s["location"]),
+                    key=lambda s: (s.get("date", ""), s.get("time", ""), s.get("location", "")),
                 )
             )
 
