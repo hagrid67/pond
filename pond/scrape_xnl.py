@@ -101,15 +101,11 @@ def availability_to_count(availability_value):
 
 
 def availability_to_display(availability_value):
-    """Convert numeric CSV availability into human-readable table text."""
+    """Convert availability into a plain numeric string for HTML display."""
     text = "" if availability_value is None else str(availability_value).strip()
     if re.fullmatch(r"\d+", text):
-        count = int(text)
-        if count == 0:
-            return "Fully Booked"
-        suffix = "Ticket" if count == 1 else "Tickets"
-        return f"{count} {suffix}"
-    return text
+        return text
+    return str(availability_to_count(availability_value))
 
 
 def resolve_output_path(output_dir, file_arg):
@@ -196,7 +192,7 @@ def write_html_report(all_slots, date_sequence, html_output, source_url):
                     ticket_count = availability_to_count(avail_raw)
 
                     if ticket_count <= 0:
-                        f.write('<td class="fully-booked">Fully Booked</td>')
+                        f.write('<td class="fully-booked">0</td>')
                     else:
                         max_capacity = 650 if v == "Lido" else 120
                         ratio = (ticket_count / max_capacity) if ticket_count > 0 else 0
