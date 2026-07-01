@@ -103,6 +103,13 @@ if ! command -v "${PYTHON_BIN}" >/dev/null 2>&1; then
   fi
 fi
 
+run_python() {
+  printf "Python command: "
+  printf "%q " "${PYTHON_BIN}" "$@"
+  echo
+  "${PYTHON_BIN}" "$@"
+}
+
 mkdir -p "${OUTPUT_DIR}" "${WWW_ROOT_DIR}"
 
 exec 9>"${LOCK_FILE}"
@@ -120,7 +127,12 @@ if [[ -e "${USER_DATA_DIR}/SingletonLock" ]]; then
 fi
 
 cd "${REPO_ROOT}"
-"${PYTHON_BIN}" -m pond.scrape_xnl --output-dir "${OUTPUT_DIR}" ${HEADLESS_FLAG:+"${HEADLESS_FLAG}"} "${SCRAPE_ARGS[@]}"
+SCRAPE_CMD_ARGS=( -m pond.scrape_xnl --output-dir "${OUTPUT_DIR}" )
+if [[ -n "${HEADLESS_FLAG}" ]]; then
+  SCRAPE_CMD_ARGS+=( "${HEADLESS_FLAG}" )
+fi
+SCRAPE_CMD_ARGS+=( "${SCRAPE_ARGS[@]}" )
+run_python "${SCRAPE_CMD_ARGS[@]}"
 
 if [[ ! -f "${BOOKINGS_SRC}" ]]; then
   echo "Error: Scrape finished but '${BOOKINGS_SRC}' was not created." >&2
@@ -131,9 +143,9 @@ cp "${BOOKINGS_SRC}" "${BOOKINGS_DST}"
 echo "Copied ${BOOKINGS_SRC} -> ${BOOKINGS_DST}"
 
 if [[ ${RUN_PLOT} -eq 1 ]]; then
-  "${PYTHON_BIN}" "${PLOT_SCRIPT_MODULE}" --venue "Men's"
-  "${PYTHON_BIN}" "${PLOT_SCRIPT_MODULE}" --venue "Mixed"
-  "${PYTHON_BIN}" "${PLOT_SCRIPT_MODULE}" --venue "Ladies"
+  run_python "${PLOT_SCRIPT_MODULE}" --venue "Men's"
+  run_python "${PLOT_SCRIPT_MODULE}" --venue "Mixed"
+  run_python "${PLOT_SCRIPT_MODULE}" --venue "Ladies"
 fi
 
 if [[ ${RUN_RSYNC} -eq 1 ]]; then

@@ -120,18 +120,18 @@ def load_snapshots(data_dir: Path) -> tuple[list[datetime], dict[SlotKey, list[t
 def filter_slots(
 	by_slot: dict[SlotKey, list[tuple[datetime, int]]],
 	venues: list[str] | None,
-	days_ahead: int | None,
+	plot_days: int | None,
+	anchor_date: str,
 	date_offset_days: int = 0,
 	start_date: str | None = None,
 	dates: list[str] | None = None,
 	max_slots_per_location: int | None = None,
 	show_only_changing_slots: bool = False,
 ) -> dict[SlotKey, list[tuple[datetime, int]]]:
-	base_date_text = min((slot.date for slot in by_slot), default=None)
-	start_date_text = start_date or base_date_text
-	if start_date is None and base_date_text is not None:
-		base_date_value = datetime.strptime(base_date_text, "%Y-%m%d").date()
-		start_date_value = base_date_value + timedelta(days=date_offset_days)
+	start_date_text = start_date
+	if start_date_text is None:
+		anchor_date_value = datetime.strptime(anchor_date, "%Y-%m%d").date()
+		start_date_value = anchor_date_value + timedelta(days=date_offset_days)
 		start_date_text = start_date_value.strftime("%Y-%m%d")
 	filtered: dict[SlotKey, list[tuple[datetime, int]]] = {}
 	for slot, points in by_slot.items():
@@ -139,9 +139,9 @@ def filter_slots(
 			continue
 		if dates and slot.date not in dates:
 			continue
-		if days_ahead is not None and start_date_text is not None:
+		if plot_days is not None and start_date_text is not None:
 			offset = date_offset(slot.date, start_date_text)
-			if offset < 0 or offset >= days_ahead:
+			if offset < 0 or offset >= plot_days:
 				continue
 		if show_only_changing_slots and len({value for _, value in points}) <= 1:
 			continue
@@ -231,16 +231,22 @@ def parse_args() -> argparse.Namespace:
 		help="Venue to include. Repeat to include multiple venues. Default: Men's.",
 	)
 	parser.add_argument(
-		"--days",
+		"--plot-days",
 		type=int,
 		default=1,
-		help="Number of days ahead to include, starting from the earliest slot date. Default: 1.",
+		help="Number of slot dates to plot, starting from the anchor date (or --date). Default: 1.",
+	)
+	parser.add_argument(
+		"--days",
+		type=int,
+		dest="plot_days",
+		help=argparse.SUPPRESS,
 	)
 	parser.add_argument(
 		"--date-offset",
 		type=int,
 		default=0,
-		help="Start-date offset in days relative to the earliest slot date: 0=today, -1=yesterday, +1=tomorrow.",
+		help="Start-date offset in days relative to latest snapshot date: 0=same day, -1=previous day, +1=next day.",
 	)
 	parser.add_argument(
 		"--date",
@@ -256,13 +262,21 @@ def main() -> None:
 	venues = args.venues or ["Men's"]
 	start_date = args.date
 	snapshot_times, slot_series = load_snapshots(DATA_DIR)
+	latest_snapshot_time = max(snapshot_times)
+	anchor_date = latest_snapshot_time.strftime("%Y-%m%d")
 	filtered_series = filter_slots(
 		slot_series,
 		venues=venues,
-		days_ahead=args.days,
+		plot_days=args.plot_days,
+		anchor_date=anchor_date,
 		date_offset_days=args.date_offset,
 		start_date=start_date,
 	)
+	plotted_dates = sorted({slot.date for slot in filtered_series})
+	print(f"Venues requested: {', '.join(venues)}")
+	print(f"Latest snapshot time: {latest_snapshot_time}")
+	print(f"Anchor slot date: {start_date or (datetime.strptime(anchor_date, '%Y-%m%d').date() + timedelta(days=args.date_offset)).strftime('%Y-%m%d')}")
+	print(f"Dates plotted: {', '.join(plotted_dates) if plotted_dates else 'none'}")
 
 	print(f"Loaded {len(snapshot_times)} snapshots from {snapshot_times[0]} to {snapshot_times[-1]}")
 	print(f"Plotting {len(filtered_series)} slot series")
