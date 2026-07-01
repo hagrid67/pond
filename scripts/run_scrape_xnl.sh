@@ -16,18 +16,20 @@ PYTHON_BIN="${PYTHON_BIN:-python}"
 HEADLESS_FLAG=""
 RUN_RSYNC=0
 RUN_PLOT=0
+CRON_MODE=0
 SCRAPE_ARGS=()
 USER_DATA_DIR="${BROWSER_SESSION_DIR}"
 
 usage() {
   cat <<'EOF'
-Usage: run_scrape_xnl.sh [--headless|--no-headless] [--plot] [--rsync] [scrape_xnl options]
+Usage: run_scrape_xnl.sh [--headless|--no-headless] [--plot] [--rsync] [--cron] [scrape_xnl options]
 
 Options:
   --headless     Run browser in headless mode.
   --no-headless  Force browser to run with UI.
   --plot         Generate booking plots for Men's, Mixed, and Ladies after scraping.
   --rsync        Run scripts/pond-rsync.sh after successful scrape.
+  --cron         Emit extra timestamped separators and blank lines for cron logs.
   -h, --help     Show this help message.
 
 All other options are passed through to pond.scrape_xnl.
@@ -47,6 +49,9 @@ while (($#)); do
       ;;
     --plot)
       RUN_PLOT=1
+      ;;
+    --cron)
+      CRON_MODE=1
       ;;
     -h|--help)
       usage
@@ -72,6 +77,15 @@ while (($#)); do
   esac
   shift
 done
+
+if [[ ${CRON_MODE} -eq 1 ]]; then
+  echo
+  echo
+  echo "------------------------------------------------------------"
+  echo "$(date '+%Y-%m-%d %H:%M:%S %Z') run_scrape_xnl.sh start"
+  echo "------------------------------------------------------------"
+  echo
+fi
 
 if [[ ! -f "${VENV_ACTIVATE}" ]]; then
   echo "Error: Virtual environment activate script not found at ${VENV_ACTIVATE}" >&2
@@ -128,4 +142,13 @@ if [[ ${RUN_RSYNC} -eq 1 ]]; then
     exit 1
   fi
   "${RSYNC_SCRIPT}"
+fi
+
+if [[ ${CRON_MODE} -eq 1 ]]; then
+  echo
+  echo "------------------------------------------------------------"
+  echo "$(date '+%Y-%m-%d %H:%M:%S %Z') run_scrape_xnl.sh end"
+  echo "------------------------------------------------------------"
+  echo
+  echo
 fi
