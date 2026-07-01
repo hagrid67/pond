@@ -143,9 +143,9 @@ cp "${BOOKINGS_SRC}" "${BOOKINGS_DST}"
 echo "Copied ${BOOKINGS_SRC} -> ${BOOKINGS_DST}"
 
 if [[ ${RUN_PLOT} -eq 1 ]]; then
-  run_python "${PLOT_SCRIPT_MODULE}" --venue "Men's"
-  run_python "${PLOT_SCRIPT_MODULE}" --venue "Mixed"
-  run_python "${PLOT_SCRIPT_MODULE}" --venue "Ladies"
+  run_python "${PLOT_SCRIPT_MODULE}" --venue "Men's" --prevday
+  run_python "${PLOT_SCRIPT_MODULE}" --venue "Mixed" --prevday
+  run_python "${PLOT_SCRIPT_MODULE}" --venue "Ladies" --prevday
 fi
 
 if [[ ${RUN_RSYNC} -eq 1 ]]; then

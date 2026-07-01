@@ -122,6 +122,7 @@ def filter_slots(
 	venues: list[str] | None,
 	plot_days: int | None,
 	anchor_date: str,
+	include_prevday: bool = False,
 	date_offset_days: int = 0,
 	start_date: str | None = None,
 	dates: list[str] | None = None,
@@ -141,7 +142,8 @@ def filter_slots(
 			continue
 		if plot_days is not None and start_date_text is not None:
 			offset = date_offset(slot.date, start_date_text)
-			if offset < 0 or offset >= plot_days:
+			min_offset = -1 if include_prevday else 0
+			if offset < min_offset or offset >= plot_days:
 				continue
 		if show_only_changing_slots and len({value for _, value in points}) <= 1:
 			continue
@@ -162,7 +164,16 @@ def filter_slots(
 	return limited
 
 
-def plot_slots(by_slot: dict[SlotKey, list[tuple[datetime, int]]], venues: list[str] | None) -> None:
+def slot_signature(slot: SlotKey) -> tuple[str, str]:
+	return (slot.time, slot.duration)
+
+
+def plot_slots(
+	by_slot: dict[SlotKey, list[tuple[datetime, int]]],
+	venues: list[str] | None,
+	focus_date: str,
+	show_prevday: bool,
+) -> None:
 	if not by_slot:
 		raise ValueError("No slot series remain after filtering")
 
@@ -183,8 +194,61 @@ def plot_slots(by_slot: dict[SlotKey, list[tuple[datetime, int]]], venues: list[
 			(slot for slot in by_slot if slot.location == location),
 			key=parse_slot_start,
 		)
+		prev_date = (datetime.strptime(focus_date, "%Y-%m%d").date() - timedelta(days=1)).strftime("%Y-%m%d")
+		location_today_slots = [slot for slot in location_slots if slot.date == focus_date]
+		location_prev_slots = [slot for slot in location_slots if show_prevday and slot.date == prev_date]
+		today_signatures = {slot_signature(slot) for slot in location_today_slots}
+		remaining_slots = [
+			slot
+			for slot in location_slots
+			if slot.date != focus_date and (not show_prevday or slot.date != prev_date)
+		]
 		location_max = 0
-		for slot in location_slots:
+		color_by_signature: dict[tuple[str, str], str] = {}
+
+		for slot in location_today_slots:
+			points = by_slot[slot]
+			x_values = [snapshot_time for snapshot_time, _ in points]
+			y_values = [availability for _, availability in points]
+			location_max = max(location_max, max(y_values, default=0))
+			line, = axis.plot(x_values, y_values, linewidth=1.5, label=slot.label)
+			color_by_signature[slot_signature(slot)] = line.get_color()
+			axis.annotate(
+				slot.label,
+				xy=(x_values[-1], y_values[-1]),
+				xytext=(4, 0),
+				textcoords="offset points",
+				color=line.get_color(),
+				fontsize=8,
+				va="center",
+			)
+
+		for slot in location_prev_slots:
+			if slot_signature(slot) not in today_signatures:
+				continue
+			points = by_slot[slot]
+			x_values = [snapshot_time for snapshot_time, _ in points]
+			y_values = [availability for _, availability in points]
+			location_max = max(location_max, max(y_values, default=0))
+			line, = axis.plot(
+				x_values,
+				y_values,
+				linewidth=1.5,
+				linestyle=":",
+				color=color_by_signature.get(slot_signature(slot)),
+				label=slot.label,
+			)
+			axis.annotate(
+				slot.label,
+				xy=(x_values[-1], y_values[-1]),
+				xytext=(4, 0),
+				textcoords="offset points",
+				color=line.get_color(),
+				fontsize=8,
+				va="center",
+			)
+
+		for slot in remaining_slots:
 			points = by_slot[slot]
 			x_values = [snapshot_time for snapshot_time, _ in points]
 			y_values = [availability for _, availability in points]
@@ -204,7 +268,7 @@ def plot_slots(by_slot: dict[SlotKey, list[tuple[datetime, int]]], venues: list[
 		axis.set_ylabel("Availability")
 		axis.set_ylim(0, max(10, int(math.ceil(location_max / 10.0) * 10)))
 		axis.grid(True, alpha=0.3)
-		axis.legend(loc="center left", bbox_to_anchor=(1.01, 0.5), fontsize=8)
+		axis.legend(loc="center left", bbox_to_anchor=(1.12, 0.5), fontsize=8)
 
 	axes[-1].set_xlabel("Snapshot time")
 	axes[-1].xaxis.set_major_formatter(mdates.DateFormatter("%m-%d\n%H:%M"))
@@ -254,6 +318,11 @@ def parse_args() -> argparse.Namespace:
 		default=None,
 		help="Explicit start date in yy-mm-dd format (for example 26-07-01). Overrides --date-offset.",
 	)
+	parser.add_argument(
+		"--prevday",
+		action="store_true",
+		help="Also plot previous-day slots matching today's slot times using dotted lines in the same colors.",
+	)
 	return parser.parse_args()
 
 
@@ -264,23 +333,28 @@ def main() -> None:
 	snapshot_times, slot_series = load_snapshots(DATA_DIR)
 	latest_snapshot_time = max(snapshot_times)
 	anchor_date = latest_snapshot_time.strftime("%Y-%m%d")
+	effective_start_date = start_date or (
+		(datetime.strptime(anchor_date, "%Y-%m%d").date() + timedelta(days=args.date_offset)).strftime("%Y-%m%d")
+	)
 	filtered_series = filter_slots(
 		slot_series,
 		venues=venues,
 		plot_days=args.plot_days,
 		anchor_date=anchor_date,
+		include_prevday=args.prevday,
 		date_offset_days=args.date_offset,
 		start_date=start_date,
 	)
 	plotted_dates = sorted({slot.date for slot in filtered_series})
 	print(f"Venues requested: {', '.join(venues)}")
 	print(f"Latest snapshot time: {latest_snapshot_time}")
-	print(f"Anchor slot date: {start_date or (datetime.strptime(anchor_date, '%Y-%m%d').date() + timedelta(days=args.date_offset)).strftime('%Y-%m%d')}")
+	print(f"Anchor slot date: {effective_start_date}")
 	print(f"Dates plotted: {', '.join(plotted_dates) if plotted_dates else 'none'}")
+	print(f"Previous-day overlay: {'on' if args.prevday else 'off'}")
 
 	print(f"Loaded {len(snapshot_times)} snapshots from {snapshot_times[0]} to {snapshot_times[-1]}")
 	print(f"Plotting {len(filtered_series)} slot series")
-	plot_slots(filtered_series, venues=venues)
+	plot_slots(filtered_series, venues=venues, focus_date=effective_start_date, show_prevday=args.prevday)
 
 
 if __name__ == "__main__":
