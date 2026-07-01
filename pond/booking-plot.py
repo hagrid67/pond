@@ -5,7 +5,7 @@ import csv
 import math
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 from pathlib import Path
 from typing import Iterable
 
@@ -168,14 +168,83 @@ def slot_signature(slot: SlotKey) -> tuple[str, str]:
 	return (slot.time, slot.duration)
 
 
+def night_seconds_between(start: datetime, end: datetime) -> float:
+	"""Return seconds within [start, end) that fall in the hidden 00:00-06:00 window."""
+	if end <= start:
+		return 0.0
+	total = 0.0
+	day = start.date()
+	end_day = end.date()
+	while day <= end_day:
+		window_start = datetime.combine(day, time(0, 0))
+		window_end = datetime.combine(day, time(6, 0))
+		overlap_start = max(start, window_start)
+		overlap_end = min(end, window_end)
+		if overlap_end > overlap_start:
+			total += (overlap_end - overlap_start).total_seconds()
+		day += timedelta(days=1)
+	return total
+
+
+def compress_time_value(value: datetime, origin: datetime) -> datetime:
+	"""Map real datetime to compressed axis datetime with 00:00-06:00 removed."""
+	real_seconds = (value - origin).total_seconds()
+	hidden_seconds = night_seconds_between(origin, value)
+	return origin + timedelta(seconds=real_seconds - hidden_seconds)
+
+
+def expand_time_value(value: datetime, origin: datetime) -> datetime:
+	"""Inverse of compress_time_value, used for x-axis tick labels."""
+	target_seconds = (value - origin).total_seconds()
+	if target_seconds <= 0:
+		return origin
+
+	low = origin
+	day_guess = int(target_seconds // (18 * 3600)) + 3
+	high = origin + timedelta(seconds=target_seconds + day_guess * 6 * 3600)
+
+	for _ in range(40):
+		mid = low + (high - low) / 2
+		mid_seconds = (mid - origin).total_seconds() - night_seconds_between(origin, mid)
+		if mid_seconds < target_seconds:
+			low = mid
+		else:
+			high = mid
+
+	return high
+
+
 def plot_slots(
 	by_slot: dict[SlotKey, list[tuple[datetime, int]]],
 	venues: list[str] | None,
 	focus_date: str,
 	show_prevday: bool,
+	include_night: bool,
 ) -> None:
 	if not by_slot:
 		raise ValueError("No slot series remain after filtering")
+
+	all_snapshot_times = [snapshot_time for points in by_slot.values() for snapshot_time, _ in points]
+	time_origin = min(all_snapshot_times)
+
+	def to_axis_time(snapshot_time: datetime) -> datetime:
+		if include_night:
+			return snapshot_time
+		return compress_time_value(snapshot_time, time_origin)
+
+	def compressed_break_positions() -> list[datetime]:
+		if include_night:
+			return []
+		real_max = max(all_snapshot_times)
+		breaks: list[datetime] = []
+		day = time_origin.date()
+		while day <= real_max.date():
+			window_start = datetime.combine(day, time(0, 0))
+			window_end = datetime.combine(day, time(6, 0))
+			if window_end > time_origin and window_start < real_max:
+				breaks.append(compress_time_value(window_start, time_origin))
+			day += timedelta(days=1)
+		return breaks
 
 	locations = sorted({slot.location for slot in by_slot})
 	fig, axes = plt.subplots(
@@ -208,7 +277,7 @@ def plot_slots(
 
 		for slot in location_today_slots:
 			points = by_slot[slot]
-			x_values = [snapshot_time for snapshot_time, _ in points]
+			x_values = [to_axis_time(snapshot_time) for snapshot_time, _ in points]
 			y_values = [availability for _, availability in points]
 			location_max = max(location_max, max(y_values, default=0))
 			line, = axis.plot(x_values, y_values, linewidth=1.5, label=slot.label)
@@ -227,7 +296,7 @@ def plot_slots(
 			if slot_signature(slot) not in today_signatures:
 				continue
 			points = by_slot[slot]
-			x_values = [snapshot_time for snapshot_time, _ in points]
+			x_values = [to_axis_time(snapshot_time) for snapshot_time, _ in points]
 			y_values = [availability for _, availability in points]
 			location_max = max(location_max, max(y_values, default=0))
 			line, = axis.plot(
@@ -250,7 +319,7 @@ def plot_slots(
 
 		for slot in remaining_slots:
 			points = by_slot[slot]
-			x_values = [snapshot_time for snapshot_time, _ in points]
+			x_values = [to_axis_time(snapshot_time) for snapshot_time, _ in points]
 			y_values = [availability for _, availability in points]
 			location_max = max(location_max, max(y_values, default=0))
 			line, = axis.plot(x_values, y_values, linewidth=1.5, label=slot.label)
@@ -270,8 +339,36 @@ def plot_slots(
 		axis.grid(True, alpha=0.3)
 		axis.legend(loc="center left", bbox_to_anchor=(1.12, 0.5), fontsize=8)
 
+		for break_x in compressed_break_positions():
+			axis.axvline(break_x, color="0.6", linestyle="--", linewidth=0.8, alpha=0.6)
+			dx = timedelta(minutes=18)
+			axis.plot(
+				[break_x - dx, break_x - dx / 3],
+				[-0.02, 0.02],
+				transform=axis.get_xaxis_transform(),
+				color="black",
+				linewidth=1.1,
+				clip_on=False,
+			)
+			axis.plot(
+				[break_x + dx / 3, break_x + dx],
+				[-0.02, 0.02],
+				transform=axis.get_xaxis_transform(),
+				color="black",
+				linewidth=1.1,
+				clip_on=False,
+			)
+
 	axes[-1].set_xlabel("Snapshot time")
-	axes[-1].xaxis.set_major_formatter(mdates.DateFormatter("%m-%d\n%H:%M"))
+	if include_night:
+		axes[-1].xaxis.set_major_formatter(mdates.DateFormatter("%m-%d\n%H:%M"))
+	else:
+		def compressed_label(value: float, _pos: int) -> str:
+			axis_dt = mdates.num2date(value).replace(tzinfo=None)
+			real_dt = expand_time_value(axis_dt, time_origin)
+			return real_dt.strftime("%m-%d\n%H:%M")
+
+		axes[-1].xaxis.set_major_formatter(compressed_label)
 	axes[-1].xaxis.set_minor_locator(mdates.MinuteLocator(interval=5))
 	fig.suptitle("Booking availability by slot over snapshot time")
 
@@ -323,6 +420,11 @@ def parse_args() -> argparse.Namespace:
 		action="store_true",
 		help="Also plot previous-day slots matching today's slot times using dotted lines in the same colors.",
 	)
+	parser.add_argument(
+		"--include-night",
+		action="store_true",
+		help="Include 00:00-06:00 on the x-axis. Default behavior compresses that range out.",
+	)
 	return parser.parse_args()
 
 
@@ -351,10 +453,17 @@ def main() -> None:
 	print(f"Anchor slot date: {effective_start_date}")
 	print(f"Dates plotted: {', '.join(plotted_dates) if plotted_dates else 'none'}")
 	print(f"Previous-day overlay: {'on' if args.prevday else 'off'}")
+	print(f"Include night hours: {'on' if args.include_night else 'off (00:00-06:00 compressed)'}")
 
 	print(f"Loaded {len(snapshot_times)} snapshots from {snapshot_times[0]} to {snapshot_times[-1]}")
 	print(f"Plotting {len(filtered_series)} slot series")
-	plot_slots(filtered_series, venues=venues, focus_date=effective_start_date, show_prevday=args.prevday)
+	plot_slots(
+		filtered_series,
+		venues=venues,
+		focus_date=effective_start_date,
+		show_prevday=args.prevday,
+		include_night=args.include_night,
+	)
 
 
 if __name__ == "__main__":
