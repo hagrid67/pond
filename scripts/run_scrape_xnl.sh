@@ -146,6 +146,7 @@ if [[ ${RUN_PLOT} -eq 1 ]]; then
   run_python "${PLOT_SCRIPT_MODULE}" --venue "Men's" --prevday
   run_python "${PLOT_SCRIPT_MODULE}" --venue "Mixed" --prevday
   run_python "${PLOT_SCRIPT_MODULE}" --venue "Ladies" --prevday
+  run_python "${PLOT_SCRIPT_MODULE}" --venue "Lido" --prevday
 fi
 
 if [[ ${RUN_RSYNC} -eq 1 ]]; then
