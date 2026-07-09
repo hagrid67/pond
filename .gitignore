@@ -37,3 +37,7 @@ output/
 browser_session/
 data/*.csv
 !data/.gitkeep
+
+# Generated web output artifacts
+www-root/booking-plot*.png
+www-root/bookings.html
