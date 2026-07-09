@@ -551,7 +551,7 @@ def plot_slots_separate_axes(
 	fig, axes = plt.subplots(
 		nrows=len(locations),
 		ncols=len(plot_dates),
-		figsize=(3.0 * len(plot_dates), max(4.2, 3.8 * len(locations))),
+		figsize=(3.8 * len(plot_dates), max(5.0, 4.4 * len(locations))),
 		sharey=True,
 		constrained_layout=True,
 	)
@@ -572,16 +572,12 @@ def plot_slots_separate_axes(
 			axis = axes_grid[row_index][col_index]
 			axis_end = axis_end_for_slot_date(slot_date_text, by_slot, latest_snapshot_time)
 			axis_start = axis_end - timedelta(days=window_days)
+			day_dt = datetime.strptime(slot_date_text, "%Y-%m%d")
 
 			def to_axis_time(snapshot_time: datetime) -> datetime:
 				if include_night:
 					return snapshot_time
 				return compress_time_value(snapshot_time, axis_start)
-
-			def axis_label(value: float, _pos: int) -> str:
-				axis_dt = mdates.num2date(value).replace(tzinfo=None)
-				real_dt = axis_dt if include_night else expand_time_value(axis_dt, axis_start)
-				return real_dt.strftime("%m-%d\n%H:%M")
 
 			def compressed_break_positions() -> list[datetime]:
 				if include_night:
@@ -639,8 +635,36 @@ def plot_slots_separate_axes(
 
 			axis.set_xlim(axis_start_plot, axis_end_plot)
 			axis.grid(True, alpha=0.3)
-			axis.xaxis.set_major_locator(mdates.HourLocator(interval=12))
-			axis.xaxis.set_major_formatter(axis_label)
+			if include_night:
+				axis.xaxis.set_major_locator(mdates.HourLocator(interval=12))
+				axis.xaxis.set_major_formatter(mdates.DateFormatter("%a\n%H:%M"))
+			else:
+				tick_positions: list[datetime] = []
+				tick_labels: list[str] = []
+				day = axis_start.date()
+				while day <= axis_end.date():
+					midnight = datetime.combine(day, time(0, 0))
+					midday = datetime.combine(day, time(12, 0))
+					evening = datetime.combine(day, time(18, 0))
+					if axis_start <= midnight <= axis_end:
+						tick_position = compress_time_value(midnight, axis_start)
+						if axis_start_plot <= tick_position <= axis_end_plot:
+							tick_positions.append(tick_position)
+							tick_labels.append(midnight.strftime("%a\n0-6h"))
+					if axis_start <= midday <= axis_end:
+						tick_position = compress_time_value(midday, axis_start)
+						if axis_start_plot <= tick_position <= axis_end_plot:
+							tick_positions.append(tick_position)
+							tick_labels.append("12h")
+					if axis_start <= evening <= axis_end:
+						tick_position = compress_time_value(evening, axis_start)
+						if axis_start_plot <= tick_position <= axis_end_plot:
+							tick_positions.append(tick_position)
+							tick_labels.append("18h")
+					day += timedelta(days=1)
+				if tick_positions:
+					axis.set_xticks(tick_positions)
+					axis.set_xticklabels(tick_labels)
 
 			for break_x in compressed_break_positions():
 				axis.axvline(break_x, color="0.6", linestyle="--", linewidth=0.8, alpha=0.6)
@@ -661,7 +685,6 @@ def plot_slots_separate_axes(
 					linewidth=1.1,
 					clip_on=False,
 				)
-			day_dt = datetime.strptime(slot_date_text, "%Y-%m%d")
 			axis.set_title(day_dt.strftime("%a %b %d"))
 			if row_index == len(locations) - 1:
 				axis.set_xlabel("Snapshot time")

@@ -16,19 +16,21 @@ PYTHON_BIN="${PYTHON_BIN:-python}"
 HEADLESS_FLAG=""
 RUN_RSYNC=0
 RUN_PLOT=0
+RUN_SCRAPE=0
 CRON_MODE=0
 SCRAPE_ARGS=()
 USER_DATA_DIR="${BROWSER_SESSION_DIR}"
 
 usage() {
   cat <<'EOF'
-Usage: run_scrape_xnl.sh [--headless|--no-headless] [--plot] [--rsync] [--cron] [scrape_xnl options]
+Usage: run_scrape_xnl.sh [--headless|--no-headless] [--scrape] [--plot] [--rsync] [--cron] [scrape_xnl options]
 
 Options:
   --headless     Run browser in headless mode.
   --no-headless  Force browser to run with UI.
-  --plot         Generate booking plots for Men's, Mixed, and Ladies after scraping.
-  --rsync        Run scripts/pond-rsync.sh after successful scrape.
+  --scrape       Run pond.scrape_xnl. If omitted, scraping is skipped.
+  --plot         Generate booking plots for Men's, Mixed, Ladies, and Lido.
+  --rsync        Run scripts/pond-rsync.sh.
   --cron         Emit extra timestamped separators and blank lines for cron logs.
   -h, --help     Show this help message.
 
@@ -46,6 +48,9 @@ while (($#)); do
       ;;
     --rsync)
       RUN_RSYNC=1
+      ;;
+    --scrape)
+      RUN_SCRAPE=1
       ;;
     --plot)
       RUN_PLOT=1
@@ -112,41 +117,45 @@ run_python() {
 
 mkdir -p "${OUTPUT_DIR}" "${WWW_ROOT_DIR}"
 
-exec 9>"${LOCK_FILE}"
-if ! flock -n 9; then
-  echo "Another scrape_xnl run is already in progress; skipping." >&2
-  exit 0
-fi
-
-if [[ -e "${USER_DATA_DIR}/SingletonLock" ]]; then
-  if pgrep -fa "(chromium|chrome).*(--user-data-dir=${USER_DATA_DIR}|${USER_DATA_DIR})" >/dev/null 2>&1; then
-    echo "Browser profile is already in use (${USER_DATA_DIR}); skipping." >&2
+cd "${REPO_ROOT}"
+if [[ ${RUN_SCRAPE} -eq 1 ]]; then
+  exec 9>"${LOCK_FILE}"
+  if ! flock -n 9; then
+    echo "Another scrape_xnl run is already in progress; skipping." >&2
     exit 0
   fi
-  rm -f "${USER_DATA_DIR}/SingletonLock" "${USER_DATA_DIR}/SingletonSocket" "${USER_DATA_DIR}/SingletonCookie"
-fi
 
-cd "${REPO_ROOT}"
-SCRAPE_CMD_ARGS=( -m pond.scrape_xnl --output-dir "${OUTPUT_DIR}" )
-if [[ -n "${HEADLESS_FLAG}" ]]; then
-  SCRAPE_CMD_ARGS+=( "${HEADLESS_FLAG}" )
-fi
-SCRAPE_CMD_ARGS+=( "${SCRAPE_ARGS[@]}" )
-run_python "${SCRAPE_CMD_ARGS[@]}"
+  if [[ -e "${USER_DATA_DIR}/SingletonLock" ]]; then
+    if pgrep -fa "(chromium|chrome).*(--user-data-dir=${USER_DATA_DIR}|${USER_DATA_DIR})" >/dev/null 2>&1; then
+      echo "Browser profile is already in use (${USER_DATA_DIR}); skipping." >&2
+      exit 0
+    fi
+    rm -f "${USER_DATA_DIR}/SingletonLock" "${USER_DATA_DIR}/SingletonSocket" "${USER_DATA_DIR}/SingletonCookie"
+  fi
 
-if [[ ! -f "${BOOKINGS_SRC}" ]]; then
-  echo "Error: Scrape finished but '${BOOKINGS_SRC}' was not created." >&2
-  exit 1
-fi
+  SCRAPE_CMD_ARGS=( -m pond.scrape_xnl --output-dir "${OUTPUT_DIR}" )
+  if [[ -n "${HEADLESS_FLAG}" ]]; then
+    SCRAPE_CMD_ARGS+=( "${HEADLESS_FLAG}" )
+  fi
+  SCRAPE_CMD_ARGS+=( "${SCRAPE_ARGS[@]}" )
+  run_python "${SCRAPE_CMD_ARGS[@]}"
 
-cp "${BOOKINGS_SRC}" "${BOOKINGS_DST}"
-echo "Copied ${BOOKINGS_SRC} -> ${BOOKINGS_DST}"
+  if [[ ! -f "${BOOKINGS_SRC}" ]]; then
+    echo "Error: Scrape finished but '${BOOKINGS_SRC}' was not created." >&2
+    exit 1
+  fi
+
+  cp "${BOOKINGS_SRC}" "${BOOKINGS_DST}"
+  echo "Copied ${BOOKINGS_SRC} -> ${BOOKINGS_DST}"
+else
+  echo "Skipping scrape (use --scrape to enable)."
+fi
 
 if [[ ${RUN_PLOT} -eq 1 ]]; then
-  run_python "${PLOT_SCRIPT_MODULE}" --venue "Men's" --prevday
-  run_python "${PLOT_SCRIPT_MODULE}" --venue "Mixed" --prevday
-  run_python "${PLOT_SCRIPT_MODULE}" --venue "Ladies" --prevday
-  run_python "${PLOT_SCRIPT_MODULE}" --venue "Lido" --prevday
+  run_python "${PLOT_SCRIPT_MODULE}" --venue "Men's" --prevday --separate-axes --prevday --nextday --per-slot-from -3
+  run_python "${PLOT_SCRIPT_MODULE}" --venue "Mixed" --prevday --separate-axes --prevday --nextday --per-slot-from -3
+  run_python "${PLOT_SCRIPT_MODULE}" --venue "Ladies" --prevday --separate-axes --prevday --nextday --per-slot-from -3
+  run_python "${PLOT_SCRIPT_MODULE}" --venue "Lido" --prevday --separate-axes --prevday --nextday --per-slot-from -3
 fi
 
 if [[ ${RUN_RSYNC} -eq 1 ]]; then
