@@ -529,14 +529,7 @@ def plot_slots_separate_axes(
 		raise ValueError("No slot series remain after filtering")
 
 	window_days = abs(per_slot_from_days if per_slot_from_days is not None else 1.0)
-	focus_day = datetime.strptime(focus_date, "%Y-%m%d").date()
-	plot_dates: list[str] = []
-	if show_prevday:
-		plot_dates.append((focus_day - timedelta(days=1)).strftime("%Y-%m%d"))
-	plot_dates.append(focus_day.strftime("%Y-%m%d"))
-	if show_nextday:
-		plot_dates.append((focus_day + timedelta(days=1)).strftime("%Y-%m%d"))
-	plot_dates = [date_text for date_text in plot_dates if any(slot.date == date_text for slot in by_slot)]
+	plot_dates = sorted({slot.date for slot in by_slot})
 	if not plot_dates:
 		raise ValueError("No slot days available for separate-axes mode")
 
