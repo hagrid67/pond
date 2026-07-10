@@ -90,25 +90,26 @@
 
 	<body>
 
-		<h1 style="text-align: center">Highgate Men's Pond temperatures (Beta)</h1>
+		<h1 style="text-align: center">Highgate Men's Pond Booking Stats (Beta)</h1>
 
 		<p>
 			Highgate Men's Pond Association (<a href="https://www.highgatemenspond.com/visitor-info">HMPA</a>)
-			provided real-time temperatures for the pond since late 2024.
-			Unfortunately the City of London removed the sensor in April 2025.
-			The real-time temperatures here are now being sourced from a (very) small private pond, as a proxy.
+			is reporting on the availability of tickets for the bookable swimming sessions.
+			We also provided real-time temperatures for the pond for a few months in 2024 and 2025, 
+			but the City of London removed the sensor in April 2025.
+			The real-time temperatures here are now being sourced from a (very) small garden pond, as a proxy.
+			Its temperature varies much more than the pond.
 		</p>
 
 
 		<br/>
 
-		<div id="tempTable"></div>
-
-		<div id="tempChart">
-			<br/>
-			<p>Here is a chart of the temperatures over the last few days. </p>
-			<img src="./pond-temps.png" height=300 >
-		</div>
+		<div id="bookings"></div>
+		<script>
+			$(function(){
+				$("#bookings").load("./bookings.html");
+			});
+		</script>
 
 		<div id="bookingPlots">
 			<br/>
@@ -124,12 +125,13 @@
 			<img src="./booking-plot-lido.png" height=300 >
 		</div>
 
-		<div id="bookings"></div>
-		<script>
-			$(function(){
-				$("#bookings").load("./bookings.html");
-			});
-		</script>
+		<div id="tempTable"></div>
+
+		<div id="tempChart">
+			<br/>
+			<p>Here is a chart of the temperatures over the last few days. </p>
+			<img src="./pond-temps.png" height=300 >
+		</div>
 
 		<div id="tempCommentary">
 
