@@ -146,7 +146,7 @@ else
 fi
 
 if [[ -f "${BOOKINGS_CSV}" ]]; then
-  run_python "${REPORT_SCRIPT_MODULE}" --input-csv "${BOOKINGS_CSV}" --html-output "${BOOKINGS_SRC}"
+  run_python "${REPORT_SCRIPT_MODULE}" --html-output "${BOOKINGS_SRC}"
   cp "${BOOKINGS_SRC}" "${BOOKINGS_DST}"
   echo "Copied ${BOOKINGS_SRC} -> ${BOOKINGS_DST}"
 elif [[ ${RUN_SCRAPE} -eq 1 ]]; then

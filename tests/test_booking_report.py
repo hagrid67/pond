@@ -56,3 +56,43 @@ def test_find_latest_bookings_csv_uses_filename_timestamp(tmp_path) -> None:
 
 	latest = booking_report.find_latest_bookings_csv(tmp_path)
 	assert latest == newer
+
+
+def test_build_report_slots_uses_history_for_disappeared_slots(tmp_path, monkeypatch) -> None:
+	def write_archive(name: str, rows: str) -> Path:
+		path = tmp_path / name
+		path.write_text("date,time,location,duration,availability\n" + rows, encoding="utf-8")
+		return path
+
+	write_archive(
+		"bookings-2026-0705-0200.csv",
+		"2026-0707,10:00-11:00,Men's,60,0\n",
+	)
+	write_archive(
+		"bookings-2026-0707-0955.csv",
+		"2026-0707,10:00-11:00,Men's,60,4\n2026-0710,14:00-15:00,Men's,60,8\n",
+	)
+	write_archive(
+		"bookings-2026-0707-1030.csv",
+		"2026-0707,10:00-11:00,Men's,60,1\n2026-0710,14:00-15:00,Men's,60,7\n",
+	)
+	selected = write_archive(
+		"bookings-2026-0710-1300.csv",
+		"2026-0710,14:00-15:00,Men's,60,6\n",
+	)
+
+	monkeypatch.setattr(booking_report, "DATA_DIR", tmp_path)
+	report_slots, date_sequence, reference_time = booking_report.build_report_slots(selected)
+
+	assert reference_time == booking_report.parse_archive_timestamp(selected)
+	assert "2026-0707" in date_sequence
+
+	historical_slot = next(
+		slot
+		for slot in report_slots
+		if slot["date"] == "2026-0707" and slot["time"] == "10:00-11:00" and slot["location"] == "Men's"
+	)
+	assert historical_slot["availability_display"] == "4 (1)"
+	assert historical_slot["availability_style"] == 4
+	assert historical_slot["availability_final"] == 1
+	assert historical_slot["booked_out_age"] == "2d8h"
