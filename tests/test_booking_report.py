@@ -36,8 +36,8 @@ def test_report_loads_csv_and_writes_html(tmp_path) -> None:
 	html = html_path.read_text(encoding="utf-8")
 
 	assert "Hampstead Heath Swimming Bookings" in html
-	assert "2026-07-06" in html
-	assert "2026-07-07" in html
+	assert "Monday 2026-07-06" in html
+	assert "Tuesday 2026-07-07" in html
 	assert "Men&#x27;s" in html
 	assert "fully-booked" in html
 	assert "https://example.test/source" in html

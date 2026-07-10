@@ -75,6 +75,18 @@ def parse_slot_start(date_text: str, time_text: str) -> datetime:
 	return datetime.strptime(f"{date_text} {time_text.split('-', 1)[0]}", "%Y-%m%d %H:%M")
 
 
+def format_booking_day_heading(date_text: str) -> str:
+	"""Format booking day headings as Weekday + original date text."""
+	clean = (date_text or "").strip()
+	for fmt in ("%Y-%m%d", "%Y-%m-%d"):
+		try:
+			parsed = datetime.strptime(clean, fmt)
+			return f"{parsed.strftime('%A')} {clean}"
+		except ValueError:
+			continue
+	return clean
+
+
 def format_elapsed(delta: timedelta) -> str:
 	total_hours = max(int(delta.total_seconds() // 3600), 0)
 	days, hours = divmod(total_hours, 24)
@@ -231,7 +243,8 @@ def write_html_report(all_slots, date_sequence, html_output, source_url):
 		)
 
 		for date in dates:
-			f.write(f"<h3>{html_lib.escape(date)}</h3>\n")
+			date_heading = format_booking_day_heading(date)
+			f.write(f"<h3>{html_lib.escape(date_heading)}</h3>\n")
 			f.write("<table>\n<tr><th>Time</th>")
 			for v in venues:
 				f.write(f"<th>{html_lib.escape(v)}</th>")
