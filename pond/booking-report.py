@@ -268,9 +268,19 @@ def write_html_report(all_slots, date_sequence, html_output, source_url, referen
 		)
 
 		reference_date = reference_time.date() if reference_time is not None else None
+		has_today = bool(
+			reference_date is not None
+			and any(parse_booking_date(date) == reference_date for date in dates)
+		)
+		if has_today:
+			f.write("<p><a href='#today'>Jump to today</a></p>\n")
+
 		for date in dates:
 			date_heading = format_booking_day_heading(date, reference_date)
-			f.write(f"<h3>{html_lib.escape(date_heading)}</h3>\n")
+			if reference_date is not None and parse_booking_date(date) == reference_date:
+				f.write(f"<h3 id='today'>{html_lib.escape(date_heading)}</h3>\n")
+			else:
+				f.write(f"<h3>{html_lib.escape(date_heading)}</h3>\n")
 			f.write("<table>\n<tr><th>Time</th>")
 			for v in venues:
 				f.write(f"<th>{html_lib.escape(v)}</th>")

@@ -65,6 +65,8 @@ def test_report_headings_include_relative_day_labels(tmp_path) -> None:
 	)
 	html = html_path.read_text(encoding="utf-8")
 
+	assert "<a href='#today'>Jump to today</a>" in html
+	assert "<h3 id='today'>Friday 2026-07-10 (today)</h3>" in html
 	assert "Thursday 2026-07-09 (yesterday)" in html
 	assert "Friday 2026-07-10 (today)" in html
 	assert "Saturday 2026-07-11 (tomorrow)" in html
