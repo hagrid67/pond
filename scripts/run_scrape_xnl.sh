@@ -5,12 +5,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 OUTPUT_DIR="${REPO_ROOT}/output"
 WWW_ROOT_DIR="${REPO_ROOT}/www-root"
+BOOKINGS_CSV="${OUTPUT_DIR}/bookings.csv"
 BOOKINGS_SRC="${OUTPUT_DIR}/bookings.html"
 BOOKINGS_DST="${WWW_ROOT_DIR}/bookings.html"
 LOCK_FILE="${REPO_ROOT}/output/scrape_xnl.lock"
 BROWSER_SESSION_DIR="${REPO_ROOT}/browser_session"
 RSYNC_SCRIPT="${SCRIPT_DIR}/pond-rsync.sh"
 PLOT_SCRIPT_MODULE="pond/booking-plot.py"
+REPORT_SCRIPT_MODULE="pond/booking-report.py"
 VENV_ACTIVATE="/home/jeremy/projects/heating/dev/ve312heat/bin/activate"
 PYTHON_BIN="${PYTHON_BIN:-python}"
 HEADLESS_FLAG=""
@@ -139,16 +141,19 @@ if [[ ${RUN_SCRAPE} -eq 1 ]]; then
   fi
   SCRAPE_CMD_ARGS+=( "${SCRAPE_ARGS[@]}" )
   run_python "${SCRAPE_CMD_ARGS[@]}"
-
-  if [[ ! -f "${BOOKINGS_SRC}" ]]; then
-    echo "Error: Scrape finished but '${BOOKINGS_SRC}' was not created." >&2
-    exit 1
-  fi
-
-  cp "${BOOKINGS_SRC}" "${BOOKINGS_DST}"
-  echo "Copied ${BOOKINGS_SRC} -> ${BOOKINGS_DST}"
 else
   echo "Skipping scrape (use --scrape to enable)."
+fi
+
+if [[ -f "${BOOKINGS_CSV}" ]]; then
+  run_python "${REPORT_SCRIPT_MODULE}" --input-csv "${BOOKINGS_CSV}" --html-output "${BOOKINGS_SRC}"
+  cp "${BOOKINGS_SRC}" "${BOOKINGS_DST}"
+  echo "Copied ${BOOKINGS_SRC} -> ${BOOKINGS_DST}"
+elif [[ ${RUN_SCRAPE} -eq 1 ]]; then
+  echo "Error: bookings CSV not found at '${BOOKINGS_CSV}'." >&2
+  exit 1
+else
+  echo "Skipping bookings report (no CSV found at '${BOOKINGS_CSV}')."
 fi
 
 if [[ ${RUN_PLOT} -eq 1 ]]; then
