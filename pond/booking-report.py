@@ -9,6 +9,10 @@ from datetime import datetime
 from pathlib import Path
 
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+DATA_DIR = REPO_ROOT / "data"
+
+
 def availability_to_count(availability_value):
 	"""Convert availability text/value into an integer ticket count."""
 	if availability_value is None:
@@ -44,6 +48,18 @@ def resolve_output_path(output_dir: str, file_arg: str) -> str:
 	if os.path.dirname(file_arg):
 		return file_arg
 	return os.path.join(output_dir, file_arg)
+
+
+def parse_archive_timestamp(path: Path) -> datetime:
+	stamp = path.stem.removeprefix("bookings-")
+	return datetime.strptime(stamp, "%Y-%m%d-%H%M")
+
+
+def find_latest_bookings_csv(data_dir: Path) -> Path:
+	matches = sorted(data_dir.glob("bookings-*.csv"))
+	if not matches:
+		raise FileNotFoundError(f"No archived bookings CSV files matched {data_dir / 'bookings-*.csv'}")
+	return max(matches, key=parse_archive_timestamp)
 
 
 def load_slots_from_csv(csv_path):
@@ -154,7 +170,11 @@ def write_html_report(all_slots, date_sequence, html_output, source_url):
 
 def main() -> None:
 	parser = argparse.ArgumentParser(description="Generate bookings.html from a bookings CSV file.")
-	parser.add_argument("--input-csv", default="output/bookings.csv", help="Bookings CSV filename/path to read.")
+	parser.add_argument(
+		"--input-csv",
+		default=None,
+		help="Bookings CSV filename/path to read. Default: newest archived bookings CSV in ./data.",
+	)
 	parser.add_argument(
 		"--html-output",
 		default="output/bookings.html",
@@ -172,7 +192,10 @@ def main() -> None:
 	)
 	args = parser.parse_args()
 
-	input_csv = resolve_output_path(args.output_dir, args.input_csv)
+	if args.input_csv is None:
+		input_csv = find_latest_bookings_csv(DATA_DIR)
+	else:
+		input_csv = Path(resolve_output_path(args.output_dir, args.input_csv))
 	html_output = resolve_output_path(args.output_dir, args.html_output)
 	os.makedirs(os.path.dirname(html_output) or ".", exist_ok=True)
 
