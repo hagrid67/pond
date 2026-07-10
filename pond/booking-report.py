@@ -5,7 +5,7 @@ import csv
 import html as html_lib
 import os
 from collections import defaultdict
-from datetime import datetime, time, timedelta
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
 
 
@@ -75,16 +75,41 @@ def parse_slot_start(date_text: str, time_text: str) -> datetime:
 	return datetime.strptime(f"{date_text} {time_text.split('-', 1)[0]}", "%Y-%m%d %H:%M")
 
 
-def format_booking_day_heading(date_text: str) -> str:
-	"""Format booking day headings as Weekday + original date text."""
+def parse_booking_date(date_text: str) -> date | None:
 	clean = (date_text or "").strip()
 	for fmt in ("%Y-%m%d", "%Y-%m-%d"):
 		try:
-			parsed = datetime.strptime(clean, fmt)
-			return f"{parsed.strftime('%A')} {clean}"
+			return datetime.strptime(clean, fmt).date()
 		except ValueError:
 			continue
-	return clean
+	return None
+
+
+def format_relative_day_label(target_date: date, reference_date: date) -> str:
+	delta_days = (target_date - reference_date).days
+	if delta_days == 0:
+		return "today"
+	if delta_days == -1:
+		return "yesterday"
+	if delta_days == 1:
+		return "tomorrow"
+	if delta_days < 0:
+		return f"{abs(delta_days)} days ago"
+	return f"in {delta_days} days"
+
+
+def format_booking_day_heading(date_text: str, reference_date: date | None = None) -> str:
+	"""Format booking day headings as Weekday + original date text (+ relative label)."""
+	clean = (date_text or "").strip()
+	parsed_date = parse_booking_date(clean)
+	if parsed_date is None:
+		return clean
+
+	heading = f"{parsed_date.strftime('%A')} {clean}"
+	if reference_date is not None:
+		relative = format_relative_day_label(parsed_date, reference_date)
+		heading = f"{heading} ({relative})"
+	return heading
 
 
 def format_elapsed(delta: timedelta) -> str:
@@ -200,7 +225,7 @@ def load_slots_from_csv(csv_path):
 	return all_slots, date_sequence
 
 
-def write_html_report(all_slots, date_sequence, html_output, source_url):
+def write_html_report(all_slots, date_sequence, html_output, source_url, reference_time: datetime | None = None):
 	venues = ["Men's", "Ladies", "Mixed", "Lido"]
 	table = defaultdict(lambda: defaultdict(dict))
 	for s in all_slots:
@@ -242,8 +267,9 @@ def write_html_report(all_slots, date_sequence, html_output, source_url):
 			"Open City of London bookings page</a></p>\n"
 		)
 
+		reference_date = reference_time.date() if reference_time is not None else None
 		for date in dates:
-			date_heading = format_booking_day_heading(date)
+			date_heading = format_booking_day_heading(date, reference_date)
 			f.write(f"<h3>{html_lib.escape(date_heading)}</h3>\n")
 			f.write("<table>\n<tr><th>Time</th>")
 			for v in venues:
@@ -334,8 +360,8 @@ def main() -> None:
 	html_output = resolve_output_path(args.output_dir, args.html_output)
 	os.makedirs(os.path.dirname(html_output) or ".", exist_ok=True)
 
-	all_slots, date_sequence, _reference_time = build_report_slots(input_csv)
-	write_html_report(all_slots, date_sequence, html_output, args.source_url)
+	all_slots, date_sequence, reference_time = build_report_slots(input_csv)
+	write_html_report(all_slots, date_sequence, html_output, args.source_url, reference_time=reference_time)
 	print(f"Loaded slots from CSV: {input_csv}")
 	print(f"Saved: {html_output}")
 

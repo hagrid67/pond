@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import os
+from datetime import datetime
 from pathlib import Path
 
 
@@ -41,6 +42,32 @@ def test_report_loads_csv_and_writes_html(tmp_path) -> None:
 	assert "Men&#x27;s" in html
 	assert "fully-booked" in html
 	assert "https://example.test/source" in html
+
+
+def test_report_headings_include_relative_day_labels(tmp_path) -> None:
+	csv_path = tmp_path / "bookings.csv"
+	html_path = tmp_path / "bookings.html"
+	csv_path.write_text(
+		"date,time,location,duration,availability\n"
+		"2026-07-09,10:00-11:00,Men's,60,12\n"
+		"2026-07-10,10:00-11:00,Men's,60,8\n"
+		"2026-07-11,10:00-11:00,Men's,60,6\n",
+		encoding="utf-8",
+	)
+
+	all_slots, date_sequence = booking_report.load_slots_from_csv(csv_path)
+	booking_report.write_html_report(
+		all_slots,
+		date_sequence,
+		html_path,
+		"https://example.test/source",
+		reference_time=datetime(2026, 7, 10, 14, 0),
+	)
+	html = html_path.read_text(encoding="utf-8")
+
+	assert "Thursday 2026-07-09 (yesterday)" in html
+	assert "Friday 2026-07-10 (today)" in html
+	assert "Saturday 2026-07-11 (tomorrow)" in html
 
 
 def test_find_latest_bookings_csv_uses_filename_timestamp(tmp_path) -> None:
