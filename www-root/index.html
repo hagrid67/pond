@@ -8,9 +8,35 @@
 		$("#tempTable").load("./pond-temps.html"); 
 		});
 
+		let reloadTimerId = null;
+
+		function set_reload_interval(minutes)
+		{
+			if (reloadTimerId !== null) {
+				clearInterval(reloadTimerId);
+				reloadTimerId = null;
+			}
+			if (minutes > 0) {
+				reloadTimerId = setInterval(function(){ reload_page(); }, minutes * 60000);
+			}
+		}
+
+		function update_reload_setting()
+		{
+			const selector = document.getElementById("reloadInterval");
+			if (!selector) {
+				return;
+			}
+			const minutes = parseInt(selector.value, 10);
+			set_reload_interval(Number.isNaN(minutes) ? 0 : minutes);
+		}
 
 		$(document).ready(function(){
-			setInterval(function(){ reload_page(); },1*60000);
+			update_reload_setting();
+			const selector = document.getElementById("reloadInterval");
+			if (selector) {
+				selector.addEventListener("change", update_reload_setting);
+			}
 		});
 
 		function reload_page()
@@ -99,6 +125,15 @@
 			but the City of London removed the sensor in April 2025.
 			The real-time temperatures here are now being sourced from a (very) small garden pond, as a proxy.
 			Its temperature varies much more than the pond.
+		</p>
+
+		<p>
+			<label for="reloadInterval">Auto-reload:</label>
+			<select id="reloadInterval">
+				<option value="0">None</option>
+				<option value="1" selected>Every minute</option>
+				<option value="15">Every 15 minutes</option>
+			</select>
 		</p>
 
 

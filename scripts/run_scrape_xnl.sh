@@ -19,6 +19,7 @@ HEADLESS_FLAG=""
 RUN_RSYNC=0
 RUN_PLOT=0
 RUN_SCRAPE=0
+RUN_FILTERS=0
 CRON_MODE=0
 SCRAPE_ARGS=()
 USER_DATA_DIR="${BROWSER_SESSION_DIR}"
@@ -32,6 +33,7 @@ Options:
   --no-headless  Force browser to run with UI.
   --scrape       Run pond.scrape_xnl. If omitted, scraping is skipped.
   --plot         Generate booking plots for Men's, Mixed, Ladies, and Lido.
+  --filters      Enable filter controls in generated bookings report HTML.
   --rsync        Run scripts/pond-rsync.sh.
   --cron         Emit extra timestamped separators and blank lines for cron logs.
   -h, --help     Show this help message.
@@ -56,6 +58,9 @@ while (($#)); do
       ;;
     --plot)
       RUN_PLOT=1
+      ;;
+    --filters)
+      RUN_FILTERS=1
       ;;
     --cron)
       CRON_MODE=1
@@ -146,7 +151,11 @@ else
 fi
 
 if [[ -f "${BOOKINGS_CSV}" ]]; then
-  run_python "${REPORT_SCRIPT_MODULE}" --html-output "${BOOKINGS_SRC}"
+  REPORT_CMD_ARGS=( "${REPORT_SCRIPT_MODULE}" --html-output "${BOOKINGS_SRC}" )
+  if [[ ${RUN_FILTERS} -eq 1 ]]; then
+    REPORT_CMD_ARGS+=( --filters )
+  fi
+  run_python "${REPORT_CMD_ARGS[@]}"
   cp "${BOOKINGS_SRC}" "${BOOKINGS_DST}"
   echo "Copied ${BOOKINGS_SRC} -> ${BOOKINGS_DST}"
 elif [[ ${RUN_SCRAPE} -eq 1 ]]; then

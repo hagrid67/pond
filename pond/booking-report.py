@@ -14,6 +14,7 @@ DATA_DIR = REPO_ROOT / "data"
 ARCHIVE_GLOB = "bookings-*.csv"
 HISTORICAL_DAYS = 6
 BOOKING_LEAD_DAYS = 7
+LIDO_SLOT_TIMES = {"10:30-13:30", "14:30-17:30", "18:00-20:00"}
 
 
 def availability_to_count(availability_value):
@@ -73,6 +74,10 @@ def infer_snapshot_time(path: Path) -> datetime:
 
 def parse_slot_start(date_text: str, time_text: str) -> datetime:
 	return datetime.strptime(f"{date_text} {time_text.split('-', 1)[0]}", "%Y-%m%d %H:%M")
+
+
+def slot_group_for_time(slot_time: str) -> str:
+	return "lido" if slot_time in LIDO_SLOT_TIMES else "pond"
 
 
 def parse_booking_date(date_text: str) -> date | None:
@@ -225,7 +230,14 @@ def load_slots_from_csv(csv_path):
 	return all_slots, date_sequence
 
 
-def write_html_report(all_slots, date_sequence, html_output, source_url, reference_time: datetime | None = None):
+def write_html_report(
+	all_slots,
+	date_sequence,
+	html_output,
+	source_url,
+	reference_time: datetime | None = None,
+	include_filters: bool = False,
+):
 	venues = ["Men's", "Ladies", "Mixed", "Lido"]
 	table = defaultdict(lambda: defaultdict(dict))
 	for s in all_slots:
@@ -258,6 +270,15 @@ def write_html_report(all_slots, date_sequence, html_output, source_url, referen
 		f.write("  .bookings-widget td.fully-booked { background: #6b2d2d; color: #fff; }\n")
 		f.write("  .bookings-widget td.empty { color: #ccc; }\n")
 		f.write("  .bookings-widget .booked-out-age { font-size: 0.78em; opacity: 0.85; }\n")
+		f.write("  .bookings-widget .filters { margin: 0.5rem auto 1rem auto; max-width: 1100px; }\n")
+		f.write("  .bookings-widget .filter-group { margin: 0.5rem 0; }\n")
+		f.write("  .bookings-widget .filter-subgroup { margin: 0.35rem 0; }\n")
+		f.write("  .bookings-widget .filter-subgroup-label { font-weight: bold; margin-right: 0.4rem; color: #c8dcdc; }\n")
+		f.write("  .bookings-widget .filter-group-label { font-weight: bold; margin-right: 0.4rem; }\n")
+		f.write("  .bookings-widget .filter-btn { margin: 0.2rem; padding: 0.25rem 0.55rem; border: 1px solid #6a8080; background: #263636; color: #d9efef; cursor: pointer; border-radius: 4px; }\n")
+		f.write("  .bookings-widget .filter-btn.active { background: #507070; color: #fff; }\n")
+		f.write("  .bookings-widget .permission-note { color: #b8caca; font-size: 0.9em; margin-left: 0.4rem; }\n")
+		f.write("  .bookings-widget.dark-bg { background: #050505; padding: 0.75rem; border-radius: 6px; }\n")
 		f.write("</style>\n")
 		f.write("<div class='bookings-widget'>\n")
 		f.write("<h2>Hampstead Heath Swimming Bookings</h2>\n")
@@ -275,24 +296,93 @@ def write_html_report(all_slots, date_sequence, html_output, source_url, referen
 		if has_today:
 			f.write("<p><a href='#today'>Jump to today</a></p>\n")
 
+		if include_filters:
+			day_groups = {"past": [], "present": [], "future": []}
+			day_group_by_date: dict[str, str] = {}
+			for day in dates:
+				parsed_day = parse_booking_date(day)
+				if parsed_day is None or reference_date is None:
+					group = "present"
+				elif parsed_day < reference_date:
+					group = "past"
+				elif parsed_day > reference_date:
+					group = "future"
+				else:
+					group = "present"
+				day_group_by_date[day] = group
+				day_groups[group].append(day)
+
+			f.write("<div class='filters'>\n")
+			f.write("<h3>Filters</h3>\n")
+			f.write("<div class='filter-group'>")
+			f.write("<button type='button' class='filter-btn' data-filter-group='ui' data-filter-value='dark-bg'>Toggle dark background</button>")
+			f.write("</div>\n")
+			f.write("<div class='filter-group'>")
+			f.write("<button type='button' class='filter-btn' data-filter-group='prefs' data-filter-value='remember'>Remember my filters on this device: Off</button>")
+			f.write("<span class='permission-note'>No login, no tracking; stored only in this browser.</span>")
+			f.write("</div>\n")
+
+			f.write("<div class='filter-group'><span class='filter-group-label'>Slot groups:</span>")
+			f.write("<button type='button' class='filter-btn active' data-filter-group='slot-group' data-filter-value='pond'>Pond slots</button>")
+			f.write("<button type='button' class='filter-btn active' data-filter-group='slot-group' data-filter-value='lido'>Lido slots</button>")
+			f.write("</div>\n")
+
+			f.write("<div class='filter-group'><span class='filter-group-label'>Venues:</span>")
+			for idx, venue in enumerate(venues):
+				f.write(
+					f"<button type='button' class='filter-btn active' "
+					f"data-filter-group='venue' data-filter-value='{idx}'>"
+					f"{html_lib.escape(venue)}</button>"
+				)
+			f.write("</div>\n")
+
+			f.write("<div class='filter-group'><span class='filter-group-label'>Day groups:</span>")
+			for day_group, group_label in (("past", "Past"), ("present", "Present"), ("future", "Future")):
+				f.write(
+					f"<button type='button' class='filter-btn active' "
+					f"data-filter-group='day-group' data-filter-value='{day_group}'>"
+					f"{group_label}</button>"
+				)
+			f.write("</div>\n")
+
+			f.write("<div class='filter-group'><span class='filter-group-label'>Slot times:</span>")
+			for slot_time in all_times:
+				slot_group = slot_group_for_time(slot_time)
+				time_value = html_lib.escape(slot_time, quote=True)
+				f.write(
+					f"<button type='button' class='filter-btn active' "
+					f"data-filter-group='time' data-slot-group='{slot_group}' data-filter-value='{time_value}'>"
+					f"{html_lib.escape(slot_time)}</button>"
+				)
+			f.write("</div>\n")
+			f.write("</div>\n")
+
 		for date in dates:
+			date_value = html_lib.escape(date, quote=True)
+			day_group = day_group_by_date[date] if include_filters else "present"
+			f.write(f"<div class='booking-day' data-day='{date_value}' data-day-group='{day_group}'>\n")
 			date_heading = format_booking_day_heading(date, reference_date)
 			if reference_date is not None and parse_booking_date(date) == reference_date:
 				f.write(f"<h3 id='today'>{html_lib.escape(date_heading)}</h3>\n")
 			else:
 				f.write(f"<h3>{html_lib.escape(date_heading)}</h3>\n")
-			f.write("<table>\n<tr><th>Time</th>")
-			for v in venues:
-				f.write(f"<th>{html_lib.escape(v)}</th>")
+			f.write(f"<table class='bookings-table' data-day='{date_value}'>\n<tr><th>Time</th>")
+			for idx, v in enumerate(venues):
+				f.write(f"<th class='venue-col' data-venue-idx='{idx}'>{html_lib.escape(v)}</th>")
 			f.write("</tr>\n")
 			for t in all_times:
 				if t not in table[date]:
 					continue
-				f.write(f"<tr><td><b>{html_lib.escape(t)}</b></td>")
-				for v in venues:
+				slot_group = slot_group_for_time(t)
+				time_value = html_lib.escape(t, quote=True)
+				f.write(
+					f"<tr data-time='{time_value}' data-slot-group='{slot_group}'>"
+					f"<td><b>{html_lib.escape(t)}</b></td>"
+				)
+				for idx, v in enumerate(venues):
 					avail_raw = table[date][t].get(v)
 					if avail_raw is None:
-						f.write('<td class="empty">—</td>')
+						f.write(f'<td class="empty venue-cell" data-venue-idx="{idx}">—</td>')
 						continue
 
 					avail = str(table[date][t].get(f"{v}__display") or availability_to_display(avail_raw))
@@ -300,7 +390,7 @@ def write_html_report(all_slots, date_sequence, html_output, source_url, referen
 					booked_out_age = str(table[date][t].get(f"{v}__age") or "")
 
 					if ticket_count <= 0:
-						f.write('<td class="fully-booked">')
+						f.write(f'<td class="fully-booked venue-cell" data-venue-idx="{idx}">')
 						f.write(html_lib.escape(avail))
 						if booked_out_age:
 							f.write(f'<div class="booked-out-age">{html_lib.escape(booked_out_age)}</div>')
@@ -320,7 +410,7 @@ def write_html_report(all_slots, date_sequence, html_output, source_url, referen
 							cell_bg_color = "#d4edda"
 						bar_width = min(percentage, 100)
 						f.write(
-							f'<td class="available" style="position: relative; padding: 0; '
+							f'<td class="available venue-cell" data-venue-idx="{idx}" style="position: relative; padding: 0; '
 							f'background: {cell_bg_color};">'
 						)
 						f.write(
@@ -336,6 +426,267 @@ def write_html_report(all_slots, date_sequence, html_output, source_url, referen
 						f.write("</td>")
 				f.write("</tr>\n")
 			f.write("</table>\n")
+			f.write("</div>\n")
+
+		if include_filters:
+			f.write("<script>\n")
+			f.write("(function() {\n")
+			f.write("  const PREFS_STORAGE_KEY = 'pondBookingsFilterPrefs';\n")
+			f.write("  const PREFS_CONSENT_KEY = 'pondBookingsFilterPrefsConsent';\n")
+			f.write("  const widget = document.querySelector('.bookings-widget');\n")
+			f.write("  const uiButtons = Array.from(document.querySelectorAll('.filter-btn[data-filter-group=\\\"ui\\\"]'));\n")
+			f.write("  const prefsButtons = Array.from(document.querySelectorAll('.filter-btn[data-filter-group=\\\"prefs\\\"]'));\n")
+			f.write("  const rememberButton = prefsButtons.find(btn => btn.dataset.filterValue === 'remember');\n")
+			f.write("  const slotGroupButtons = Array.from(document.querySelectorAll('.filter-btn[data-filter-group=\\\"slot-group\\\"]'));\n")
+			f.write("  const venueButtons = Array.from(document.querySelectorAll('.filter-btn[data-filter-group=\\\"venue\\\"]'));\n")
+			f.write("  const dayGroupButtons = Array.from(document.querySelectorAll('.filter-btn[data-filter-group=\\\"day-group\\\"]'));\n")
+			f.write("  const timeButtons = Array.from(document.querySelectorAll('.filter-btn[data-filter-group=\\\"time\\\"]'));\n")
+			f.write("  const selectedVenues = new Set(venueButtons.map(btn => btn.dataset.filterValue));\n")
+			f.write("  const selectedDayGroups = new Set(dayGroupButtons.map(btn => btn.dataset.filterValue));\n")
+			f.write("  const selectedTimes = new Set(timeButtons.map(btn => btn.dataset.filterValue));\n")
+			f.write("  const selectedSlotGroups = new Set(slotGroupButtons.map(btn => btn.dataset.filterValue));\n")
+			f.write("  let persistPrefs = false;\n")
+			f.write("\n")
+			f.write("  function readStorage(key) {\n")
+			f.write("    try {\n")
+			f.write("      return window.localStorage.getItem(key);\n")
+			f.write("    } catch (_err) {\n")
+			f.write("      return null;\n")
+			f.write("    }\n")
+			f.write("  }\n")
+			f.write("\n")
+			f.write("  function writeStorage(key, value) {\n")
+			f.write("    try {\n")
+			f.write("      window.localStorage.setItem(key, value);\n")
+			f.write("      return true;\n")
+			f.write("    } catch (_err) {\n")
+			f.write("      return false;\n")
+			f.write("    }\n")
+			f.write("  }\n")
+			f.write("\n")
+			f.write("  function removeStorage(key) {\n")
+			f.write("    try {\n")
+			f.write("      window.localStorage.removeItem(key);\n")
+			f.write("    } catch (_err) {\n")
+			f.write("      // Ignore storage removal failures.\n")
+			f.write("    }\n")
+			f.write("  }\n")
+			f.write("\n")
+			f.write("  function setButtonState(button, isActive) {\n")
+			f.write("    button.classList.toggle('active', isActive);\n")
+			f.write("  }\n")
+			f.write("\n")
+			f.write("  function updateRememberButton() {\n")
+			f.write("    if (!rememberButton) {\n")
+			f.write("      return;\n")
+			f.write("    }\n")
+			f.write("    rememberButton.textContent = persistPrefs\n")
+			f.write("      ? 'Remember my filters on this device: On'\n")
+			f.write("      : 'Remember my filters on this device: Off';\n")
+			f.write("    setButtonState(rememberButton, persistPrefs);\n")
+			f.write("  }\n")
+			f.write("\n")
+			f.write("  function savePreferences() {\n")
+			f.write("    if (!persistPrefs) {\n")
+			f.write("      return;\n")
+			f.write("    }\n")
+			f.write("    const payload = {\n")
+			f.write("      venues: Array.from(selectedVenues),\n")
+			f.write("      dayGroups: Array.from(selectedDayGroups),\n")
+			f.write("      times: Array.from(selectedTimes),\n")
+			f.write("      slotGroups: Array.from(selectedSlotGroups),\n")
+			f.write("      darkBg: !!(widget && widget.classList.contains('dark-bg'))\n")
+			f.write("    };\n")
+			f.write("    writeStorage(PREFS_STORAGE_KEY, JSON.stringify(payload));\n")
+			f.write("  }\n")
+			f.write("\n")
+			f.write("  function loadPreferences() {\n")
+			f.write("    const raw = readStorage(PREFS_STORAGE_KEY);\n")
+			f.write("    if (!raw) {\n")
+			f.write("      return;\n")
+			f.write("    }\n")
+			f.write("    let parsed = null;\n")
+			f.write("    try {\n")
+			f.write("      parsed = JSON.parse(raw);\n")
+			f.write("    } catch (_err) {\n")
+			f.write("      return;\n")
+			f.write("    }\n")
+			f.write("\n")
+			f.write("    if (parsed && Array.isArray(parsed.venues)) {\n")
+			f.write("      selectedVenues.clear();\n")
+			f.write("      parsed.venues.forEach(value => {\n")
+			f.write("        if (venueButtons.some(btn => btn.dataset.filterValue === value)) {\n")
+			f.write("          selectedVenues.add(value);\n")
+			f.write("        }\n")
+			f.write("      });\n")
+			f.write("    }\n")
+			f.write("    if (parsed && Array.isArray(parsed.dayGroups)) {\n")
+			f.write("      selectedDayGroups.clear();\n")
+			f.write("      parsed.dayGroups.forEach(value => {\n")
+			f.write("        if (dayGroupButtons.some(btn => btn.dataset.filterValue === value)) {\n")
+			f.write("          selectedDayGroups.add(value);\n")
+			f.write("        }\n")
+			f.write("      });\n")
+			f.write("    }\n")
+			f.write("    if (parsed && Array.isArray(parsed.times)) {\n")
+			f.write("      selectedTimes.clear();\n")
+			f.write("      parsed.times.forEach(value => {\n")
+			f.write("        if (timeButtons.some(btn => btn.dataset.filterValue === value)) {\n")
+			f.write("          selectedTimes.add(value);\n")
+			f.write("        }\n")
+			f.write("      });\n")
+			f.write("    }\n")
+			f.write("    if (parsed && Array.isArray(parsed.slotGroups)) {\n")
+			f.write("      selectedSlotGroups.clear();\n")
+			f.write("      parsed.slotGroups.forEach(value => {\n")
+			f.write("        if (slotGroupButtons.some(btn => btn.dataset.filterValue === value)) {\n")
+			f.write("          selectedSlotGroups.add(value);\n")
+			f.write("        }\n")
+			f.write("      });\n")
+			f.write("    }\n")
+			f.write("\n")
+			f.write("    if (widget && parsed && parsed.darkBg) {\n")
+			f.write("      widget.classList.add('dark-bg');\n")
+			f.write("    }\n")
+			f.write("\n")
+			f.write("    venueButtons.forEach(btn => setButtonState(btn, selectedVenues.has(btn.dataset.filterValue)));\n")
+			f.write("    dayGroupButtons.forEach(btn => setButtonState(btn, selectedDayGroups.has(btn.dataset.filterValue)));\n")
+			f.write("    timeButtons.forEach(btn => setButtonState(btn, selectedTimes.has(btn.dataset.filterValue)));\n")
+			f.write("    slotGroupButtons.forEach(btn => setButtonState(btn, selectedSlotGroups.has(btn.dataset.filterValue)));\n")
+			f.write("    const darkToggle = uiButtons.find(btn => btn.dataset.filterValue === 'dark-bg');\n")
+			f.write("    if (darkToggle && widget) {\n")
+			f.write("      setButtonState(darkToggle, widget.classList.contains('dark-bg'));\n")
+			f.write("    }\n")
+			f.write("  }\n")
+			f.write("\n")
+			f.write("  function refreshDayGroupButtons() {\n")
+			f.write("    dayGroupButtons.forEach(groupBtn => {\n")
+			f.write("      setButtonState(groupBtn, selectedDayGroups.has(groupBtn.dataset.filterValue));\n")
+			f.write("    });\n")
+			f.write("  }\n")
+			f.write("\n")
+			f.write("  function refreshSlotGroupButtons() {\n")
+			f.write("    slotGroupButtons.forEach(groupBtn => {\n")
+			f.write("      const groupName = groupBtn.dataset.filterValue;\n")
+			f.write("      setButtonState(groupBtn, selectedSlotGroups.has(groupName));\n")
+			f.write("    });\n")
+			f.write("  }\n")
+			f.write("\n")
+			f.write("  function applyFilters() {\n")
+			f.write("    timeButtons.forEach(button => {\n")
+			f.write("      const slotGroup = button.dataset.slotGroup;\n")
+			f.write("      button.style.display = selectedSlotGroups.has(slotGroup) ? '' : 'none';\n")
+			f.write("    });\n")
+			f.write("\n")
+			f.write("    document.querySelectorAll('.bookings-widget .bookings-table').forEach(table => {\n")
+			f.write("      table.querySelectorAll('th.venue-col, td.venue-cell').forEach(cell => {\n")
+			f.write("        const venueIdx = cell.dataset.venueIdx;\n")
+			f.write("        cell.style.display = selectedVenues.has(venueIdx) ? '' : 'none';\n")
+			f.write("      });\n")
+			f.write("\n")
+			f.write("      table.querySelectorAll('tr[data-time]').forEach(row => {\n")
+			f.write("        const timeMatch = selectedTimes.has(row.dataset.time);\n")
+			f.write("        const slotGroupMatch = selectedSlotGroups.has(row.dataset.slotGroup);\n")
+			f.write("        const hasVisibleVenue = Array.from(row.querySelectorAll('td.venue-cell')).some(cell => cell.style.display !== 'none');\n")
+			f.write("        row.style.display = (timeMatch && slotGroupMatch && hasVisibleVenue) ? '' : 'none';\n")
+			f.write("      });\n")
+			f.write("    });\n")
+			f.write("\n")
+			f.write("    document.querySelectorAll('.bookings-widget .booking-day').forEach(section => {\n")
+			f.write("      const daySelected = selectedDayGroups.has(section.dataset.dayGroup);\n")
+			f.write("      const hasVisibleRows = Array.from(section.querySelectorAll('tr[data-time]')).some(row => row.style.display !== 'none');\n")
+			f.write("      section.style.display = (daySelected && hasVisibleRows) ? '' : 'none';\n")
+			f.write("    });\n")
+			f.write("    refreshDayGroupButtons();\n")
+			f.write("    refreshSlotGroupButtons();\n")
+			f.write("    savePreferences();\n")
+			f.write("  }\n")
+			f.write("\n")
+			f.write("  prefsButtons.forEach(button => {\n")
+			f.write("    if (button.dataset.filterValue !== 'remember') {\n")
+			f.write("      return;\n")
+			f.write("    }\n")
+			f.write("    button.addEventListener('click', () => {\n")
+			f.write("      persistPrefs = !persistPrefs;\n")
+			f.write("      if (persistPrefs) {\n")
+			f.write("        if (!writeStorage(PREFS_CONSENT_KEY, 'accepted')) {\n")
+			f.write("          persistPrefs = false;\n")
+			f.write("        }\n")
+			f.write("      } else {\n")
+			f.write("        removeStorage(PREFS_CONSENT_KEY);\n")
+			f.write("        removeStorage(PREFS_STORAGE_KEY);\n")
+			f.write("      }\n")
+			f.write("      updateRememberButton();\n")
+			f.write("      savePreferences();\n")
+			f.write("    });\n")
+			f.write("  });\n")
+			f.write("\n")
+			f.write("  uiButtons.forEach(button => {\n")
+			f.write("    if (button.dataset.filterValue !== 'dark-bg') {\n")
+			f.write("      return;\n")
+			f.write("    }\n")
+			f.write("    button.addEventListener('click', () => {\n")
+			f.write("      if (!widget) {\n")
+			f.write("        return;\n")
+			f.write("      }\n")
+			f.write("      widget.classList.toggle('dark-bg');\n")
+			f.write("      setButtonState(button, widget.classList.contains('dark-bg'));\n")
+			f.write("    });\n")
+			f.write("  });\n")
+			f.write("\n")
+			f.write("  slotGroupButtons.forEach(button => {\n")
+			f.write("    button.addEventListener('click', () => {\n")
+			f.write("      const value = button.dataset.filterValue;\n")
+			f.write("      if (selectedSlotGroups.has(value)) {\n")
+			f.write("        selectedSlotGroups.delete(value);\n")
+			f.write("      } else {\n")
+			f.write("        selectedSlotGroups.add(value);\n")
+			f.write("      }\n")
+			f.write("      setButtonState(button, selectedSlotGroups.has(value));\n")
+			f.write("      applyFilters();\n")
+			f.write("    });\n")
+			f.write("  });\n")
+			f.write("\n")
+			f.write("  dayGroupButtons.forEach(button => {\n")
+			f.write("    button.addEventListener('click', () => {\n")
+			f.write("      const value = button.dataset.filterValue;\n")
+			f.write("      if (selectedDayGroups.has(value)) {\n")
+			f.write("        selectedDayGroups.delete(value);\n")
+			f.write("      } else {\n")
+			f.write("        selectedDayGroups.add(value);\n")
+			f.write("      }\n")
+			f.write("      setButtonState(button, selectedDayGroups.has(value));\n")
+			f.write("      applyFilters();\n")
+			f.write("    });\n")
+			f.write("  });\n")
+			f.write("\n")
+			f.write("  function wireButtons(buttons, selectedSet) {\n")
+			f.write("    buttons.forEach(button => {\n")
+			f.write("      button.addEventListener('click', () => {\n")
+			f.write("        const value = button.dataset.filterValue;\n")
+			f.write("        if (selectedSet.has(value)) {\n")
+			f.write("          selectedSet.delete(value);\n")
+			f.write("        } else {\n")
+			f.write("          selectedSet.add(value);\n")
+			f.write("        }\n")
+			f.write("        setButtonState(button, selectedSet.has(value));\n")
+			f.write("        applyFilters();\n")
+			f.write("      });\n")
+			f.write("    });\n")
+			f.write("  }\n")
+			f.write("\n")
+			f.write("  wireButtons(venueButtons, selectedVenues);\n")
+			f.write("  wireButtons(timeButtons, selectedTimes);\n")
+			f.write("  persistPrefs = readStorage(PREFS_CONSENT_KEY) === 'accepted';\n")
+			f.write("  updateRememberButton();\n")
+			f.write("  if (persistPrefs) {\n")
+			f.write("    loadPreferences();\n")
+			f.write("  }\n")
+			f.write("  refreshDayGroupButtons();\n")
+			f.write("  refreshSlotGroupButtons();\n")
+			f.write("  applyFilters();\n")
+			f.write("})();\n")
+			f.write("</script>\n")
 		f.write("</div>\n")
 
 
@@ -361,6 +712,11 @@ def main() -> None:
 		default="output",
 		help="Default directory for outputs when output args are bare filenames.",
 	)
+	parser.add_argument(
+		"--filters",
+		action="store_true",
+		help="Enable interactive filter buttons for venues, days, and slot times.",
+	)
 	args = parser.parse_args()
 
 	if args.input_csv is None:
@@ -371,7 +727,14 @@ def main() -> None:
 	os.makedirs(os.path.dirname(html_output) or ".", exist_ok=True)
 
 	all_slots, date_sequence, reference_time = build_report_slots(input_csv)
-	write_html_report(all_slots, date_sequence, html_output, args.source_url, reference_time=reference_time)
+	write_html_report(
+		all_slots,
+		date_sequence,
+		html_output,
+		args.source_url,
+		reference_time=reference_time,
+		include_filters=args.filters,
+	)
 	print(f"Loaded slots from CSV: {input_csv}")
 	print(f"Saved: {html_output}")
 

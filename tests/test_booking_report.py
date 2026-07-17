@@ -72,6 +72,52 @@ def test_report_headings_include_relative_day_labels(tmp_path) -> None:
 	assert "Saturday 2026-07-11 (tomorrow)" in html
 
 
+def test_report_includes_filter_controls_when_enabled(tmp_path) -> None:
+	csv_path = tmp_path / "bookings.csv"
+	html_path = tmp_path / "bookings.html"
+	csv_path.write_text(
+		"date,time,location,duration,availability\n"
+		"2026-07-10,10:00-11:00,Men's,60,8\n"
+		"2026-07-10,10:30-13:30,Lido,180,60\n"
+		"2026-07-10,11:00-12:00,Ladies,60,5\n"
+		"2026-07-11,10:00-11:00,Mixed,60,6\n",
+		encoding="utf-8",
+	)
+
+	all_slots, date_sequence = booking_report.load_slots_from_csv(csv_path)
+	booking_report.write_html_report(
+		all_slots,
+		date_sequence,
+		html_path,
+		"https://example.test/source",
+		reference_time=datetime(2026, 7, 10, 14, 0),
+		include_filters=True,
+	)
+	html = html_path.read_text(encoding="utf-8")
+
+	assert "<h3>Filters</h3>" in html
+	assert "Toggle dark background" in html
+	assert "Remember my filters on this device: Off" in html
+	assert "No login, no tracking; stored only in this browser." in html
+	assert "data-filter-group='slot-group' data-filter-value='pond'" in html
+	assert "data-filter-group='slot-group' data-filter-value='lido'" in html
+	assert "data-filter-group='day-group' data-filter-value='past'" in html
+	assert "data-filter-group='day-group' data-filter-value='present'" in html
+	assert "data-filter-group='day-group' data-filter-value='future'" in html
+	assert "data-filter-group='venue'" in html
+	assert "data-filter-group='day'" not in html
+	assert "data-day-group='present'" in html
+	assert "data-day-group='future'" in html
+	assert "data-filter-group='time'" in html
+	assert "data-filter-group='time' data-slot-group='pond'" in html
+	assert "data-filter-group='time' data-slot-group='lido'" in html
+	assert "class='booking-day' data-day='2026-07-10'" in html
+	assert "class='bookings-table' data-day='2026-07-10'" in html
+	assert "tr data-time='10:00-11:00'" in html
+	assert "data-slot-group='pond'" in html
+	assert "data-slot-group='lido'" in html
+
+
 def test_find_latest_bookings_csv_uses_filename_timestamp(tmp_path) -> None:
 	older = tmp_path / "bookings-2026-0709-1200.csv"
 	newer = tmp_path / "bookings-2026-0710-1200.csv"
