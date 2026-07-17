@@ -21,6 +21,7 @@
     const venueButtons = Array.from(widget.querySelectorAll(".filter-btn[data-filter-group='venue']"));
     const dayGroupButtons = Array.from(widget.querySelectorAll(".filter-btn[data-filter-group='day-group']"));
     const timeButtons = Array.from(widget.querySelectorAll(".filter-btn[data-filter-group='time']"));
+    const reloadSelector = document.getElementById("reloadInterval");
 
     if (!slotGroupButtons.length && !venueButtons.length && !dayGroupButtons.length && !timeButtons.length) {
       return;
@@ -81,6 +82,7 @@
         times: Array.from(selectedTimes),
         slotGroups: Array.from(selectedSlotGroups),
         darkBg: widget.classList.contains("dark-bg"),
+        reloadInterval: reloadSelector ? reloadSelector.value : null,
       };
       writeStorage(PREFS_STORAGE_KEY, JSON.stringify(payload));
     }
@@ -136,6 +138,16 @@
 
       if (parsed && parsed.darkBg) {
         widget.classList.add("dark-bg");
+      }
+
+      if (reloadSelector && parsed && typeof parsed.reloadInterval === "string") {
+        const hasOption = !!reloadSelector.querySelector("option[value='" + parsed.reloadInterval + "']");
+        if (hasOption) {
+          reloadSelector.value = parsed.reloadInterval;
+          if (typeof window.update_reload_setting === "function") {
+            window.update_reload_setting();
+          }
+        }
       }
 
       venueButtons.forEach((btn) => setButtonState(btn, selectedVenues.has(btn.dataset.filterValue)));
@@ -270,6 +282,12 @@
 
     wireButtons(venueButtons, selectedVenues);
     wireButtons(timeButtons, selectedTimes);
+
+    if (reloadSelector) {
+      reloadSelector.addEventListener("change", () => {
+        savePreferences();
+      });
+    }
 
     persistPrefs = readStorage(PREFS_CONSENT_KEY) === "accepted";
     updateRememberButton();
