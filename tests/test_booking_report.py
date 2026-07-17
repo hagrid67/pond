@@ -42,6 +42,8 @@ def test_report_loads_csv_and_writes_html(tmp_path) -> None:
 	assert "Men&#x27;s" in html
 	assert "fully-booked" in html
 	assert "https://example.test/source" in html
+	assert "<style>" not in html
+	assert "<script>" not in html
 
 
 def test_report_headings_include_relative_day_labels(tmp_path) -> None:

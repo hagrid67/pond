@@ -1,0 +1,99 @@
+.bookings-widget {
+  font-family: sans-serif;
+  color: #fff;
+}
+
+.bookings-widget table {
+  border-collapse: collapse;
+  margin: 0 auto 1rem auto;
+}
+
+.bookings-widget th,
+.bookings-widget td {
+  border: 1px solid #666;
+  padding: 6px 12px;
+  text-align: center;
+  color: #fff;
+}
+
+.bookings-widget th {
+  background: #2f3f3f;
+}
+
+.bookings-widget tr:nth-child(even) {
+  background: #507070;
+}
+
+.bookings-widget th:nth-child(even) {
+  background: #507070;
+}
+
+.bookings-widget .meta {
+  margin: 0.25rem 0 1rem 0;
+  color: #aaa;
+}
+
+.bookings-widget .meta a {
+  color: #8ab4f8;
+}
+
+.bookings-widget td.available {
+  background: #d4edda;
+  color: #111;
+  font-weight: bold;
+}
+
+.bookings-widget td.fully-booked {
+  background: #6b2d2d;
+  color: #fff;
+}
+
+.bookings-widget td.empty {
+  color: #ccc;
+}
+
+.bookings-widget .booked-out-age {
+  font-size: 0.78em;
+  opacity: 0.85;
+}
+
+.bookings-widget .filters {
+  margin: 0.5rem auto 1rem auto;
+  max-width: 1100px;
+}
+
+.bookings-widget .filter-group {
+  margin: 0.5rem 0;
+}
+
+.bookings-widget .filter-group-label {
+  font-weight: bold;
+  margin-right: 0.4rem;
+}
+
+.bookings-widget .filter-btn {
+  margin: 0.2rem;
+  padding: 0.25rem 0.55rem;
+  border: 1px solid #6a8080;
+  background: #263636;
+  color: #d9efef;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.bookings-widget .filter-btn.active {
+  background: #507070;
+  color: #fff;
+}
+
+.bookings-widget .permission-note {
+  color: #b8caca;
+  font-size: 0.9em;
+  margin-left: 0.4rem;
+}
+
+.bookings-widget.dark-bg {
+  background: #050505;
+  padding: 0.75rem;
+  border-radius: 6px;
+}
