@@ -1,11 +1,12 @@
 #!/bin/bash
 
+# fail fast on error, unset variable, or pipe failure
 set -euo pipefail
 
 echo `date` start rsync 
 cd ~/projects/pond
 
-echo rsync pc19 - gcweb
+echo rsync from `hostname` to gcweb
 
 cp -f ./output/booking-plot-*.png ./www-root/
 
