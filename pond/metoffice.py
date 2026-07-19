@@ -15,6 +15,7 @@ import glob
 import pandas as pd
 import json
 from datetime import datetime
+import re
 
 BASE_DIR = os.path.join(os.path.expanduser("~"), "projects", "pond")
 LOG_DIR = os.path.join(BASE_DIR, "logs")
@@ -36,6 +37,84 @@ log.basicConfig(
 
 base_url = "https://data.hub.api.metoffice.gov.uk/sitespecific/v0/point/"
 
+
+def parse_snapshot_datetime_from_filename(file_path):
+    """Parse snapshot datetime from filename format pond-yymmdd-hhmm.json."""
+    name = os.path.basename(file_path)
+    match = re.match(r"^pond-(\d{6})-(\d{4})\.json$", name)
+    if not match:
+        return None
+    return pd.to_datetime(f"{match.group(1)}-{match.group(2)}", format="%y%m%d-%H%M", utc=True)
+
+
+def dataframe_from_forecast_json(data):
+    """Build a DataFrame indexed by time from forecast JSON."""
+    props = data["features"][0]["properties"]
+    ts = props.get("timeSeries")
+    if ts is None:
+        # Accept lowercase variant for robustness.
+        ts = props.get("timeseries")
+    if ts is None:
+        raise KeyError("timeSeries")
+
+    dfW = pd.DataFrame(ts)
+    if "time" not in dfW.columns:
+        raise KeyError("time")
+
+    dfW["time"] = pd.to_datetime(dfW["time"], errors="coerce", utc=True)
+    dfW = dfW.dropna(subset=["time"]).set_index("time").sort_index()
+    return dfW
+
+
+def load_merged_recent_data(nDays=7):
+    """Merge forecast data from the last nDays files, preferring newer snapshots."""
+    data_dir = resolve_path("metoffice-data")
+    pattern = os.path.join(data_dir, "pond-*.json")
+    files = glob.glob(pattern)
+
+    if not files:
+        print("ERROR: No JSON files found in ./metoffice-data/")
+        return
+
+    cutoff = pd.Timestamp.utcnow() - pd.Timedelta(days=nDays)
+    recent_files = []
+
+    for file_path in files:
+        file_dt = parse_snapshot_datetime_from_filename(file_path)
+        if file_dt is None:
+            continue
+        if file_dt >= cutoff:
+            recent_files.append((file_dt, file_path))
+
+    if not recent_files:
+        print(f"ERROR: No forecast files found in last {nDays} days")
+        return
+
+    recent_files.sort(key=lambda item: item[0])
+
+    frames = []
+    for _, file_path in recent_files:
+        try:
+            with open(file_path, "r") as f:
+                data = json.load(f)
+            frames.append(dataframe_from_forecast_json(data))
+        except Exception:
+            log.warning("Skipping unreadable/invalid forecast file: %s", file_path, exc_info=True)
+
+    if not frames:
+        print("ERROR: No valid forecast dataframes could be loaded")
+        return
+
+    # Concatenate oldest -> newest then keep the last duplicate timestamp.
+    # This means newer snapshots override older values for the same forecast time.
+    dfW = pd.concat(frames)
+    dfW = dfW[~dfW.index.duplicated(keep="last")].sort_index()
+
+    print(f"Merged {len(frames)} forecast files from the last {nDays} days")
+    print(f"dfW shape: {dfW.shape}")
+    print(dfW.head())
+    return dfW
+
 def load_latest_data():
     """Load the most recent pond-*.json file from ./metoffice-data/ and build dfW from timeseries."""
     data_dir = resolve_path("metoffice-data")
@@ -53,16 +132,7 @@ def load_latest_data():
         with open(latest_file, 'r') as f:
             data = json.load(f)
         print(f"Loaded: {latest_file}")
-
-        # Build dataframe from features[0].properties.timeseries and index by time.
-        ts = data["features"][0]["properties"]["timeSeries"]
-        dfW = pd.DataFrame(ts)
-        if "time" not in dfW.columns:
-            print("ERROR: timeseries does not contain a 'time' field")
-            return
-
-        dfW["time"] = pd.to_datetime(dfW["time"], errors="coerce")
-        dfW = dfW.set_index("time").sort_index()
+        dfW = dataframe_from_forecast_json(data)
 
         print(f"dfW shape: {dfW.shape}")
         print(dfW.head())
@@ -71,6 +141,9 @@ def load_latest_data():
     except Exception as e:
         log.error(f"Error loading file {latest_file}", exc_info=True)
         print(f"ERROR: Could not load {latest_file}")
+
+
+
 
 def retrieve_forecast(baseUrl, timesteps, requestHeaders, latitude, longitude, excludeMetadata, includeLocation):
     
@@ -207,11 +280,32 @@ if __name__ == "__main__":
         dest="load",
         help="Load and display the most recent pond data JSON file."
     )
+    parser.add_argument(
+        "--load-merged",
+        action="store_true",
+        dest="load_merged",
+        help="Load and merge recent forecast JSON files. Newer snapshots override older values for the same forecast time."
+    )
+    parser.add_argument(
+        "--days",
+        action="store",
+        dest="days",
+        type=int,
+        default=7,
+        help="Number of recent days of forecast snapshots to include with --load-merged (default: 7)."
+    )
 
     args = parser.parse_args()
 
     if args.load:
         load_latest_data()
+        sys.exit()
+
+    if args.load_merged:
+        if args.days < 1:
+            print("ERROR: --days must be >= 1")
+            sys.exit()
+        load_merged_recent_data(nDays=args.days)
         sys.exit()
 
     timesteps = args.timesteps

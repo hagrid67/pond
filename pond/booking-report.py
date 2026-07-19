@@ -7,6 +7,9 @@ import os
 from collections import defaultdict
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
+
+import pandas as pd
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -74,6 +77,72 @@ def infer_snapshot_time(path: Path) -> datetime:
 
 def parse_slot_start(date_text: str, time_text: str) -> datetime:
 	return datetime.strptime(f"{date_text} {time_text.split('-', 1)[0]}", "%Y-%m%d %H:%M")
+
+
+def resolve_slot_weather(
+	weather_df,
+	slot_date: str,
+	slot_time: str,
+	london_tz: ZoneInfo,
+	utc_tz: ZoneInfo,
+) -> str:
+	"""Return weather text for slot start time, converting local BST/GMT to UTC."""
+	if weather_df is None or weather_df.empty:
+		return ""
+
+	try:
+		slot_start_local = parse_slot_start(slot_date, slot_time).replace(tzinfo=london_tz)
+	except ValueError:
+		return ""
+
+	slot_start_utc = slot_start_local.astimezone(utc_tz)
+	target_time = pd.Timestamp(slot_start_utc)
+
+	if target_time in weather_df.index:
+		row = weather_df.loc[target_time]
+	else:
+		idx = weather_df.index.get_indexer([target_time], method="nearest")
+		if len(idx) == 0 or idx[0] < 0:
+			return ""
+		nearest_time = weather_df.index[idx[0]]
+		if abs(nearest_time - target_time) > pd.Timedelta(hours=1):
+			return ""
+		row = weather_df.iloc[idx[0]]
+
+	temp_value = row.get("screenTemperature")
+	uv_value = row.get("uvIndex")
+	if pd.isna(temp_value) or pd.isna(uv_value):
+		return ""
+
+	temp_rounded = int(round(float(temp_value)))
+	uv_rounded = int(round(float(uv_value)))
+	return f"{temp_rounded}°C, {uv_rounded}"
+
+
+def build_weather_by_slot(date_sequence: list[str], all_times: list[str], n_days: int = 7) -> dict[tuple[str, str], str]:
+	"""Build weather display strings for each slot start from merged forecast files."""
+	try:
+		from pond.metoffice import load_merged_recent_data
+	except Exception:
+		return {}
+
+	try:
+		weather_df = load_merged_recent_data(nDays=n_days)
+	except Exception:
+		return {}
+
+	if weather_df is None or weather_df.empty:
+		return {}
+
+	london_tz = ZoneInfo("Europe/London")
+	utc_tz = ZoneInfo("UTC")
+	weather_by_slot: dict[tuple[str, str], str] = {}
+	for day in date_sequence:
+		for slot_time in all_times:
+			weather_text = resolve_slot_weather(weather_df, day, slot_time, london_tz, utc_tz)
+			if weather_text:
+				weather_by_slot[(day, slot_time)] = weather_text
+	return weather_by_slot
 
 
 def slot_group_for_time(slot_time: str) -> str:
@@ -254,6 +323,7 @@ def write_html_report(
 
 	dates = [d for d in date_sequence if d in table]
 	all_times = sorted(set(t for d in table.values() for t in d.keys()))
+	weather_by_slot = build_weather_by_slot(dates, all_times)
 	reference_date = reference_time.date() if reference_time is not None else None
 	has_today = bool(
 		reference_date is not None
@@ -291,6 +361,7 @@ def write_html_report(
 			f.write("<h3>Filters</h3>\n")
 			f.write("<div class='filter-group'>")
 			f.write("<button type='button' class='filter-btn' data-filter-group='ui' data-filter-value='dark-bg'>Toggle dark background</button>")
+			f.write("<button type='button' class='filter-btn' data-filter-group='ui' data-filter-value='weather'>Weather</button>")
 			f.write("</div>\n")
 			f.write("<div class='filter-group'>")
 			f.write("<button type='button' class='filter-btn' data-filter-group='prefs' data-filter-value='remember'>Remember my filters on this device: Off</button>")
@@ -344,6 +415,7 @@ def write_html_report(
 			f.write(f"<table class='bookings-table' data-day='{date_value}'>\n<tr><th>Time</th>")
 			for idx, v in enumerate(venues):
 				f.write(f"<th class='venue-col' data-venue-idx='{idx}'>{html_lib.escape(v)}</th>")
+			f.write("<th class='weather-col weather-hidden'>Weather</th>")
 			f.write("</tr>\n")
 			for t in all_times:
 				if t not in table[date]:
@@ -399,6 +471,9 @@ def write_html_report(
 							f.write(f'<div class="booked-out-age">{html_lib.escape(booked_out_age)}</div>')
 						f.write("</div>")
 						f.write("</td>")
+				weather_text = weather_by_slot.get((date, t), "")
+				weather_display = html_lib.escape(weather_text) if weather_text else "—"
+				f.write(f"<td class='weather-cell weather-col weather-hidden'>{weather_display}</td>")
 				f.write("</tr>\n")
 			f.write("</table>\n")
 			f.write("</div>\n")

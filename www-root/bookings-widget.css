@@ -92,6 +92,10 @@
   margin-left: 0.4rem;
 }
 
+.bookings-widget .weather-hidden {
+  display: none;
+}
+
 .bookings-widget.dark-bg {
   background: #050505;
   padding: 0.75rem;

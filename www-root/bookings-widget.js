@@ -31,6 +31,7 @@
     const selectedDayGroups = new Set(dayGroupButtons.map((btn) => btn.dataset.filterValue));
     const selectedTimes = new Set(timeButtons.map((btn) => btn.dataset.filterValue));
     const selectedSlotGroups = new Set(slotGroupButtons.map((btn) => btn.dataset.filterValue));
+    let showWeather = false;
     let persistPrefs = false;
 
     function readStorage(key) {
@@ -82,6 +83,7 @@
         times: Array.from(selectedTimes),
         slotGroups: Array.from(selectedSlotGroups),
         darkBg: widget.classList.contains("dark-bg"),
+        showWeather: showWeather,
         reloadInterval: reloadSelector ? reloadSelector.value : null,
       };
       writeStorage(PREFS_STORAGE_KEY, JSON.stringify(payload));
@@ -140,6 +142,10 @@
         widget.classList.add("dark-bg");
       }
 
+      if (parsed && typeof parsed.showWeather === "boolean") {
+        showWeather = parsed.showWeather;
+      }
+
       if (reloadSelector && parsed && typeof parsed.reloadInterval === "string") {
         const hasOption = !!reloadSelector.querySelector("option[value='" + parsed.reloadInterval + "']");
         if (hasOption) {
@@ -159,6 +165,10 @@
       if (darkToggle) {
         setButtonState(darkToggle, widget.classList.contains("dark-bg"));
       }
+      const weatherToggle = uiButtons.find((btn) => btn.dataset.filterValue === "weather");
+      if (weatherToggle) {
+        setButtonState(weatherToggle, showWeather);
+      }
     }
 
     function refreshDayGroupButtons() {
@@ -175,6 +185,10 @@
     }
 
     function applyFilters() {
+      widget.querySelectorAll("th.weather-col, td.weather-col").forEach((cell) => {
+        cell.classList.toggle("weather-hidden", !showWeather);
+      });
+
       timeButtons.forEach((button) => {
         const slotGroup = button.dataset.slotGroup;
         button.style.display = selectedSlotGroups.has(slotGroup) ? "" : "none";
@@ -229,12 +243,15 @@
     });
 
     uiButtons.forEach((button) => {
-      if (button.dataset.filterValue !== "dark-bg") {
-        return;
-      }
       button.addEventListener("click", () => {
-        widget.classList.toggle("dark-bg");
-        setButtonState(button, widget.classList.contains("dark-bg"));
+        if (button.dataset.filterValue === "dark-bg") {
+          widget.classList.toggle("dark-bg");
+          setButtonState(button, widget.classList.contains("dark-bg"));
+        } else if (button.dataset.filterValue === "weather") {
+          showWeather = !showWeather;
+          setButtonState(button, showWeather);
+          applyFilters();
+        }
         savePreferences();
       });
     });
