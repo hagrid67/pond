@@ -20,6 +20,8 @@ RUN_RSYNC=0
 RUN_PLOT=0
 RUN_SCRAPE=0
 RUN_FILTERS=0
+RUN_WEATHER_DEBUG=0
+WEATHER_DEBUG_LOG=""
 CRON_MODE=0
 SCRAPE_ARGS=()
 USER_DATA_DIR="${BROWSER_SESSION_DIR}"
@@ -34,6 +36,8 @@ Options:
   --scrape       Run pond.scrape_xnl. If omitted, scraping is skipped.
   --plot         Generate booking plots for Men's, Mixed, Ladies, and Lido.
   --filters      Enable filter controls in generated bookings report HTML.
+  --weather-debug Enable verbose weather debug logs in booking-report.py.
+  --weather-debug-log PATH  Write weather debug logs to PATH.
   --rsync        Run scripts/pond-rsync.sh.
   --cron         Emit extra timestamped separators and blank lines for cron logs.
   -h, --help     Show this help message.
@@ -61,6 +65,20 @@ while (($#)); do
       ;;
     --filters)
       RUN_FILTERS=1
+      ;;
+    --weather-debug)
+      RUN_WEATHER_DEBUG=1
+      ;;
+    --weather-debug-log)
+      shift
+      if (($# == 0)); then
+        echo "Error: --weather-debug-log requires a value." >&2
+        exit 1
+      fi
+      WEATHER_DEBUG_LOG="$1"
+      ;;
+    --weather-debug-log=*)
+      WEATHER_DEBUG_LOG="${1#*=}"
       ;;
     --cron)
       CRON_MODE=1
@@ -154,6 +172,12 @@ if [[ -f "${BOOKINGS_CSV}" ]]; then
   REPORT_CMD_ARGS=( "${REPORT_SCRIPT_MODULE}" --html-output "${BOOKINGS_SRC}" )
   if [[ ${RUN_FILTERS} -eq 1 ]]; then
     REPORT_CMD_ARGS+=( --filters )
+  fi
+  if [[ ${RUN_WEATHER_DEBUG} -eq 1 ]]; then
+    REPORT_CMD_ARGS+=( --weather-debug )
+    if [[ -n "${WEATHER_DEBUG_LOG}" ]]; then
+      REPORT_CMD_ARGS+=( --weather-debug-log "${WEATHER_DEBUG_LOG}" )
+    fi
   fi
   run_python "${REPORT_CMD_ARGS[@]}"
   cp "${BOOKINGS_SRC}" "${BOOKINGS_DST}"

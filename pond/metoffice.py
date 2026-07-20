@@ -135,6 +135,7 @@ def load_latest_data():
         dfW = dataframe_from_forecast_json(data)
 
         print(f"dfW shape: {dfW.shape}")
+        print(dfW[["screenTemperature", "uvIndex"]])
         print(dfW.head())
         return dfW
 

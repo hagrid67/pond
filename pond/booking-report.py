@@ -8,6 +8,7 @@ from collections import defaultdict
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
+from typing import Callable
 
 import pandas as pd
 
@@ -79,69 +80,124 @@ def parse_slot_start(date_text: str, time_text: str) -> datetime:
 	return datetime.strptime(f"{date_text} {time_text.split('-', 1)[0]}", "%Y-%m%d %H:%M")
 
 
+def make_debug_logger(enabled: bool, file_path: str | None = None) -> Callable[[str], None]:
+	"""Create a debug logger used for weather diagnostics."""
+	if not enabled:
+		return lambda _msg: None
+
+	def _log(message: str) -> None:
+		stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+		line = f"[{stamp}] [weather-debug] {message}"
+		print(line)
+		if file_path:
+			try:
+				os.makedirs(os.path.dirname(file_path) or ".", exist_ok=True)
+				with open(file_path, "a", encoding="utf-8") as fh:
+					fh.write(line + "\n")
+			except OSError:
+				# Keep debug logging non-fatal.
+				pass
+
+	return _log
+
+
 def resolve_slot_weather(
 	weather_df,
 	slot_date: str,
 	slot_time: str,
 	london_tz: ZoneInfo,
 	utc_tz: ZoneInfo,
-) -> str:
+) -> tuple[str, str]:
 	"""Return weather text for slot start time, converting local BST/GMT to UTC."""
 	if weather_df is None or weather_df.empty:
-		return ""
+		return "", "empty-weather-data"
 
 	try:
 		slot_start_local = parse_slot_start(slot_date, slot_time).replace(tzinfo=london_tz)
 	except ValueError:
-		return ""
+		return "", "slot-parse-failed"
 
 	slot_start_utc = slot_start_local.astimezone(utc_tz)
 	target_time = pd.Timestamp(slot_start_utc)
 
 	if target_time in weather_df.index:
 		row = weather_df.loc[target_time]
+		match_type = "exact"
 	else:
 		idx = weather_df.index.get_indexer([target_time], method="nearest")
 		if len(idx) == 0 or idx[0] < 0:
-			return ""
+			return "", "no-nearest-index"
 		nearest_time = weather_df.index[idx[0]]
 		if abs(nearest_time - target_time) > pd.Timedelta(hours=1):
-			return ""
+			return "", "nearest-too-far"
 		row = weather_df.iloc[idx[0]]
+		match_type = "nearest"
 
 	temp_value = row.get("screenTemperature")
 	uv_value = row.get("uvIndex")
 	if pd.isna(temp_value) or pd.isna(uv_value):
-		return ""
+		return "", "missing-temp-or-uv"
 
 	temp_rounded = int(round(float(temp_value)))
 	uv_rounded = int(round(float(uv_value)))
-	return f"{temp_rounded}°C, {uv_rounded}"
+	return f"{temp_rounded}°C, {uv_rounded}", match_type
 
 
-def build_weather_by_slot(date_sequence: list[str], all_times: list[str], n_days: int = 7) -> dict[tuple[str, str], str]:
+def build_weather_by_slot(
+	date_sequence: list[str],
+	all_times: list[str],
+	n_days: int = 7,
+	debug_log: Callable[[str], None] | None = None,
+) -> dict[tuple[str, str], str]:
 	"""Build weather display strings for each slot start from merged forecast files."""
+	if debug_log is None:
+		debug_log = lambda _msg: None
+
+	debug_log(
+		f"Starting weather merge: n_days={n_days}, day_count={len(date_sequence)}, slot_time_count={len(all_times)}"
+	)
+
 	try:
 		from pond.metoffice import load_merged_recent_data
-	except Exception:
+		debug_log("Imported pond.metoffice.load_merged_recent_data")
+	except Exception as exc:
+		debug_log(f"Failed to import pond.metoffice.load_merged_recent_data: {exc!r}")
 		return {}
 
 	try:
 		weather_df = load_merged_recent_data(nDays=n_days)
-	except Exception:
+	except Exception as exc:
+		debug_log(f"Weather merge loader raised exception: {exc!r}")
 		return {}
 
 	if weather_df is None or weather_df.empty:
+		debug_log("Merged weather dataframe is empty")
 		return {}
+
+	debug_log(
+		"Weather dataframe loaded: "
+		f"rows={len(weather_df)}, cols={len(weather_df.columns)}, "
+		f"index_min={weather_df.index.min()}, index_max={weather_df.index.max()}, "
+		f"has_temp={'screenTemperature' in weather_df.columns}, has_uv={'uvIndex' in weather_df.columns}"
+	)
 
 	london_tz = ZoneInfo("Europe/London")
 	utc_tz = ZoneInfo("UTC")
 	weather_by_slot: dict[tuple[str, str], str] = {}
+	reason_counts: dict[str, int] = defaultdict(int)
+	hit_count = 0
 	for day in date_sequence:
 		for slot_time in all_times:
-			weather_text = resolve_slot_weather(weather_df, day, slot_time, london_tz, utc_tz)
+			weather_text, reason = resolve_slot_weather(weather_df, day, slot_time, london_tz, utc_tz)
+			reason_counts[reason] += 1
 			if weather_text:
+				hit_count += 1
 				weather_by_slot[(day, slot_time)] = weather_text
+
+	debug_log(
+		f"Weather lookup complete: matched={hit_count}, total_checks={len(date_sequence) * len(all_times)}, "
+		f"reason_counts={dict(reason_counts)}"
+	)
 	return weather_by_slot
 
 
@@ -306,7 +362,11 @@ def write_html_report(
 	source_url,
 	reference_time: datetime | None = None,
 	include_filters: bool = False,
+	weather_debug_log: Callable[[str], None] | None = None,
 ):
+	if weather_debug_log is None:
+		weather_debug_log = lambda _msg: None
+
 	venues = ["Men's", "Ladies", "Mixed", "Lido"]
 	table = defaultdict(lambda: defaultdict(dict))
 	for s in all_slots:
@@ -323,7 +383,8 @@ def write_html_report(
 
 	dates = [d for d in date_sequence if d in table]
 	all_times = sorted(set(t for d in table.values() for t in d.keys()))
-	weather_by_slot = build_weather_by_slot(dates, all_times)
+	weather_by_slot = build_weather_by_slot(dates, all_times, debug_log=weather_debug_log)
+	weather_debug_log(f"Weather entries available for report slots: {len(weather_by_slot)}")
 	reference_date = reference_time.date() if reference_time is not None else None
 	has_today = bool(
 		reference_date is not None
@@ -507,6 +568,16 @@ def main() -> None:
 		action="store_true",
 		help="Enable interactive filter buttons for venues, days, and slot times.",
 	)
+	parser.add_argument(
+		"--weather-debug",
+		action="store_true",
+		help="Enable verbose weather integration debug logs.",
+	)
+	parser.add_argument(
+		"--weather-debug-log",
+		default="logs/booking-report-weather.log",
+		help="Debug log file path used with --weather-debug. Relative paths are resolved from current working directory.",
+	)
 	args = parser.parse_args()
 
 	if args.input_csv is None:
@@ -515,8 +586,13 @@ def main() -> None:
 		input_csv = Path(resolve_output_path(args.output_dir, args.input_csv))
 	html_output = resolve_output_path(args.output_dir, args.html_output)
 	os.makedirs(os.path.dirname(html_output) or ".", exist_ok=True)
+	weather_debug_log = make_debug_logger(args.weather_debug, args.weather_debug_log if args.weather_debug else None)
+	weather_debug_log(f"booking-report start: input_csv={input_csv}, html_output={html_output}")
 
 	all_slots, date_sequence, reference_time = build_report_slots(input_csv)
+	weather_debug_log(
+		f"slot data loaded: all_slots={len(all_slots)}, date_sequence={len(date_sequence)}, reference_time={reference_time}"
+	)
 	write_html_report(
 		all_slots,
 		date_sequence,
@@ -524,6 +600,7 @@ def main() -> None:
 		args.source_url,
 		reference_time=reference_time,
 		include_filters=args.filters,
+		weather_debug_log=weather_debug_log,
 	)
 	print(f"Loaded slots from CSV: {input_csv}")
 	print(f"Saved: {html_output}")
