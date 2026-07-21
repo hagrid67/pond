@@ -37,14 +37,49 @@ log.basicConfig(
 
 base_url = "https://data.hub.api.metoffice.gov.uk/sitespecific/v0/point/"
 
+TIMESTEP_CODE_TO_API = {
+    "1h": "hourly",
+    "3h": "three-hourly",
+    "1d": "daily",
+}
 
-def parse_snapshot_datetime_from_filename(file_path):
-    """Parse snapshot datetime from filename format pond-yymmdd-hhmm.json."""
+
+def parse_timestep_codes(arg_value):
+    """Parse a comma-separated list of timestep codes into ordered API timestep names."""
+    raw_codes = [part.strip() for part in str(arg_value).split(",") if part.strip()]
+    if not raw_codes:
+        return None, "No timestep codes provided"
+
+    invalid = [code for code in raw_codes if code not in TIMESTEP_CODE_TO_API]
+    if invalid:
+        return None, f"Invalid timestep codes: {', '.join(invalid)}"
+
+    # Preserve user order while removing duplicates.
+    selected = []
+    for code in raw_codes:
+        timestep = TIMESTEP_CODE_TO_API[code]
+        if timestep not in selected:
+            selected.append(timestep)
+    return selected, None
+
+
+def parse_snapshot_metadata_from_filename(file_path):
+    """Parse snapshot datetime and suffix from filenames like pond-yymmdd-hhmm[-3h|-1d].json."""
     name = os.path.basename(file_path)
-    match = re.match(r"^pond-(\d{6})-(\d{4})\.json$", name)
+    match = re.match(r"^pond-(\d{6})-(\d{4})(?:-(3h|1d))?\.json$", name)
     if not match:
         return None
-    return pd.to_datetime(f"{match.group(1)}-{match.group(2)}", format="%y%m%d-%H%M", utc=True)
+    snapshot_dt = pd.to_datetime(f"{match.group(1)}-{match.group(2)}", format="%y%m%d-%H%M", utc=True)
+    snapshot_suffix = f"-{match.group(3)}" if match.group(3) else ""
+    return snapshot_dt, snapshot_suffix
+
+
+def parse_snapshot_datetime_from_filename(file_path):
+    """Parse snapshot datetime from a forecast filename."""
+    metadata = parse_snapshot_metadata_from_filename(file_path)
+    if metadata is None:
+        return None
+    return metadata[0]
 
 
 def dataframe_from_forecast_json(data):
@@ -66,8 +101,12 @@ def dataframe_from_forecast_json(data):
     return dfW
 
 
-def load_merged_recent_data(nDays=7):
-    """Merge forecast data from the last nDays files, preferring newer snapshots."""
+def load_merged_recent_data(nDays=7, file_suffix="", verbose=True):
+    """Merge forecast data from the last nDays files, preferring newer snapshots.
+
+    file_suffix controls which files are loaded:
+    empty string means hourly files, "-3h" means three-hourly files, and "-1d" means daily files.
+    """
     data_dir = resolve_path("metoffice-data")
     pattern = os.path.join(data_dir, "pond-*.json")
     files = glob.glob(pattern)
@@ -80,8 +119,11 @@ def load_merged_recent_data(nDays=7):
     recent_files = []
 
     for file_path in files:
-        file_dt = parse_snapshot_datetime_from_filename(file_path)
-        if file_dt is None:
+        metadata = parse_snapshot_metadata_from_filename(file_path)
+        if metadata is None:
+            continue
+        file_dt, snapshot_suffix = metadata
+        if snapshot_suffix != file_suffix:
             continue
         if file_dt >= cutoff:
             recent_files.append((file_dt, file_path))
@@ -110,9 +152,10 @@ def load_merged_recent_data(nDays=7):
     dfW = pd.concat(frames)
     dfW = dfW[~dfW.index.duplicated(keep="last")].sort_index()
 
-    print(f"Merged {len(frames)} forecast files from the last {nDays} days")
-    print(f"dfW shape: {dfW.shape}")
-    print(dfW.head())
+    if verbose:
+        print(f"Merged {len(frames)} forecast files from the last {nDays} days")
+        print(f"dfW shape: {dfW.shape}")
+        print(dfW.head())
     return dfW
 
 def load_latest_data():
@@ -199,7 +242,13 @@ def retrieve_forecast(baseUrl, timesteps, requestHeaders, latitude, longitude, e
 
     out_dir = resolve_path("metoffice-data")
     os.makedirs(out_dir, exist_ok=True)
-    out_name = f"pond-{model_run_dt.strftime('%y%m%d-%H%M')}.json"
+    timestep_suffix = ""
+    if timesteps == "three-hourly":
+        timestep_suffix = "-3h"
+    elif timesteps == "daily":
+        timestep_suffix = "-1d"
+
+    out_name = f"pond-{model_run_dt.strftime('%y%m%d-%H%M')}{timestep_suffix}.json"
     out_path = os.path.join(out_dir, out_name)
 
     if os.path.exists(out_path):
@@ -224,8 +273,8 @@ if __name__ == "__main__":
         "--timesteps",
         action="store",
         dest="timesteps",
-        default="hourly",
-        help="The frequency of the timesteps provided in the forecast. The options are hourly, three-hourly or daily",
+        default="1h,3h",
+        help="Comma-separated timestep codes to fetch. Supported values: 1h (hourly), 3h (three-hourly), 1d (daily). Default: 1h,3h",
     )
     parser.add_argument(
         "-m",
@@ -337,11 +386,18 @@ if __name__ == "__main__":
         print("ERROR: Latitude and longitude must be supplied")
         sys.exit()
 
-    if timesteps != "hourly" and timesteps != "three-hourly" and timesteps != "daily":
-        print("ERROR: The available frequencies for timesteps are hourly, three-hourly or daily.")
+    selected_timesteps, parse_error = parse_timestep_codes(timesteps)
+    if parse_error is not None:
+        print(f"ERROR: {parse_error}")
+        print("ERROR: Use --timesteps with comma-separated codes: 1h,3h,1d")
         sys.exit() 
-    
-    retrieve_forecast(base_url, timesteps, requestHeaders, latitude, longitude, excludeMetadata, includeLocation)
+
+    if selected_timesteps is None:
+        print("ERROR: Could not parse timestep codes")
+        sys.exit()
+
+    for timestep in selected_timesteps:
+        retrieve_forecast(base_url, timestep, requestHeaders, latitude, longitude, excludeMetadata, includeLocation)
 
 
 

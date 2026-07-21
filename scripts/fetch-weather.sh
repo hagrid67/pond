@@ -24,9 +24,10 @@ All other options are passed through to: python -m pond.metoffice
 
 Examples:
   fetch-weather.sh
-  fetch-weather.sh --timesteps hourly
+  fetch-weather.sh --timesteps 1h
   fetch-weather.sh --key "<API_KEY>"
-  fetch-weather.sh --cron --timesteps three-hourly
+  fetch-weather.sh --cron --timesteps 3h
+  fetch-weather.sh --timesteps 1h,3h
 EOF
 }
 

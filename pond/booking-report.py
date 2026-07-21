@@ -3,13 +3,16 @@ from __future__ import annotations
 import argparse
 import csv
 import html as html_lib
+import json
 import os
+import sys
 from collections import defaultdict
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
-from typing import Callable
+from typing import Callable, cast
 
+import numpy as np
 import pandas as pd
 
 
@@ -101,17 +104,364 @@ def make_debug_logger(enabled: bool, file_path: str | None = None) -> Callable[[
 	return _log
 
 
+def _load_recent_weather_snapshots(
+	n_days: int,
+	file_suffix: str,
+	debug_log: Callable[[str], None] | None = None,
+) -> list[pd.DataFrame]:
+	if debug_log is None:
+		debug_log = lambda _msg: None
+
+	try:
+		from pond.metoffice import dataframe_from_forecast_json, parse_snapshot_metadata_from_filename
+		debug_log("Imported pond.metoffice dataframe helpers")
+	except Exception as exc:
+		debug_log(f"Failed to import pond.metoffice dataframe helpers: {exc!r}")
+		return []
+
+	data_dir = REPO_ROOT / "metoffice-data"
+	cutoff = pd.Timestamp.utcnow() - pd.Timedelta(days=n_days)
+	snapshot_frames: list[pd.DataFrame] = []
+
+	for file_path in sorted(data_dir.glob("pond-*.json")):
+		metadata = parse_snapshot_metadata_from_filename(str(file_path))
+		if metadata is None:
+			continue
+		snapshot_time, snapshot_suffix = metadata
+		if snapshot_suffix != file_suffix or snapshot_time < cutoff:
+			continue
+
+		try:
+			with open(file_path, "r", encoding="utf-8") as fh:
+				data = json.load(fh)
+			raw_frame = dataframe_from_forecast_json(data).sort_index()
+		except Exception as exc:
+			debug_log(f"Skipping unreadable forecast file {file_path}: {exc!r}")
+			continue
+
+		snapshot_frames.append(
+			_normalize_weather_snapshot(
+				raw_frame,
+				file_path.name,
+				snapshot_time,
+				snapshot_suffix or "hourly",
+			)
+		)
+
+	return snapshot_frames
+
+
+def _normalize_weather_snapshot(
+	snapshot_frame: pd.DataFrame,
+	source_file: str,
+	source_snapshot_time: pd.Timestamp,
+	source_timestep: str,
+) -> pd.DataFrame:
+	frame = snapshot_frame.copy()
+	frame.index = pd.DatetimeIndex(frame.index, tz="UTC")
+	frame.index.name = "weather_time_utc"
+
+	if source_timestep == "-3h" and {"minScreenAirTemp", "maxScreenAirTemp"}.issubset(frame.columns):
+		screen_temperature = (
+			pd.to_numeric(frame["minScreenAirTemp"], errors="coerce")
+			+ pd.to_numeric(frame["maxScreenAirTemp"], errors="coerce")
+		) / 2
+	else:
+		if "screenTemperature" in frame.columns:
+			screen_temperature = pd.to_numeric(frame["screenTemperature"], errors="coerce")
+		else:
+			screen_temperature = pd.Series(np.nan, index=frame.index)
+
+	if "uvIndex" in frame.columns:
+		uv_index = pd.to_numeric(frame["uvIndex"], errors="coerce")
+	else:
+		uv_index = pd.Series(np.nan, index=frame.index)
+
+	frame = pd.DataFrame(
+		{
+			"screenTemperature": screen_temperature,
+			"uvIndex": uv_index,
+			"source_file": source_file,
+			"source_time": frame.index,
+			"source_timestep": source_timestep,
+		},
+		index=frame.index,
+	)
+	frame["source_snapshot_time"] = source_snapshot_time
+	frame["source_priority"] = 1 if source_timestep == "hourly" else 0
+	return frame
+
+
+def build_unified_weather_dataframe(n_days: int = 7, debug_log: Callable[[str], None] | None = None) -> pd.DataFrame | None:
+	if debug_log is None:
+		debug_log = lambda _msg: None
+
+	hourly_frames = _load_recent_weather_snapshots(n_days, "", debug_log=debug_log)
+	three_hourly_frames = _load_recent_weather_snapshots(n_days, "-3h", debug_log=debug_log)
+	if not hourly_frames and not three_hourly_frames:
+		return None
+
+	raw_frames = three_hourly_frames + hourly_frames
+	raw = pd.concat(raw_frames).sort_index(kind="stable")
+	raw = raw[~raw.index.duplicated(keep="last")].sort_index()
+
+	start_time = raw.index.min().floor("h")
+	end_time = raw.index.max().ceil("h")
+	grid_index = pd.date_range(start=start_time, end=end_time, freq="1h", tz="UTC")
+	combined = pd.DataFrame(index=grid_index)
+	combined.index.name = "weather_time_utc"
+
+	numeric = raw[["screenTemperature", "uvIndex"]].apply(pd.to_numeric, errors="coerce")
+	combined_numeric = (
+		numeric.reindex(numeric.index.union(grid_index))
+		.sort_index()
+		.interpolate(method="time")
+		.reindex(grid_index)
+	)
+	combined["screenTemperature"] = combined_numeric["screenTemperature"]
+	combined["uvIndex"] = combined_numeric["uvIndex"]
+	combined["source_file"] = raw["source_file"].reindex(grid_index).ffill()
+	combined["source_time"] = raw["source_time"].reindex(grid_index).ffill()
+	combined["source_timestep"] = raw["source_timestep"].reindex(grid_index).ffill()
+	combined["source_snapshot_time"] = raw["source_snapshot_time"].reindex(grid_index).ffill()
+	combined["is_interpolated"] = ~grid_index.isin(raw.index)
+
+	return combined
+
+
+def _resolve_weather_row(weather_df: pd.DataFrame | None, target_time: pd.Timestamp) -> pd.Series | None:
+	if weather_df is None or weather_df.empty:
+		return None
+	if target_time < weather_df.index.min() or target_time > weather_df.index.max():
+		return None
+
+	augmented = weather_df.reindex(weather_df.index.union([target_time])).sort_index()
+	augmented[["screenTemperature", "uvIndex"]] = augmented[["screenTemperature", "uvIndex"]].interpolate(method="time")
+	for column in ("source_file", "source_time", "source_timestep", "source_snapshot_time"):
+		if column in augmented.columns:
+			augmented[column] = augmented[column].ffill()
+	row = augmented.loc[target_time]
+	if isinstance(row, pd.DataFrame):
+		row = row.iloc[0]
+	row = row.copy()
+	row["is_interpolated"] = bool(target_time not in weather_df.index)
+	return row
+
+
+def _load_weather_frames(n_days: int, debug_log: Callable[[str], None] | None = None) -> tuple[pd.DataFrame | None, pd.DataFrame | None]:
+	if debug_log is None:
+		debug_log = lambda _msg: None
+
+	try:
+		from pond.metoffice import load_merged_recent_data
+		debug_log("Imported pond.metoffice.load_merged_recent_data")
+	except Exception as exc:
+		debug_log(f"Failed to import pond.metoffice.load_merged_recent_data: {exc!r}")
+		return None, None
+
+	try:
+		hourly_weather_df = load_merged_recent_data(nDays=n_days, file_suffix="", verbose=False)
+		three_hourly_weather_df = load_merged_recent_data(nDays=n_days, file_suffix="-3h", verbose=False)
+	except Exception as exc:
+		debug_log(f"Weather merge loader raised exception: {exc!r}")
+		return None, None
+
+	return hourly_weather_df, three_hourly_weather_df
+
+
+def build_hourly_weather_dataframe(
+	hourly_weather_df: pd.DataFrame | None,
+	three_hourly_weather_df: pd.DataFrame | None,
+) -> pd.DataFrame | None:
+	weather_columns = ["screenTemperature", "uvIndex"]
+	hourly_frame = _prepare_weather_frame(hourly_weather_df)
+	three_hourly_frame = _prepare_weather_frame(three_hourly_weather_df, use_three_hour_mean=True)
+	if hourly_frame is None and three_hourly_frame is None:
+		return None
+
+	frames = [frame for frame in (hourly_frame, three_hourly_frame) if frame is not None and not frame.empty]
+	if not frames:
+		return None
+
+	start_time = min(frame.index.min() for frame in frames).floor("h")
+	end_time = max(frame.index.max() for frame in frames).ceil("h")
+	combined_tz = getattr(frames[0].index, "tz", None)
+	combined_index = pd.date_range(start=start_time, end=end_time, freq="1h", tz=combined_tz)
+	combined = pd.DataFrame(index=combined_index)
+	combined.index.name = "weather_time_utc"
+	combined["screenTemperature"] = np.nan
+	combined["uvIndex"] = np.nan
+	combined["source_timestep"] = ""
+
+	if three_hourly_frame is not None and not three_hourly_frame.empty:
+		three_hourly_numeric = three_hourly_frame[[column for column in weather_columns if column in three_hourly_frame.columns]]
+		three_hourly_hourly = (
+			three_hourly_numeric.reindex(three_hourly_numeric.index.union(combined_index))
+			.sort_index()
+			.interpolate(method="time")
+			.reindex(combined_index)
+		)
+		for column in three_hourly_hourly.columns:
+			combined[column] = three_hourly_hourly[column]
+		combined["source_timestep"] = "-3h"
+
+	if hourly_frame is not None and not hourly_frame.empty:
+		hourly_numeric = hourly_frame[[column for column in weather_columns if column in hourly_frame.columns]]
+		hourly_aligned = hourly_numeric.reindex(combined_index)
+		hourly_mask = hourly_aligned.notna().any(axis=1)
+		for column in hourly_aligned.columns:
+			combined.loc[hourly_mask, column] = hourly_aligned.loc[hourly_mask, column]
+		combined.loc[hourly_mask, "source_timestep"] = "hourly"
+
+	return combined
+
+
+def build_test_weather_dataframe(
+	input_csv: Path,
+	n_days: int = 7,
+	debug_log: Callable[[str], None] | None = None,
+) -> pd.DataFrame:
+	if debug_log is None:
+		debug_log = lambda _msg: None
+
+	all_slots, _date_sequence = load_slots_from_csv(input_csv)
+	if not all_slots:
+		return pd.DataFrame()
+
+	combined_weather_df = build_unified_weather_dataframe(n_days=n_days, debug_log=debug_log)
+	if combined_weather_df is None or combined_weather_df.empty:
+		return pd.DataFrame()
+
+	london_tz = ZoneInfo("Europe/London")
+	utc_tz = ZoneInfo("UTC")
+
+	unique_dates = sorted({slot["date"] for slot in all_slots}, key=lambda value: parse_booking_date(value) or date.min)
+	unique_times = sorted({slot["time"] for slot in all_slots})
+	slot_lookup = {(slot["date"], slot["time"]) for slot in all_slots}
+	rows: list[dict[str, object]] = []
+
+	for slot_date in unique_dates:
+		for slot_time in unique_times:
+			if (slot_date, slot_time) not in slot_lookup:
+				continue
+			slot_start_local = parse_slot_start(slot_date, slot_time).replace(tzinfo=london_tz)
+			target_time_utc = pd.Timestamp(slot_start_local.astimezone(utc_tz))
+			lookup_row = _resolve_weather_row(combined_weather_df, target_time_utc)
+			if lookup_row is None:
+				continue
+
+			temp_value = lookup_row.get("screenTemperature")
+			uv_value = lookup_row.get("uvIndex")
+			source_timestep = str(lookup_row.get("source_timestep") or "")
+
+			rows.append(
+				{
+					"slot_date": slot_date,
+					"slot_time": slot_time,
+					"lookup_time_utc": target_time_utc,
+					"source_timestep": source_timestep,
+					"source_file": lookup_row.get("source_file"),
+					"source_time": lookup_row.get("source_time"),
+					"is_interpolated": bool(lookup_row.get("is_interpolated", False)),
+					"screenTemperature": round(float(temp_value), 2) if not pd.isna(temp_value) else pd.NA,
+					"uvIndex": round(float(uv_value), 2) if not pd.isna(uv_value) else pd.NA,
+				}
+			)
+
+	result = pd.DataFrame(rows)
+	if result.empty:
+		return result
+
+	result["slot_start_local"] = pd.to_datetime(
+		result["slot_date"] + " " + result["slot_time"].str.split("-", n=1).str[0],
+		format="%Y-%m%d %H:%M",
+	).dt.tz_localize(london_tz)
+	result = result.set_index("slot_start_local").sort_index()
+	result.index.name = "slot_start_local"
+	return result[["slot_date", "slot_time", "lookup_time_utc", "source_timestep", "source_file", "source_time", "is_interpolated", "screenTemperature", "uvIndex"]]
+
+
+def _prepare_weather_frame(weather_df: pd.DataFrame | None, use_three_hour_mean: bool = False) -> pd.DataFrame | None:
+	if weather_df is None or weather_df.empty:
+		return None
+	frame = weather_df.sort_index().copy()
+	if use_three_hour_mean and {"minScreenAirTemp", "maxScreenAirTemp"}.issubset(frame.columns):
+		frame["screenTemperature"] = (
+			pd.to_numeric(frame["minScreenAirTemp"], errors="coerce")
+			+ pd.to_numeric(frame["maxScreenAirTemp"], errors="coerce")
+		) / 2
+	else:
+		temperature_column = next(
+			(column for column in ("screenTemperature", "feelsLikeTemp", "maxScreenAirTemp", "minScreenAirTemp") if column in frame.columns),
+			None,
+		)
+		if temperature_column is not None:
+			frame["screenTemperature"] = pd.to_numeric(frame[temperature_column], errors="coerce")
+	if "uvIndex" in frame.columns:
+		frame["uvIndex"] = pd.to_numeric(frame["uvIndex"], errors="coerce")
+	return frame
+
+
+def _format_weather_row(row: pd.Series) -> str:
+	temp_value = row.get("screenTemperature")
+	uv_value = row.get("uvIndex")
+	if pd.isna(temp_value) or pd.isna(uv_value):
+		return ""
+
+	temp_rounded = int(round(float(temp_value)))
+	uv_rounded = int(round(float(uv_value)))
+	return f"{temp_rounded}°C, {uv_rounded}"
+
+
+def _resolve_from_hourly_frame(weather_df: pd.DataFrame | None, target_time: pd.Timestamp) -> tuple[str, str]:
+	frame = _prepare_weather_frame(weather_df)
+	if frame is None:
+		return "", "no-hourly-data"
+
+	if target_time in frame.index:
+		row = frame.loc[target_time]
+		if isinstance(row, pd.DataFrame):
+			row = row.iloc[0]
+		weather_text = _format_weather_row(row)
+		return weather_text, "hourly-exact" if weather_text else "hourly-missing-values"
+
+	idx = frame.index.get_indexer(pd.DatetimeIndex([target_time]), method="nearest")
+	if len(idx) == 0 or idx[0] < 0:
+		return "", "hourly-no-nearest-index"
+	nearest_time = cast(pd.Timestamp, frame.index[idx[0]])
+	if abs(nearest_time - target_time) > pd.Timedelta(hours=1):
+		return "", "hourly-nearest-too-far"
+	row = frame.iloc[idx[0]]
+	weather_text = _format_weather_row(row)
+	return weather_text, "hourly-nearest" if weather_text else "hourly-missing-values"
+
+
+def _resolve_from_three_hour_frame(weather_df: pd.DataFrame | None, target_time: pd.Timestamp) -> tuple[str, str]:
+	frame = _prepare_weather_frame(weather_df)
+	if frame is None:
+		return "", "no-three-hour-data"
+
+	if target_time < frame.index.min() or target_time > frame.index.max():
+		return "", "three-hour-out-of-range"
+
+	augmented = frame.reindex(frame.index.union([target_time])).sort_index().interpolate(method="time")
+	row = augmented.loc[target_time]
+	if isinstance(row, pd.DataFrame):
+		row = row.iloc[0]
+	weather_text = _format_weather_row(row)
+	if weather_text:
+		return weather_text, "three-hour-interpolated" if target_time not in frame.index else "three-hour-exact"
+	return "", "three-hour-missing-values"
+
+
 def resolve_slot_weather(
-	weather_df,
+	weather_df: pd.DataFrame | None,
 	slot_date: str,
 	slot_time: str,
 	london_tz: ZoneInfo,
 	utc_tz: ZoneInfo,
 ) -> tuple[str, str]:
 	"""Return weather text for slot start time, converting local BST/GMT to UTC."""
-	if weather_df is None or weather_df.empty:
-		return "", "empty-weather-data"
-
 	try:
 		slot_start_local = parse_slot_start(slot_date, slot_time).replace(tzinfo=london_tz)
 	except ValueError:
@@ -119,28 +469,18 @@ def resolve_slot_weather(
 
 	slot_start_utc = slot_start_local.astimezone(utc_tz)
 	target_time = pd.Timestamp(slot_start_utc)
+	row = _resolve_weather_row(weather_df, target_time)
+	if row is None:
+		return "", "no-weather-match"
 
-	if target_time in weather_df.index:
-		row = weather_df.loc[target_time]
-		match_type = "exact"
-	else:
-		idx = weather_df.index.get_indexer([target_time], method="nearest")
-		if len(idx) == 0 or idx[0] < 0:
-			return "", "no-nearest-index"
-		nearest_time = weather_df.index[idx[0]]
-		if abs(nearest_time - target_time) > pd.Timedelta(hours=1):
-			return "", "nearest-too-far"
-		row = weather_df.iloc[idx[0]]
-		match_type = "nearest"
-
-	temp_value = row.get("screenTemperature")
-	uv_value = row.get("uvIndex")
-	if pd.isna(temp_value) or pd.isna(uv_value):
+	weather_text = _format_weather_row(row)
+	if not weather_text:
 		return "", "missing-temp-or-uv"
 
-	temp_rounded = int(round(float(temp_value)))
-	uv_rounded = int(round(float(uv_value)))
-	return f"{temp_rounded}°C, {uv_rounded}", match_type
+	reason = str(row.get("source_timestep") or "weather")
+	if row.get("is_interpolated"):
+		reason = f"{reason}-interpolated"
+	return weather_text, reason
 
 
 def build_weather_by_slot(
@@ -157,28 +497,15 @@ def build_weather_by_slot(
 		f"Starting weather merge: n_days={n_days}, day_count={len(date_sequence)}, slot_time_count={len(all_times)}"
 	)
 
-	try:
-		from pond.metoffice import load_merged_recent_data
-		debug_log("Imported pond.metoffice.load_merged_recent_data")
-	except Exception as exc:
-		debug_log(f"Failed to import pond.metoffice.load_merged_recent_data: {exc!r}")
-		return {}
-
-	try:
-		weather_df = load_merged_recent_data(nDays=n_days)
-	except Exception as exc:
-		debug_log(f"Weather merge loader raised exception: {exc!r}")
-		return {}
-
-	if weather_df is None or weather_df.empty:
-		debug_log("Merged weather dataframe is empty")
+	weather_df = build_unified_weather_dataframe(n_days=n_days, debug_log=debug_log)
+	if weather_df is None:
 		return {}
 
 	debug_log(
-		"Weather dataframe loaded: "
-		f"rows={len(weather_df)}, cols={len(weather_df.columns)}, "
+		"Weather dataframes loaded: "
+		f"rows={len(weather_df)}, "
 		f"index_min={weather_df.index.min()}, index_max={weather_df.index.max()}, "
-		f"has_temp={'screenTemperature' in weather_df.columns}, has_uv={'uvIndex' in weather_df.columns}"
+		f"interpolated_rows={int(weather_df['is_interpolated'].sum()) if 'is_interpolated' in weather_df.columns else 0}"
 	)
 
 	london_tz = ZoneInfo("Europe/London")
@@ -188,7 +515,13 @@ def build_weather_by_slot(
 	hit_count = 0
 	for day in date_sequence:
 		for slot_time in all_times:
-			weather_text, reason = resolve_slot_weather(weather_df, day, slot_time, london_tz, utc_tz)
+			weather_text, reason = resolve_slot_weather(
+				weather_df,
+				day,
+				slot_time,
+				london_tz,
+				utc_tz,
+			)
 			reason_counts[reason] += 1
 			if weather_text:
 				hit_count += 1
@@ -578,6 +911,11 @@ def main() -> None:
 		default="logs/booking-report-weather.log",
 		help="Debug log file path used with --weather-debug. Relative paths are resolved from current working directory.",
 	)
+	parser.add_argument(
+		"--test-weather",
+		action="store_true",
+		help="Print a slot-indexed weather dataframe for debugging interpolation and forecast source selection.",
+	)
 	args = parser.parse_args()
 
 	if args.input_csv is None:
@@ -588,6 +926,15 @@ def main() -> None:
 	os.makedirs(os.path.dirname(html_output) or ".", exist_ok=True)
 	weather_debug_log = make_debug_logger(args.weather_debug, args.weather_debug_log if args.weather_debug else None)
 	weather_debug_log(f"booking-report start: input_csv={input_csv}, html_output={html_output}")
+
+	if args.test_weather:
+		weather_df = build_test_weather_dataframe(input_csv, debug_log=weather_debug_log)
+		if weather_df.empty:
+			print("ERROR: No test-weather dataframe could be built")
+			sys.exit(1)
+		with pd.option_context("display.max_rows", None, "display.max_columns", None, "display.width", 200):
+			print(weather_df.round({"screenTemperature": 2, "uvIndex": 2}).to_string())
+		sys.exit()
 
 	all_slots, date_sequence, reference_time = build_report_slots(input_csv)
 	weather_debug_log(

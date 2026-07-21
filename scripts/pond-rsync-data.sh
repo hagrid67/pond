@@ -9,6 +9,7 @@ cd ~/projects/pond
 echo rsync from jwpc12 to `hostname`
 
 rsync -av jwpc12:projects/pond/data .
+rsync -av jwpc12:projects/pond/metoffice-data .
 
 echo `date` end pond data rsync
 
