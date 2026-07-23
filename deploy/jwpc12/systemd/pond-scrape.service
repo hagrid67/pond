@@ -5,6 +5,8 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
+Environment=LIBGL_ALWAYS_SOFTWARE=1
+Environment=__GLX_VENDOR_LIBRARY_NAME=mesa
 WorkingDirectory=/home/jeremy/projects/pond
 ExecStart=/home/jeremy/projects/pond/scripts/run_scrape_xnl.sh --scrape --headless --filters --rsync
 

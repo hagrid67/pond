@@ -131,6 +131,11 @@ def scrape_bookings(
         browser_context = p.chromium.launch_persistent_context(
             user_data_dir=user_data_dir,
             headless=headless,
+            args=[
+                "--disable-gpu",
+                "--use-gl=swiftshader",
+                "--disable-gpu-compositing",
+            ],
         )
 
         page = browser_context.pages[0]
