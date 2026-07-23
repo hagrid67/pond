@@ -13,15 +13,69 @@
 
     const PREFS_STORAGE_KEY = "pondBookingsFilterPrefs";
     const PREFS_CONSENT_KEY = "pondBookingsFilterPrefsConsent";
+    const FILTERS_COLLAPSED_STORAGE_KEY = "pondBookingsFiltersCollapsed";
+
+    const debugFilters = window.location.search.includes("debugFilters=1");
+    function debugLog(message, details) {
+      if (!debugFilters) {
+        return;
+      }
+      if (typeof details === "undefined") {
+        console.log("[bookings-filters]", message);
+      } else {
+        console.log("[bookings-filters]", message, details);
+      }
+    }
 
     const uiButtons = Array.from(widget.querySelectorAll(".filter-btn[data-filter-group='ui']"));
     const prefsButtons = Array.from(widget.querySelectorAll(".filter-btn[data-filter-group='prefs']"));
     const rememberButton = prefsButtons.find((btn) => btn.dataset.filterValue === "remember");
+    const filtersShell = widget.querySelector(".filters-shell");
+    const desktopToggle = filtersShell ? filtersShell.querySelector(".filters-toggle-desktop") : null;
     const slotGroupButtons = Array.from(widget.querySelectorAll(".filter-btn[data-filter-group='slot-group']"));
     const venueButtons = Array.from(widget.querySelectorAll(".filter-btn[data-filter-group='venue']"));
     const dayGroupButtons = Array.from(widget.querySelectorAll(".filter-btn[data-filter-group='day-group']"));
     const timeButtons = Array.from(widget.querySelectorAll(".filter-btn[data-filter-group='time']"));
     const reloadSelector = document.getElementById("reloadInterval");
+
+    function setDesktopFiltersCollapsed(isCollapsed) {
+      if (!filtersShell || !desktopToggle) {
+        return;
+      }
+      filtersShell.classList.toggle("filters-collapsed", isCollapsed);
+      desktopToggle.setAttribute("aria-expanded", isCollapsed ? "false" : "true");
+      desktopToggle.textContent = isCollapsed ? "Show filters" : "Hide filters";
+      try {
+        window.localStorage.setItem(FILTERS_COLLAPSED_STORAGE_KEY, isCollapsed ? "1" : "0");
+      } catch (_err) {
+        // Ignore storage failures.
+      }
+      debugLog("desktop disclosure toggled", {
+        isCollapsed: isCollapsed,
+        width: window.innerWidth,
+      });
+    }
+
+    if (desktopToggle) {
+      desktopToggle.addEventListener("click", () => {
+        const isCollapsed = !filtersShell.classList.contains("filters-collapsed");
+        setDesktopFiltersCollapsed(isCollapsed);
+      });
+    }
+
+    debugLog("init", {
+      width: window.innerWidth,
+      mediaMax900: window.matchMedia("(max-width: 900px)").matches,
+      hasDesktopToggle: !!desktopToggle,
+      hasMobileToggle: false,
+    });
+
+    try {
+      const collapsedPref = window.localStorage.getItem(FILTERS_COLLAPSED_STORAGE_KEY) === "1";
+      setDesktopFiltersCollapsed(collapsedPref);
+    } catch (_err) {
+      setDesktopFiltersCollapsed(false);
+    }
 
     if (!slotGroupButtons.length && !venueButtons.length && !dayGroupButtons.length && !timeButtons.length) {
       return;

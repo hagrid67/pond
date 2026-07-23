@@ -944,7 +944,11 @@ def write_html_report(
 			f.write("<p><a href='#today'>Jump to today</a></p>\n")
 
 		if include_filters:
-			f.write("<div class='filters'>\n")
+			f.write("<div class='filters-shell'>\n")
+			f.write("<div class='filters-controls'>\n")
+			f.write("<button type='button' class='filters-toggle-desktop' aria-expanded='true'>Hide filters</button>")
+			f.write("</div>\n")
+			f.write("<div class='filters' id='booking-filters-panel'>\n")
 			f.write("<h3>Filters</h3>\n")
 			f.write("<div class='filter-group'>")
 			f.write("<button type='button' class='filter-btn' data-filter-group='ui' data-filter-value='dark-bg'>Toggle dark background</button>")
@@ -987,6 +991,7 @@ def write_html_report(
 					f"data-filter-group='time' data-slot-group='{slot_group}' data-filter-value='{time_value}'>"
 					f"{html_lib.escape(slot_time)}</button>"
 				)
+			f.write("</div>\n")
 			f.write("</div>\n")
 			f.write("</div>\n")
 

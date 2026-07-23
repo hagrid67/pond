@@ -1,6 +1,7 @@
 
 <html>
 	<head>
+		<meta name="viewport" content="width=device-width, initial-scale=1">
 		<link rel="stylesheet" href="./bookings-widget.css">
 		<script src="./bookings-widget.js"></script>
 		
@@ -9,6 +10,48 @@
 		$(function(){
 		$("#tempTable").load("./pond-temps.html"); 
 		});
+
+		const CHARTS_HIDDEN_STORAGE_KEY = "pondChartsHidden";
+		const RELOAD_INTERVAL_STORAGE_KEY = "pondReloadInterval";
+
+		function set_charts_hidden(hidden)
+		{
+			const chartBlocks = [
+				document.getElementById("bookingPlots"),
+				document.getElementById("tempChart"),
+			];
+			const toggleBtn = document.getElementById("toggleChartsBtn");
+			if (!toggleBtn) {
+				return;
+			}
+
+			chartBlocks.forEach((block) => {
+				if (!block) {
+					return;
+				}
+				block.style.display = hidden ? "none" : "";
+			});
+
+			toggleBtn.dataset.hidden = hidden ? "1" : "0";
+			toggleBtn.textContent = hidden ? "Show charts" : "Hide charts";
+
+			try {
+				window.localStorage.setItem(CHARTS_HIDDEN_STORAGE_KEY, hidden ? "1" : "0");
+			} catch (_err) {
+				// Ignore storage failures.
+			}
+		}
+
+		function toggle_charts_visibility()
+		{
+			const toggleBtn = document.getElementById("toggleChartsBtn");
+			if (!toggleBtn) {
+				return;
+			}
+
+			const currentlyHidden = toggleBtn.dataset.hidden === "1";
+			set_charts_hidden(!currentlyHidden);
+		}
 
 		let reloadTimerId = null;
 
@@ -31,13 +74,36 @@
 			}
 			const minutes = parseInt(selector.value, 10);
 			set_reload_interval(Number.isNaN(minutes) ? 0 : minutes);
+			try {
+				window.localStorage.setItem(RELOAD_INTERVAL_STORAGE_KEY, selector.value);
+			} catch (_err) {
+				// Ignore storage failures.
+			}
 		}
 
 		$(document).ready(function(){
-			update_reload_setting();
 			const selector = document.getElementById("reloadInterval");
 			if (selector) {
+				try {
+					const reloadPref = window.localStorage.getItem(RELOAD_INTERVAL_STORAGE_KEY);
+					if (reloadPref && selector.querySelector("option[value='" + reloadPref + "']")) {
+						selector.value = reloadPref;
+					}
+				} catch (_err) {
+					// Ignore storage failures.
+				}
 				selector.addEventListener("change", update_reload_setting);
+			}
+			update_reload_setting();
+			const toggleBtn = document.getElementById("toggleChartsBtn");
+			if (toggleBtn) {
+				let hiddenPref = false;
+				try {
+					hiddenPref = window.localStorage.getItem(CHARTS_HIDDEN_STORAGE_KEY) === "1";
+				} catch (_err) {
+					hiddenPref = false;
+				}
+				set_charts_hidden(hiddenPref);
 			}
 		});
 
@@ -87,12 +153,28 @@
 			font-size: 20px;
 			}
 
+			h1, h2, h3, p {
+			max-width: 62rem;
+			margin-left: auto;
+			margin-right: auto;
+			}
+
+			#bookings {
+			width: 100%;
+			margin: 0 auto;
+			}
+
 			table {
 			border-collapse: collapse;
 			font-family: Arial, Helvetica, sans-serif;
 			font-size: 30px;
 			margin-left: auto;
 			margin-right: auto;
+			}
+
+			img, video {
+			max-width: 100%;
+			height: auto;
 			}
 			
 			
@@ -109,6 +191,17 @@
 
 			th:nth-child(even) {
 			background-color: #507070;
+			}
+
+			@media (max-width: 900px) {
+				body {
+					padding: 12px;
+					font-size: 18px;
+				}
+
+				table {
+					font-size: 22px;
+				}
 			}
 
 	
@@ -133,6 +226,10 @@
 				<option value="1" selected>Every minute</option>
 				<option value="15">Every 15 minutes</option>
 			</select>
+		</p>
+
+		<p>
+			<button id="toggleChartsBtn" onclick="toggle_charts_visibility()">Hide charts</button>
 		</p>
 
 
