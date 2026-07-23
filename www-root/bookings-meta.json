@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
-  "reportGeneratedAt": "2026-07-23T15:59:30.100969+00:00",
-  "bookingsSnapshotAt": "2026-07-23T16:50:00",
-  "weatherForecastAt": "2026-07-23T14:00:00+00:00",
+  "reportGeneratedAt": "2026-07-23T16:36:00.923612+00:00",
+  "bookingsSnapshotAt": "2026-07-23T16:30:00+00:00",
+  "weatherForecastAt": "2026-07-23T15:00:00+00:00",
   "weatherSources": [
     {
       "modelRunAt": "2026-07-19T14:15:00+00:00",
@@ -961,6 +961,19 @@
         },
         {
           "file": "pond-260723-1400.json",
+          "timestep": "hourly"
+        }
+      ]
+    },
+    {
+      "modelRunAt": "2026-07-23T15:00:00+00:00",
+      "sources": [
+        {
+          "file": "pond-260723-1500-3h.json",
+          "timestep": "three-hourly"
+        },
+        {
+          "file": "pond-260723-1500.json",
           "timestep": "hourly"
         }
       ]

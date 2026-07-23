@@ -264,7 +264,7 @@ def build_report_metadata(
 	return {
 		"schemaVersion": 1,
 		"reportGeneratedAt": report_generated_at.astimezone(ZoneInfo("UTC")).isoformat(),
-		"bookingsSnapshotAt": bookings_snapshot_at.isoformat(),
+		"bookingsSnapshotAt": bookings_snapshot_at.astimezone(ZoneInfo("UTC")).isoformat(),
 		"weatherForecastAt": weather_forecast_at,
 		"weatherSources": weather_sources,
 		"reportDateRange": {

@@ -12,6 +12,10 @@
 
 		const CHARTS_HIDDEN_STORAGE_KEY = "pondChartsHidden";
 		const RELOAD_INTERVAL_STORAGE_KEY = "pondReloadInterval";
+		const LIVENESS_BUCKETS = {
+			bookings: [15, 60, 120],
+			weather: [120, 240, 720],
+		};
 
 		function set_charts_hidden(hidden)
 		{
@@ -129,6 +133,57 @@
 					throw new Error("Failed to load bookings metadata: " + response.status);
 				}
 				return response.json();
+			});
+		}
+
+		function format_liveness_age(ageMinutes)
+		{
+			const minutes = Math.max(0, Math.floor(ageMinutes));
+			const hours = Math.floor(minutes / 60);
+			const remainingMinutes = minutes % 60;
+			return hours + "h" + remainingMinutes + "m";
+		}
+
+		function liveness_class_for_minutes(ageMinutes, buckets)
+		{
+			if (!Number.isFinite(ageMinutes)) {
+				return "liveness-unknown";
+			}
+			if (ageMinutes < buckets[0]) {
+				return "liveness-green";
+			}
+			if (ageMinutes < buckets[1]) {
+				return "liveness-yellowgreen";
+			}
+			if (ageMinutes < buckets[2]) {
+				return "liveness-orange";
+			}
+			return "liveness-red";
+		}
+
+		function update_liveness_table(metadata)
+		{
+			const nowMs = Date.now();
+			[
+				{
+					cellId: "bookingsLivenessValue",
+					timestamp: metadata ? metadata.bookingsSnapshotAt : null,
+					buckets: LIVENESS_BUCKETS.bookings,
+				},
+				{
+					cellId: "weatherLivenessValue",
+					timestamp: metadata ? metadata.weatherForecastAt : null,
+					buckets: LIVENESS_BUCKETS.weather,
+				},
+			].forEach((row) => {
+				const cell = document.getElementById(row.cellId);
+				if (!cell) {
+					return;
+				}
+				const timestampMs = row.timestamp ? Date.parse(row.timestamp) : NaN;
+				const ageMinutes = Number.isFinite(timestampMs) ? (nowMs - timestampMs) / 60000 : NaN;
+				cell.className = liveness_class_for_minutes(ageMinutes, row.buckets);
+				cell.textContent = Number.isFinite(ageMinutes) ? format_liveness_age(ageMinutes) : "n/a";
 			});
 		}
 
@@ -465,6 +520,7 @@
 			Promise.all([load_bookings_html(), load_bookings_metadata()])
 				.then((results) => {
 					const metadata = results[1];
+					update_liveness_table(metadata);
 					initBookingsFilters(metadata);
 					refresh_visible_charts();
 					window.scrollTo(0, scrollY);
@@ -554,6 +610,49 @@
 			margin: 0 auto;
 			}
 
+			.liveness-table {
+				border-collapse: collapse;
+				margin: 0.5rem auto 1rem auto;
+				font-size: 0.95rem;
+			}
+
+			.liveness-table th,
+			.liveness-table td {
+				border: 1px solid #5d6d6d;
+				padding: 0.35rem 0.75rem;
+				text-align: center;
+			}
+
+			.liveness-table th {
+				background: #263636;
+				color: #d9efef;
+			}
+
+			.liveness-green {
+				background: #2f7d32;
+				color: #fff;
+			}
+
+			.liveness-yellowgreen {
+				background: #8bbf3d;
+				color: #111;
+			}
+
+			.liveness-orange {
+				background: #d9822b;
+				color: #111;
+			}
+
+			.liveness-red {
+				background: #b23a48;
+				color: #fff;
+			}
+
+			.liveness-unknown {
+				background: #3f4c4c;
+				color: #d9efef;
+			}
+
 			table {
 			border-collapse: collapse;
 			font-family: Arial, Helvetica, sans-serif;
@@ -618,6 +717,21 @@
 			</select>
 		</p>
 
+		<table class="liveness-table" aria-label="Data liveness">
+			<tr>
+				<th>Dataset</th>
+				<th>Age</th>
+			</tr>
+			<tr>
+				<td>Bookings</td>
+				<td id="bookingsLivenessValue" class="liveness-unknown">n/a</td>
+			</tr>
+			<tr>
+				<td>Weather</td>
+				<td id="weatherLivenessValue" class="liveness-unknown">n/a</td>
+			</tr>
+		</table>
+
 		<p>
 			<button id="toggleChartsBtn" onclick="toggle_charts_visibility()">Hide charts</button>
 		</p>
@@ -630,6 +744,7 @@
 			Promise.all([load_bookings_html(), load_bookings_metadata()])
 				.then((results) => {
 					const metadata = results[1];
+					update_liveness_table(metadata);
 					initBookingsFilters(metadata);
 				})
 				.catch((error) => {
