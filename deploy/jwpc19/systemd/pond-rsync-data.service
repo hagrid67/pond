@@ -1,0 +1,14 @@
+[Unit]
+Description=Sync pond data from jwpc12 to jwpc19 dev environment
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=jeremy
+Group=jeremy
+WorkingDirectory=/home/jeremy/projects/pond
+ExecStart=/home/jeremy/projects/pond/scripts/pond-rsync-data.sh
+
+[Install]
+WantedBy=multi-user.target
