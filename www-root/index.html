@@ -12,6 +12,7 @@
 
 		const CHARTS_HIDDEN_STORAGE_KEY = "pondChartsHidden";
 		const GALLERY_HIDDEN_STORAGE_KEY = "pondGalleryHidden";
+		const WATER_TEMP_HIDDEN_STORAGE_KEY = "pondWaterTempHidden";
 		const RELOAD_INTERVAL_STORAGE_KEY = "pondReloadInterval";
 		const LIVENESS_BUCKETS = {
 			bookings: [15, 60, 120],
@@ -88,6 +89,39 @@
 
 			const currentlyHidden = toggleBtn.dataset.hidden === "1";
 			set_gallery_hidden(!currentlyHidden);
+		}
+
+		function set_water_temp_hidden(hidden)
+		{
+			const waterTempSection = document.getElementById("waterTempSection");
+			const toggleBtn = document.getElementById("toggleWaterTempBtn");
+			if (!toggleBtn) {
+				return;
+			}
+
+			if (waterTempSection) {
+				waterTempSection.style.display = hidden ? "none" : "";
+			}
+
+			toggleBtn.dataset.hidden = hidden ? "1" : "0";
+			toggleBtn.textContent = hidden ? "Show water temp" : "Hide water temp";
+
+			try {
+				window.localStorage.setItem(WATER_TEMP_HIDDEN_STORAGE_KEY, hidden ? "1" : "0");
+			} catch (_err) {
+				// Ignore storage failures.
+			}
+		}
+
+		function toggle_water_temp_visibility()
+		{
+			const toggleBtn = document.getElementById("toggleWaterTempBtn");
+			if (!toggleBtn) {
+				return;
+			}
+
+			const currentlyHidden = toggleBtn.dataset.hidden === "1";
+			set_water_temp_hidden(!currentlyHidden);
 		}
 
 		let reloadTimerId = null;
@@ -221,6 +255,37 @@
 			});
 		}
 
+		function sync_intro_width_to_bookings()
+		{
+			const heading = document.getElementById("pageTitle");
+			const intro = document.getElementById("pageIntro");
+			const targets = [heading, intro].filter((node) => !!node);
+			if (targets.length === 0) {
+				return;
+			}
+
+			const firstTable = document.querySelector("#bookings .bookings-table");
+			if (!firstTable) {
+				targets.forEach((node) => {
+					node.style.width = "";
+					node.style.maxWidth = "62rem";
+				});
+				return;
+			}
+
+			const tableWidth = Math.round(firstTable.getBoundingClientRect().width);
+			if (!Number.isFinite(tableWidth) || tableWidth <= 0) {
+				return;
+			}
+
+			targets.forEach((node) => {
+				node.style.width = String(tableWidth) + "px";
+				node.style.maxWidth = "100%";
+				node.style.marginLeft = "auto";
+				node.style.marginRight = "auto";
+			});
+		}
+
 		function default_bookings_filter_state(metadata)
 		{
 			const defaultVenueIds = (metadata.venues || [])
@@ -315,13 +380,9 @@
 			html += "<option value='15'>Every 15 minutes</option>";
 			html += "</select>";
 			html += "<button id='toggleChartsBtn' type='button' onclick='toggle_charts_visibility()'>Hide charts</button>";
+			html += "<button id='toggleWaterTempBtn' type='button' onclick='toggle_water_temp_visibility()'>Show water temp</button>";
 			html += "<button id='toggleGalleryBtn' type='button' onclick='toggle_gallery_visibility()'>Hide gallery</button>";
 			html += "</div>";
-			html += "<table class='liveness-table' aria-label='Data liveness'>";
-			html += "<tr><th>Dataset</th><th>Age</th></tr>";
-			html += "<tr><td>Bookings</td><td id='bookingsLivenessValue' class='liveness-unknown'>n/a</td></tr>";
-			html += "<tr><td>Weather</td><td id='weatherLivenessValue' class='liveness-unknown'>n/a</td></tr>";
-			html += "</table>";
 			html += "<h3>Filters</h3>";
 			html += "<div class='filter-group'>";
 			html += "<button type='button' class='filter-btn" + (state.showWeather ? " active" : "") + "' data-filter-group='ui' data-filter-value='weather'>Weather</button>";
@@ -360,6 +421,11 @@
 				html += "<button type='button' class='filter-btn" + (selected ? " active" : "") + "' data-filter-group='time' data-slot-group='" + escape_html(slotGroup) + "' data-filter-value='" + escape_html(slotTime) + "'>" + escape_html(slotTime) + "</button>";
 			});
 			html += "</div>";
+			html += "<table class='liveness-table' aria-label='Data liveness'>";
+			html += "<tr><th>Dataset</th><th>Age</th></tr>";
+			html += "<tr><td>Bookings</td><td id='bookingsLivenessValue' class='liveness-unknown'>n/a</td></tr>";
+			html += "<tr><td>Weather</td><td id='weatherLivenessValue' class='liveness-unknown'>n/a</td></tr>";
+			html += "</table>";
 			html += "</div>";
 			html += "</div>";
 			return html;
@@ -579,6 +645,18 @@
 				}
 				set_gallery_hidden(hiddenPref);
 			}
+
+			const waterTempToggleBtn = document.getElementById("toggleWaterTempBtn");
+			if (waterTempToggleBtn) {
+				let hiddenPref = true;
+				try {
+					const stored = window.localStorage.getItem(WATER_TEMP_HIDDEN_STORAGE_KEY);
+					hiddenPref = stored === null ? true : stored === "1";
+				} catch (_err) {
+					hiddenPref = true;
+				}
+				set_water_temp_hidden(hiddenPref);
+			}
 		}
 
 		function update_reload_setting()
@@ -629,6 +707,7 @@
 					const metadata = results[1];
 					initBookingsFilters(metadata);
 					update_liveness_table(metadata);
+					sync_intro_width_to_bookings();
 					refresh_visible_charts();
 					window.scrollTo(0, scrollY);
 				})
@@ -642,6 +721,9 @@
 
 		$(document).ready(function(){
 			// Dynamic controls are initialized after bookings HTML/metadata are loaded.
+			window.addEventListener("resize", () => {
+				sync_intro_width_to_bookings();
+			});
 		});
 
 		// zoom in on click.  Doesn't work.
@@ -701,6 +783,13 @@
 				align-items: center;
 				gap: 0.6rem;
 				flex-wrap: wrap;
+			}
+
+			#booking-filters-panel {
+				border: 1px solid #5d6d6d;
+				border-radius: 8px;
+				padding: 0.8rem 0.9rem;
+				background: rgba(15, 25, 25, 0.45);
 			}
 
 			#gallerySection {
@@ -806,9 +895,9 @@
 
 	<body>
 
-		<h3 style="text-align: center">Highgate Men's Pond Booking Stats (Beta)</h3>
+		<h3 id="pageTitle" style="text-align: center">Highgate Men's Pond Booking Stats (Beta)</h3>
 
-		<p>
+		<p id="pageIntro">
 			Highgate Men's Pond Association (<a href="https://www.highgatemenspond.com/visitor-info">HMPA</a>)
 			is providing a summary of the availability of tickets for the bookable swimming sessions.
 			
@@ -823,6 +912,7 @@
 					const metadata = results[1];
 					initBookingsFilters(metadata);
 					update_liveness_table(metadata);
+					sync_intro_width_to_bookings();
 				})
 				.catch((error) => {
 					console.error("Failed to initialize bookings controls", error);
@@ -843,15 +933,17 @@
 			<img src="./booking-plot-lido.png" height=300 >
 		</div>
 
-		<br/>
-		<h2>Recent Temperatures of the *garden* pond</h2>
-		<p>
-		    We also provided real-time temperatures for the pond for a few months in 2024 and 2025, 
-			but the City of London removed the sensor in April 2025.
-			The real-time temperatures here are now being sourced from a (very) small garden pond, as a proxy.
-			Its temperature varies much more than the pond.
-		</p>
-		<div id="tempTable"></div>
+		<div id="waterTempSection">
+			<br/>
+			<h2>Recent Temperatures of the *garden* pond</h2>
+			<p>
+			    We also provided real-time temperatures for the pond for a few months in 2024 and 2025, 
+				but the City of London removed the sensor in April 2025.
+				The real-time temperatures here are now being sourced from a (very) small garden pond, as a proxy.
+				Its temperature varies much more than the pond.
+			</p>
+			<div id="tempTable"></div>
+		</div>
 
 		<div id="tempChart">
 			<br/>
