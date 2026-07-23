@@ -46,3 +46,4 @@ logs/*
 # Generated web output artifacts
 www-root/booking-plot*.png
 www-root/bookings.html
+www-root/bookings-meta.json
