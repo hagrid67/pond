@@ -53,6 +53,7 @@
 		}
 
 		let reloadTimerId = null;
+		let reloadInProgress = false;
 
 		function set_reload_interval(minutes)
 		{
@@ -61,7 +62,7 @@
 				reloadTimerId = null;
 			}
 			if (minutes > 0) {
-				reloadTimerId = setInterval(function(){ reload_page(); }, minutes * 60000);
+				reloadTimerId = setInterval(function(){ refresh_report_content(); }, minutes * 60000);
 			}
 		}
 
@@ -433,6 +434,49 @@
 			}
 		}
 
+		function refresh_visible_charts()
+		{
+			[
+				document.getElementById("bookingPlots"),
+				document.getElementById("tempChart"),
+			].forEach((block) => {
+				if (!block || block.style.display === "none") {
+					return;
+				}
+				block.querySelectorAll("img").forEach((image) => {
+					const source = image.getAttribute("src");
+					if (!source) {
+						return;
+					}
+					const refreshUrl = new URL(source, window.location.href);
+					refreshUrl.searchParams.set("reload", String(Date.now()));
+					image.src = refreshUrl.toString();
+				});
+			});
+		}
+
+		function refresh_report_content()
+		{
+			if (reloadInProgress) {
+				return;
+			}
+			reloadInProgress = true;
+			const scrollY = window.scrollY;
+			Promise.all([load_bookings_html(), load_bookings_metadata()])
+				.then((results) => {
+					const metadata = results[1];
+					initBookingsFilters(metadata);
+					refresh_visible_charts();
+					window.scrollTo(0, scrollY);
+				})
+				.catch((error) => {
+					console.error("Failed to refresh bookings report", error);
+				})
+				.finally(() => {
+					reloadInProgress = false;
+				});
+		}
+
 		$(document).ready(function(){
 			const selector = document.getElementById("reloadInterval");
 			if (selector) {
@@ -458,12 +502,6 @@
 				set_charts_hidden(hiddenPref);
 			}
 		});
-
-		function reload_page()
-		{
-			window.location.reload(true);
-		};
-
 
 		// zoom in on click.  Doesn't work.
 		// https://stackoverflow.com/questions/10416876/jquery-zoom-image-on-click
