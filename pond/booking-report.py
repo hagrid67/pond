@@ -22,6 +22,8 @@ ARCHIVE_GLOB = "bookings-*.csv"
 HISTORICAL_DAYS = 6
 BOOKING_LEAD_DAYS = 7
 LIDO_SLOT_TIMES = {"10:30-13:30", "14:30-17:30", "18:00-20:00"}
+POND_ELEVATION_M = 70.0
+LAPSE_RATE_C_PER_KM = 6.5
 
 
 def availability_to_count(availability_value):
@@ -135,6 +137,8 @@ def _load_recent_weather_snapshots(
 			with open(file_path, "r", encoding="utf-8") as fh:
 				data = json.load(fh)
 			raw_frame = dataframe_from_forecast_json(data).sort_index()
+			coords = data.get("features", [{}])[0].get("geometry", {}).get("coordinates", [])
+			model_elevation_m = float(coords[2]) if isinstance(coords, list) and len(coords) >= 3 else np.nan
 		except Exception as exc:
 			debug_log(f"Skipping unreadable forecast file {file_path}: {exc!r}")
 			continue
@@ -145,6 +149,7 @@ def _load_recent_weather_snapshots(
 				file_path.name,
 				snapshot_time,
 				snapshot_suffix or "hourly",
+					model_elevation_m,
 			)
 		)
 
@@ -156,6 +161,7 @@ def _normalize_weather_snapshot(
 	source_file: str,
 	source_snapshot_time: pd.Timestamp,
 	source_timestep: str,
+	model_elevation_m: float,
 ) -> pd.DataFrame:
 	frame = snapshot_frame.copy()
 	frame.index = pd.DatetimeIndex(frame.index, tz="UTC")
@@ -177,13 +183,22 @@ def _normalize_weather_snapshot(
 	else:
 		uv_index = pd.Series(np.nan, index=frame.index)
 
+	if np.isnan(model_elevation_m):
+		adjusted_screen_temperature = pd.Series(np.nan, index=frame.index)
+	else:
+		elevation_delta_m = model_elevation_m - POND_ELEVATION_M
+		adjustment_c = LAPSE_RATE_C_PER_KM * (elevation_delta_m / 1000.0)
+		adjusted_screen_temperature = screen_temperature + adjustment_c
+
 	frame = pd.DataFrame(
 		{
 			"screenTemperature": screen_temperature,
+			"adjustedScreenTemperature": adjusted_screen_temperature,
 			"uvIndex": uv_index,
 			"source_file": source_file,
 			"source_time": frame.index,
 			"source_timestep": source_timestep,
+			"model_elevation_m": model_elevation_m,
 		},
 		index=frame.index,
 	)
@@ -212,18 +227,27 @@ def build_unified_weather_dataframe(n_days: int = 7, debug_log: Callable[[str], 
 	combined.index.name = "weather_time_utc"
 
 	numeric = raw[["screenTemperature", "uvIndex"]].apply(pd.to_numeric, errors="coerce")
+	adjusted_numeric = raw[["adjustedScreenTemperature"]].apply(pd.to_numeric, errors="coerce")
 	combined_numeric = (
 		numeric.reindex(numeric.index.union(grid_index))
 		.sort_index()
 		.interpolate(method="time")
 		.reindex(grid_index)
 	)
+	combined_adjusted = (
+		adjusted_numeric.reindex(adjusted_numeric.index.union(grid_index))
+		.sort_index()
+		.interpolate(method="time")
+		.reindex(grid_index)
+	)
 	combined["screenTemperature"] = combined_numeric["screenTemperature"]
+	combined["adjustedScreenTemperature"] = combined_adjusted["adjustedScreenTemperature"]
 	combined["uvIndex"] = combined_numeric["uvIndex"]
 	combined["source_file"] = raw["source_file"].reindex(grid_index).ffill()
 	combined["source_time"] = raw["source_time"].reindex(grid_index).ffill()
 	combined["source_timestep"] = raw["source_timestep"].reindex(grid_index).ffill()
 	combined["source_snapshot_time"] = raw["source_snapshot_time"].reindex(grid_index).ffill()
+	combined["model_elevation_m"] = raw["model_elevation_m"].reindex(grid_index).ffill()
 	combined["is_interpolated"] = ~grid_index.isin(raw.index)
 
 	return combined
@@ -236,8 +260,8 @@ def _resolve_weather_row(weather_df: pd.DataFrame | None, target_time: pd.Timest
 		return None
 
 	augmented = weather_df.reindex(weather_df.index.union([target_time])).sort_index()
-	augmented[["screenTemperature", "uvIndex"]] = augmented[["screenTemperature", "uvIndex"]].interpolate(method="time")
-	for column in ("source_file", "source_time", "source_timestep", "source_snapshot_time"):
+	augmented[["screenTemperature", "adjustedScreenTemperature", "uvIndex"]] = augmented[["screenTemperature", "adjustedScreenTemperature", "uvIndex"]].interpolate(method="time")
+	for column in ("source_file", "source_time", "source_timestep", "source_snapshot_time", "model_elevation_m"):
 		if column in augmented.columns:
 			augmented[column] = augmented[column].ffill()
 	row = augmented.loc[target_time]
@@ -351,6 +375,7 @@ def build_test_weather_dataframe(
 				continue
 
 			temp_value = lookup_row.get("screenTemperature")
+			adjusted_temp_value = lookup_row.get("adjustedScreenTemperature")
 			uv_value = lookup_row.get("uvIndex")
 			source_timestep = str(lookup_row.get("source_timestep") or "")
 
@@ -362,8 +387,10 @@ def build_test_weather_dataframe(
 					"source_timestep": source_timestep,
 					"source_file": lookup_row.get("source_file"),
 					"source_time": lookup_row.get("source_time"),
+					"model_elevation_m": lookup_row.get("model_elevation_m"),
 					"is_interpolated": bool(lookup_row.get("is_interpolated", False)),
 					"screenTemperature": round(float(temp_value), 2) if not pd.isna(temp_value) else pd.NA,
+					"adjustedScreenTemperature": round(float(adjusted_temp_value), 2) if not pd.isna(adjusted_temp_value) else pd.NA,
 					"uvIndex": round(float(uv_value), 2) if not pd.isna(uv_value) else pd.NA,
 				}
 			)
@@ -378,7 +405,7 @@ def build_test_weather_dataframe(
 	).dt.tz_localize(london_tz)
 	result = result.set_index("slot_start_local").sort_index()
 	result.index.name = "slot_start_local"
-	return result[["slot_date", "slot_time", "lookup_time_utc", "source_timestep", "source_file", "source_time", "is_interpolated", "screenTemperature", "uvIndex"]]
+	return result[["slot_date", "slot_time", "lookup_time_utc", "source_timestep", "source_file", "source_time", "model_elevation_m", "is_interpolated", "screenTemperature", "adjustedScreenTemperature", "uvIndex"]]
 
 
 def _prepare_weather_frame(weather_df: pd.DataFrame | None, use_three_hour_mean: bool = False) -> pd.DataFrame | None:
@@ -402,8 +429,11 @@ def _prepare_weather_frame(weather_df: pd.DataFrame | None, use_three_hour_mean:
 	return frame
 
 
-def _format_weather_row(row: pd.Series) -> str:
-	temp_value = row.get("screenTemperature")
+def _format_weather_row(row: pd.Series, use_adjusted_temp: bool = True) -> str:
+	if use_adjusted_temp and "adjustedScreenTemperature" in row and not pd.isna(row.get("adjustedScreenTemperature")):
+		temp_value = row.get("adjustedScreenTemperature")
+	else:
+		temp_value = row.get("screenTemperature")
 	uv_value = row.get("uvIndex")
 	if pd.isna(temp_value) or pd.isna(uv_value):
 		return ""
@@ -460,6 +490,7 @@ def resolve_slot_weather(
 	slot_time: str,
 	london_tz: ZoneInfo,
 	utc_tz: ZoneInfo,
+	use_adjusted_temp: bool = True,
 ) -> tuple[str, str]:
 	"""Return weather text for slot start time, converting local BST/GMT to UTC."""
 	try:
@@ -473,7 +504,7 @@ def resolve_slot_weather(
 	if row is None:
 		return "", "no-weather-match"
 
-	weather_text = _format_weather_row(row)
+	weather_text = _format_weather_row(row, use_adjusted_temp=use_adjusted_temp)
 	if not weather_text:
 		return "", "missing-temp-or-uv"
 
@@ -488,6 +519,7 @@ def build_weather_by_slot(
 	all_times: list[str],
 	n_days: int = 7,
 	debug_log: Callable[[str], None] | None = None,
+	use_adjusted_temp: bool = True,
 ) -> dict[tuple[str, str], str]:
 	"""Build weather display strings for each slot start from merged forecast files."""
 	if debug_log is None:
@@ -521,6 +553,7 @@ def build_weather_by_slot(
 				slot_time,
 				london_tz,
 				utc_tz,
+				use_adjusted_temp=use_adjusted_temp,
 			)
 			reason_counts[reason] += 1
 			if weather_text:
@@ -696,6 +729,7 @@ def write_html_report(
 	reference_time: datetime | None = None,
 	include_filters: bool = False,
 	weather_debug_log: Callable[[str], None] | None = None,
+	use_adjusted_temp: bool = True,
 ):
 	if weather_debug_log is None:
 		weather_debug_log = lambda _msg: None
@@ -716,7 +750,12 @@ def write_html_report(
 
 	dates = [d for d in date_sequence if d in table]
 	all_times = sorted(set(t for d in table.values() for t in d.keys()))
-	weather_by_slot = build_weather_by_slot(dates, all_times, debug_log=weather_debug_log)
+	weather_by_slot = build_weather_by_slot(
+		dates,
+		all_times,
+		debug_log=weather_debug_log,
+		use_adjusted_temp=use_adjusted_temp,
+	)
 	weather_debug_log(f"Weather entries available for report slots: {len(weather_by_slot)}")
 	reference_date = reference_time.date() if reference_time is not None else None
 	has_today = bool(
@@ -883,7 +922,7 @@ def main() -> None:
 	)
 	parser.add_argument(
 		"--html-output",
-		default="output/bookings.html",
+		default="bookings.html",
 		help="HTML summary filename/path. Bare filename goes under --output-dir.",
 	)
 	parser.add_argument(
@@ -916,6 +955,11 @@ def main() -> None:
 		action="store_true",
 		help="Print a slot-indexed weather dataframe for debugging interpolation and forecast source selection.",
 	)
+	parser.add_argument(
+		"--raw-temp",
+		action="store_true",
+		help="Use raw screenTemperature instead of elevation-adjusted temperatures in booking-report weather output.",
+	)
 	args = parser.parse_args()
 
 	if args.input_csv is None:
@@ -933,7 +977,7 @@ def main() -> None:
 			print("ERROR: No test-weather dataframe could be built")
 			sys.exit(1)
 		with pd.option_context("display.max_rows", None, "display.max_columns", None, "display.width", 200):
-			print(weather_df.round({"screenTemperature": 2, "uvIndex": 2}).to_string())
+			print(weather_df.round({"screenTemperature": 2, "adjustedScreenTemperature": 2, "uvIndex": 2}).to_string())
 		sys.exit()
 
 	all_slots, date_sequence, reference_time = build_report_slots(input_csv)
@@ -948,6 +992,7 @@ def main() -> None:
 		reference_time=reference_time,
 		include_filters=args.filters,
 		weather_debug_log=weather_debug_log,
+		use_adjusted_temp=not args.raw_temp,
 	)
 	print(f"Loaded slots from CSV: {input_csv}")
 	print(f"Saved: {html_output}")
