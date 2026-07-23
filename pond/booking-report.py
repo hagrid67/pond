@@ -161,6 +161,127 @@ def resolve_output_path(output_dir: str, file_arg: str) -> str:
 	return os.path.join(output_dir, file_arg)
 
 
+def _timestep_label_from_suffix(snapshot_suffix: str) -> str:
+	if snapshot_suffix == "":
+		return "hourly"
+	if snapshot_suffix == "-3h":
+		return "three-hourly"
+	if snapshot_suffix == "-1d":
+		return "daily"
+	return snapshot_suffix.lstrip("-") or "unknown"
+
+
+def collect_weather_source_runs(n_days: int = 7) -> list[dict[str, object]]:
+	"""Collect grouped weather model runs used to build the report."""
+	data_dir = REPO_ROOT / "metoffice-data"
+	cutoff = pd.Timestamp.utcnow() - pd.Timedelta(days=n_days)
+	runs_by_time: dict[str, dict[str, object]] = {}
+	from pond.metoffice import parse_snapshot_metadata_from_filename
+
+	try:
+		from pond.metoffice import parse_snapshot_metadata_from_filename
+	except Exception:
+		return []
+
+	for file_path in sorted(data_dir.glob("pond-*.json")):
+		metadata = parse_snapshot_metadata_from_filename(str(file_path))
+		if metadata is None:
+			continue
+		snapshot_time, snapshot_suffix = metadata
+		if snapshot_time < cutoff:
+			continue
+
+		model_run_at = snapshot_time.isoformat()
+		run = runs_by_time.get(model_run_at)
+		if run is None:
+			run = {"modelRunAt": model_run_at, "sources": []}
+			runs_by_time[model_run_at] = run
+
+		sources = cast(list[dict[str, str]], run["sources"])
+		sources.append(
+			{
+				"file": file_path.name,
+				"timestep": _timestep_label_from_suffix(snapshot_suffix),
+			}
+		)
+
+	return sorted(runs_by_time.values(), key=lambda item: str(item.get("modelRunAt") or ""))
+
+
+def build_report_metadata(
+	selected_csv: Path,
+	report_slots: list[dict[str, str | int]],
+	date_sequence: list[str],
+	report_generated_at: datetime,
+	n_days: int = 7,
+) -> dict[str, object]:
+	"""Build a compact metadata manifest for the browser controls."""
+	bookings_snapshot_at = infer_snapshot_time(selected_csv)
+	all_times: list[str] = []
+	all_times_seen: set[str] = set()
+	time_slot_groups: dict[str, str] = {}
+	days: list[dict[str, object]] = []
+	reference_date = bookings_snapshot_at.date()
+
+	for day in date_sequence:
+		parsed_day = parse_booking_date(day)
+		if parsed_day is None:
+			day_group = "present"
+		else:
+			if parsed_day < reference_date:
+				day_group = "past"
+			elif parsed_day > reference_date:
+				day_group = "future"
+			else:
+				day_group = "present"
+
+		day_slots: list[dict[str, str]] = []
+		seen_day_times: set[str] = set()
+		for slot in sorted((slot for slot in report_slots if slot["date"] == day), key=lambda slot: str(slot["time"])):
+			time_text = str(slot["time"])
+			if time_text in seen_day_times:
+				continue
+			seen_day_times.add(time_text)
+			slot_group = slot_group_for_time(time_text)
+			day_slots.append({"time": time_text, "slotGroup": slot_group})
+			if time_text not in time_slot_groups:
+				time_slot_groups[time_text] = slot_group
+			if time_text not in all_times_seen:
+				all_times_seen.add(time_text)
+				all_times.append(time_text)
+
+		days.append(
+			{
+				"date": day,
+				"dayGroup": day_group,
+				"slots": day_slots,
+			}
+		)
+
+	weather_sources = collect_weather_source_runs(n_days=n_days)
+	weather_forecast_at = weather_sources[-1]["modelRunAt"] if weather_sources else None
+
+	return {
+		"schemaVersion": 1,
+		"reportGeneratedAt": report_generated_at.astimezone(ZoneInfo("UTC")).isoformat(),
+		"bookingsSnapshotAt": bookings_snapshot_at.isoformat(),
+		"weatherForecastAt": weather_forecast_at,
+		"weatherSources": weather_sources,
+		"reportDateRange": {
+			"start": date_sequence[0] if date_sequence else None,
+			"end": date_sequence[-1] if date_sequence else None,
+		},
+		"venues": [{"id": idx, "label": venue} for idx, venue in enumerate(["Men's", "Ladies", "Mixed", "Lido"])],
+		"slotGroups": [
+			{"id": "pond", "label": "Pond slots"},
+			{"id": "lido", "label": "Lido slots"},
+		],
+		"allTimes": all_times,
+		"timeSlotGroups": time_slot_groups,
+		"days": days,
+	}
+
+
 def parse_archive_timestamp(path: Path) -> datetime:
 	stamp = path.stem.removeprefix("bookings-")
 	return datetime.strptime(stamp, "%Y-%m%d-%H%M")
@@ -943,61 +1064,9 @@ def write_html_report(
 		if has_today:
 			f.write("<p><a href='#today'>Jump to today</a></p>\n")
 
-		if include_filters:
-			f.write("<div class='filters-shell'>\n")
-			f.write("<div class='filters-controls'>\n")
-			f.write("<button type='button' class='filters-toggle-desktop' aria-expanded='true'>Hide filters</button>")
-			f.write("</div>\n")
-			f.write("<div class='filters' id='booking-filters-panel'>\n")
-			f.write("<h3>Filters</h3>\n")
-			f.write("<div class='filter-group'>")
-			f.write("<button type='button' class='filter-btn' data-filter-group='ui' data-filter-value='dark-bg'>Toggle dark background</button>")
-			f.write("<button type='button' class='filter-btn' data-filter-group='ui' data-filter-value='weather'>Weather</button>")
-			f.write("</div>\n")
-			f.write("<div class='filter-group'>")
-			f.write("<button type='button' class='filter-btn' data-filter-group='prefs' data-filter-value='remember'>Remember my filters on this device: Off</button>")
-			f.write("<span class='permission-note'>No login, no tracking; stored only in this browser.</span>")
-			f.write("</div>\n")
-
-			f.write("<div class='filter-group'><span class='filter-group-label'>Slot groups:</span>")
-			f.write("<button type='button' class='filter-btn active' data-filter-group='slot-group' data-filter-value='pond'>Pond slots</button>")
-			f.write("<button type='button' class='filter-btn active' data-filter-group='slot-group' data-filter-value='lido'>Lido slots</button>")
-			f.write("</div>\n")
-
-			f.write("<div class='filter-group'><span class='filter-group-label'>Venues:</span>")
-			for idx, venue in enumerate(venues):
-				f.write(
-					f"<button type='button' class='filter-btn active' "
-					f"data-filter-group='venue' data-filter-value='{idx}'>"
-					f"{html_lib.escape(venue)}</button>"
-				)
-			f.write("</div>\n")
-
-			f.write("<div class='filter-group'><span class='filter-group-label'>Day groups:</span>")
-			for day_group, group_label in (("past", "Past"), ("present", "Present"), ("future", "Future")):
-				f.write(
-					f"<button type='button' class='filter-btn active' "
-					f"data-filter-group='day-group' data-filter-value='{day_group}'>"
-					f"{group_label}</button>"
-				)
-			f.write("</div>\n")
-
-			f.write("<div class='filter-group'><span class='filter-group-label'>Slot times:</span>")
-			for slot_time in all_times:
-				slot_group = slot_group_for_time(slot_time)
-				time_value = html_lib.escape(slot_time, quote=True)
-				f.write(
-					f"<button type='button' class='filter-btn active' "
-					f"data-filter-group='time' data-slot-group='{slot_group}' data-filter-value='{time_value}'>"
-					f"{html_lib.escape(slot_time)}</button>"
-				)
-			f.write("</div>\n")
-			f.write("</div>\n")
-			f.write("</div>\n")
-
 		for date in dates:
 			date_value = html_lib.escape(date, quote=True)
-			day_group = day_group_by_date[date] if include_filters else "present"
+			day_group = day_group_by_date[date]
 			f.write(f"<div class='booking-day' data-day='{date_value}' data-day-group='{day_group}'>\n")
 			date_heading = format_booking_day_heading(date, reference_date)
 			if reference_date is not None and parse_booking_date(date) == reference_date:
@@ -1072,6 +1141,12 @@ def write_html_report(
 		f.write("</div>\n")
 
 
+def write_json_file(path: str, payload: object) -> None:
+	with open(path, "w", encoding="utf-8") as fh:
+		json.dump(payload, fh, indent=2, ensure_ascii=False)
+		fh.write("\n")
+
+
 def main() -> None:
 	parser = argparse.ArgumentParser(description="Generate bookings.html from a bookings CSV file.")
 	parser.add_argument(
@@ -1131,6 +1206,7 @@ def main() -> None:
 	else:
 		input_csv = Path(resolve_output_path(args.output_dir, args.input_csv))
 	html_output = resolve_output_path(args.output_dir, args.html_output)
+	meta_output = resolve_output_path(args.output_dir, "bookings-meta.json")
 	os.makedirs(os.path.dirname(html_output) or ".", exist_ok=True)
 	weather_debug_log = make_debug_logger(args.weather_debug, args.weather_debug_log if args.weather_debug else None)
 	weather_debug_log(f"booking-report start: input_csv={input_csv}, html_output={html_output}")
@@ -1150,18 +1226,20 @@ def main() -> None:
 	weather_debug_log(
 		f"slot data loaded: all_slots={len(all_slots)}, date_sequence={len(date_sequence)}, reference_time={reference_time}"
 	)
+	metadata = build_report_metadata(input_csv, all_slots, date_sequence, datetime.now(ZoneInfo("UTC")))
 	write_html_report(
 		all_slots,
 		date_sequence,
 		html_output,
 		args.source_url,
 		reference_time=reference_time,
-		include_filters=args.filters,
 		weather_debug_log=weather_debug_log,
 		use_adjusted_temp=not args.raw_temp,
 	)
+	write_json_file(meta_output, metadata)
 	print(f"Loaded slots from CSV: {input_csv}")
 	print(f"Saved: {html_output}")
+	print(f"Saved: {meta_output}")
 
 
 if __name__ == "__main__":

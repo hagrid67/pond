@@ -3,7 +3,6 @@
 	<head>
 		<meta name="viewport" content="width=device-width, initial-scale=1">
 		<link rel="stylesheet" href="./bookings-widget.css">
-		<script src="./bookings-widget.js"></script>
 		
 		<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
 		<script> 
@@ -64,6 +63,359 @@
 			if (minutes > 0) {
 				reloadTimerId = setInterval(function(){ reload_page(); }, minutes * 60000);
 			}
+		}
+
+		const BOOKINGS_META_URL = "./bookings-meta.json";
+		const BOOKINGS_FILTERS_STATE_KEY = "pondBookingsFilterPrefs";
+		const BOOKINGS_FILTERS_CONSENT_KEY = "pondBookingsFilterPrefsConsent";
+		const BOOKINGS_FILTERS_COLLAPSED_KEY = "pondBookingsFiltersCollapsed";
+
+		function escape_html(text)
+		{
+			return String(text)
+				.replaceAll("&", "&amp;")
+				.replaceAll("<", "&lt;")
+				.replaceAll(">", "&gt;")
+				.replaceAll('"', "&quot;")
+				.replaceAll("'", "&#x27;");
+		}
+
+		function read_storage(key)
+		{
+			try {
+				return window.localStorage.getItem(key);
+			} catch (_err) {
+				return null;
+			}
+		}
+
+		function write_storage(key, value)
+		{
+			try {
+				window.localStorage.setItem(key, value);
+				return true;
+			} catch (_err) {
+				return false;
+			}
+		}
+
+		function remove_storage(key)
+		{
+			try {
+				window.localStorage.removeItem(key);
+			} catch (_err) {
+				// Ignore storage failures.
+			}
+		}
+
+		function load_bookings_html()
+		{
+			return new Promise((resolve, reject) => {
+				$("#bookings").load("./bookings.html", function (_response, status, xhr) {
+					if (status === "error") {
+						reject(xhr || new Error("Failed to load bookings.html"));
+						return;
+					}
+					resolve();
+				});
+			});
+		}
+
+		function load_bookings_metadata()
+		{
+			return fetch(BOOKINGS_META_URL, { cache: "no-store" }).then((response) => {
+				if (!response.ok) {
+					throw new Error("Failed to load bookings metadata: " + response.status);
+				}
+				return response.json();
+			});
+		}
+
+		function default_bookings_filter_state(metadata)
+		{
+			return {
+				selectedVenues: (metadata.venues || []).map((venue) => String(venue.id)),
+				selectedDayGroups: ["past", "present", "future"],
+				selectedTimes: (metadata.allTimes || []).slice(),
+				selectedSlotGroups: (metadata.slotGroups || []).map((slotGroup) => String(slotGroup.id)),
+				darkBg: false,
+				showWeather: false,
+				persistPrefs: read_storage(BOOKINGS_FILTERS_CONSENT_KEY) === "accepted",
+				filtersCollapsed: read_storage(BOOKINGS_FILTERS_COLLAPSED_KEY) === "1",
+			};
+		}
+
+		function parse_saved_bookings_filter_state(raw, metadata)
+		{
+			const state = default_bookings_filter_state(metadata);
+			if (!raw) {
+				return state;
+			}
+
+			let parsed = null;
+			try {
+				parsed = JSON.parse(raw);
+			} catch (_err) {
+				return state;
+			}
+
+			const venueIds = new Set((metadata.venues || []).map((venue) => String(venue.id)));
+			const dayGroups = new Set(["past", "present", "future"]);
+			const slotGroupIds = new Set((metadata.slotGroups || []).map((slotGroup) => String(slotGroup.id)));
+			const timeSet = new Set(metadata.allTimes || []);
+
+			if (Array.isArray(parsed.venues)) {
+				state.selectedVenues = parsed.venues.map(String).filter((value) => venueIds.has(value));
+			}
+			if (Array.isArray(parsed.dayGroups)) {
+				state.selectedDayGroups = parsed.dayGroups.map(String).filter((value) => dayGroups.has(value));
+			}
+			if (Array.isArray(parsed.times)) {
+				state.selectedTimes = parsed.times.map(String).filter((value) => timeSet.has(value));
+			}
+			if (Array.isArray(parsed.slotGroups)) {
+				state.selectedSlotGroups = parsed.slotGroups.map(String).filter((value) => slotGroupIds.has(value));
+			}
+			if (typeof parsed.darkBg === "boolean") {
+				state.darkBg = parsed.darkBg;
+			}
+			if (typeof parsed.showWeather === "boolean") {
+				state.showWeather = parsed.showWeather;
+			}
+			if (typeof parsed.persistPrefs === "boolean") {
+				state.persistPrefs = parsed.persistPrefs;
+			}
+			return state;
+		}
+
+		function bookings_filter_panel_html(metadata, state)
+		{
+			const selectedVenues = new Set(state.selectedVenues || []);
+			const selectedDayGroups = new Set(state.selectedDayGroups || []);
+			const selectedTimes = new Set(state.selectedTimes || []);
+			const selectedSlotGroups = new Set(state.selectedSlotGroups || []);
+			const filtersCollapsed = !!state.filtersCollapsed;
+			const rememberLabel = state.persistPrefs ? "Remember my filters on this device: On" : "Remember my filters on this device: Off";
+			const slotGroupLabel = (slotGroupId) => {
+				const found = (metadata.slotGroups || []).find((entry) => String(entry.id) === String(slotGroupId));
+				return found ? found.label : String(slotGroupId);
+			};
+			let html = "<div class='filters-shell" + (filtersCollapsed ? " filters-collapsed" : "") + "'>";
+			html += "<div class='filters-controls'>";
+			html += "<button type='button' class='filters-toggle-desktop' aria-expanded='" + (!filtersCollapsed ? "true" : "false") + "'>" + (filtersCollapsed ? "Show filters" : "Hide filters") + "</button>";
+			html += "</div>";
+			html += "<div class='filters' id='booking-filters-panel'>";
+			html += "<h3>Filters</h3>";
+			html += "<div class='filter-group'>";
+			html += "<button type='button' class='filter-btn" + (state.darkBg ? " active" : "") + "' data-filter-group='ui' data-filter-value='dark-bg'>Toggle dark background</button>";
+			html += "<button type='button' class='filter-btn" + (state.showWeather ? " active" : "") + "' data-filter-group='ui' data-filter-value='weather'>Weather</button>";
+			html += "</div>";
+			html += "<div class='filter-group'>";
+			html += "<button type='button' class='filter-btn" + (state.persistPrefs ? " active" : "") + "' data-filter-group='prefs' data-filter-value='remember'>" + escape_html(rememberLabel) + "</button>";
+			html += "<span class='permission-note'>No login, no tracking; stored only in this browser.</span>";
+			html += "</div>";
+			html += "<div class='filter-group'><span class='filter-group-label'>Slot groups:</span>";
+			(metadata.slotGroups || []).forEach((slotGroup) => {
+				const selected = selectedSlotGroups.has(String(slotGroup.id));
+				html += "<button type='button' class='filter-btn" + (selected ? " active" : "") + "' data-filter-group='slot-group' data-filter-value='" + escape_html(slotGroup.id) + "'>" + escape_html(slotGroup.label) + "</button>";
+			});
+			html += "</div>";
+			html += "<div class='filter-group'><span class='filter-group-label'>Venues:</span>";
+			(metadata.venues || []).forEach((venue) => {
+				const selected = selectedVenues.has(String(venue.id));
+				html += "<button type='button' class='filter-btn" + (selected ? " active" : "") + "' data-filter-group='venue' data-filter-value='" + escape_html(venue.id) + "'>" + escape_html(venue.label) + "</button>";
+			});
+			html += "</div>";
+			html += "<div class='filter-group'><span class='filter-group-label'>Day groups:</span>";
+			["past", "present", "future"].forEach((dayGroup) => {
+				const selected = selectedDayGroups.has(dayGroup);
+				html += "<button type='button' class='filter-btn" + (selected ? " active" : "") + "' data-filter-group='day-group' data-filter-value='" + escape_html(dayGroup) + "'>" + escape_html(dayGroup.charAt(0).toUpperCase() + dayGroup.slice(1)) + "</button>";
+			});
+			html += "</div>";
+			html += "<div class='filter-group'><span class='filter-group-label'>Slot times:</span>";
+			(metadata.allTimes || []).forEach((slotTime) => {
+				const slotGroup = metadata.timeSlotGroups ? metadata.timeSlotGroups[slotTime] : "pond";
+				const selected = selectedTimes.has(slotTime);
+				html += "<button type='button' class='filter-btn" + (selected ? " active" : "") + "' data-filter-group='time' data-slot-group='" + escape_html(slotGroup) + "' data-filter-value='" + escape_html(slotTime) + "'>" + escape_html(slotTime) + "</button>";
+			});
+			html += "</div>";
+			html += "</div>";
+			html += "</div>";
+			return html;
+		}
+
+		function applyBookingsFilterState(widget, state)
+		{
+			const selectedVenues = new Set(state.selectedVenues || []);
+			const selectedDayGroups = new Set(state.selectedDayGroups || []);
+			const selectedTimes = new Set(state.selectedTimes || []);
+			const selectedSlotGroups = new Set(state.selectedSlotGroups || []);
+
+			widget.classList.toggle("dark-bg", !!state.darkBg);
+
+			widget.querySelectorAll("th.weather-col, td.weather-col").forEach((cell) => {
+				cell.classList.toggle("weather-hidden", !state.showWeather);
+			});
+
+			widget.querySelectorAll(".filter-btn[data-filter-group='ui']").forEach((button) => {
+				if (button.dataset.filterValue === "dark-bg") {
+					button.classList.toggle("active", !!state.darkBg);
+				}
+				if (button.dataset.filterValue === "weather") {
+					button.classList.toggle("active", !!state.showWeather);
+				}
+			});
+
+			widget.querySelectorAll(".filter-btn[data-filter-group='prefs']").forEach((button) => {
+				if (button.dataset.filterValue === "remember") {
+					button.classList.toggle("active", !!state.persistPrefs);
+					button.textContent = state.persistPrefs
+						? "Remember my filters on this device: On"
+						: "Remember my filters on this device: Off";
+				}
+			});
+
+			widget.querySelectorAll(".filters-shell").forEach((shell) => {
+				shell.classList.toggle("filters-collapsed", !!state.filtersCollapsed);
+				const toggleButton = shell.querySelector(".filters-toggle-desktop");
+				if (toggleButton) {
+					toggleButton.setAttribute("aria-expanded", state.filtersCollapsed ? "false" : "true");
+					toggleButton.textContent = state.filtersCollapsed ? "Show filters" : "Hide filters";
+				}
+			});
+
+			widget.querySelectorAll(".filter-btn[data-filter-group='slot-group']").forEach((button) => {
+				button.classList.toggle("active", selectedSlotGroups.has(button.dataset.filterValue));
+			});
+			widget.querySelectorAll(".filter-btn[data-filter-group='venue']").forEach((button) => {
+				button.classList.toggle("active", selectedVenues.has(button.dataset.filterValue));
+			});
+			widget.querySelectorAll(".filter-btn[data-filter-group='day-group']").forEach((button) => {
+				button.classList.toggle("active", selectedDayGroups.has(button.dataset.filterValue));
+			});
+			widget.querySelectorAll(".filter-btn[data-filter-group='time']").forEach((button) => {
+				button.classList.toggle("active", selectedTimes.has(button.dataset.filterValue));
+			});
+
+			widget.querySelectorAll(".filter-btn[data-filter-group='time']").forEach((button) => {
+				const slotGroup = button.dataset.slotGroup;
+				button.style.display = selectedSlotGroups.has(slotGroup) ? "" : "none";
+			});
+
+			widget.querySelectorAll(".bookings-table").forEach((table) => {
+				table.querySelectorAll("th.venue-col, td.venue-cell").forEach((cell) => {
+					const venueIdx = cell.dataset.venueIdx;
+					cell.style.display = selectedVenues.has(venueIdx) ? "" : "none";
+				});
+
+				table.querySelectorAll("tr[data-time]").forEach((row) => {
+					const timeMatch = selectedTimes.has(row.dataset.time);
+					const slotGroupMatch = selectedSlotGroups.has(row.dataset.slotGroup);
+					const hasVisibleVenue = Array.from(row.querySelectorAll("td.venue-cell")).some((cell) => cell.style.display !== "none");
+					row.style.display = timeMatch && slotGroupMatch && hasVisibleVenue ? "" : "none";
+				});
+			});
+
+			widget.querySelectorAll(".booking-day").forEach((section) => {
+				const daySelected = selectedDayGroups.has(section.dataset.dayGroup);
+				const hasVisibleRows = Array.from(section.querySelectorAll("tr[data-time]")).some((row) => row.style.display !== "none");
+				section.style.display = daySelected && hasVisibleRows ? "" : "none";
+			});
+		}
+
+		function persist_bookings_filter_state(state)
+		{
+			if (!state.persistPrefs) {
+				return;
+			}
+			const payload = {
+				venues: Array.from(state.selectedVenues || []),
+				dayGroups: Array.from(state.selectedDayGroups || []),
+				times: Array.from(state.selectedTimes || []),
+				slotGroups: Array.from(state.selectedSlotGroups || []),
+				darkBg: !!state.darkBg,
+				showWeather: !!state.showWeather,
+				persistPrefs: !!state.persistPrefs,
+			};
+			write_storage(BOOKINGS_FILTERS_STATE_KEY, JSON.stringify(payload));
+		}
+
+		function initBookingsFilters(metadata)
+		{
+			const widget = document.querySelector("#bookings .bookings-widget");
+			if (!widget) {
+				return;
+			}
+
+			widget.querySelectorAll(".filters-shell").forEach((existing) => existing.remove());
+			const rawState = read_storage(BOOKINGS_FILTERS_STATE_KEY);
+			const state = parse_saved_bookings_filter_state(rawState, metadata);
+			widget.insertAdjacentHTML("afterbegin", bookings_filter_panel_html(metadata, state));
+
+			function syncAndApply() {
+				applyBookingsFilterState(widget, state);
+				persist_bookings_filter_state(state);
+			}
+
+			widget.querySelectorAll(".filters-toggle-desktop").forEach((button) => {
+				button.addEventListener("click", () => {
+					state.filtersCollapsed = !state.filtersCollapsed;
+					write_storage(BOOKINGS_FILTERS_COLLAPSED_KEY, state.filtersCollapsed ? "1" : "0");
+					syncAndApply();
+				});
+			});
+
+			widget.querySelectorAll(".filter-btn[data-filter-group='prefs']").forEach((button) => {
+				if (button.dataset.filterValue !== "remember") {
+					return;
+				}
+				button.addEventListener("click", () => {
+					state.persistPrefs = !state.persistPrefs;
+					if (state.persistPrefs) {
+						if (!write_storage(BOOKINGS_FILTERS_CONSENT_KEY, "accepted")) {
+							state.persistPrefs = false;
+						}
+					} else {
+						remove_storage(BOOKINGS_FILTERS_CONSENT_KEY);
+						remove_storage(BOOKINGS_FILTERS_STATE_KEY);
+					}
+					syncAndApply();
+				});
+			});
+
+			widget.querySelectorAll(".filter-btn[data-filter-group='ui']").forEach((button) => {
+				button.addEventListener("click", () => {
+					if (button.dataset.filterValue === "dark-bg") {
+						state.darkBg = !state.darkBg;
+					} else if (button.dataset.filterValue === "weather") {
+						state.showWeather = !state.showWeather;
+					}
+					syncAndApply();
+				});
+			});
+
+			function wireSetButtons(selector, stateKey) {
+				widget.querySelectorAll(selector).forEach((button) => {
+					button.addEventListener("click", () => {
+						const value = button.dataset.filterValue;
+						const selectedSet = new Set(state[stateKey] || []);
+						if (selectedSet.has(value)) {
+							selectedSet.delete(value);
+						} else {
+							selectedSet.add(value);
+						}
+						state[stateKey] = Array.from(selectedSet);
+						syncAndApply();
+					});
+				});
+			}
+
+			wireSetButtons(".filter-btn[data-filter-group='slot-group']", "selectedSlotGroups");
+			wireSetButtons(".filter-btn[data-filter-group='venue']", "selectedVenues");
+			wireSetButtons(".filter-btn[data-filter-group='day-group']", "selectedDayGroups");
+			wireSetButtons(".filter-btn[data-filter-group='time']", "selectedTimes");
+
+			syncAndApply();
 		}
 
 		function update_reload_setting()
@@ -237,13 +589,14 @@
 
 		<div id="bookings"></div>
 		<script>
-			$(function(){
-				$("#bookings").load("./bookings.html", function () {
-					if (window.initAllBookingsWidgets) {
-						window.initAllBookingsWidgets(document.getElementById("bookings"));
-					}
+			Promise.all([load_bookings_html(), load_bookings_metadata()])
+				.then((results) => {
+					const metadata = results[1];
+					initBookingsFilters(metadata);
+				})
+				.catch((error) => {
+					console.error("Failed to initialize bookings controls", error);
 				});
-			});
 		</script>
 
 		<div id="bookingPlots">
