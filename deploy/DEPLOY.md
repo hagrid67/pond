@@ -33,6 +33,33 @@ Use systemd timers instead of cron for scheduling, logging, and jitter support.
 
 Random delay is configured with RandomizedDelaySec. For scrape, this is set to 3 minutes.
 
+## User Units and Linger (No sudo Runtime)
+Use user-level systemd units so daily operations do not require sudo.
+
+User units live under ~/.config/systemd/user/ and are managed with systemctl --user.
+
+To allow timers to run when jeremy is not logged in, enable linger for jeremy once:
+- sudo loginctl enable-linger jeremy
+
+Check linger status:
+- loginctl show-user jeremy -p Linger
+
+Note: enabling linger is typically a one-time admin action. After that, all timer lifecycle commands below can be run without sudo.
+
+## One-Command Host Deployment Scripts
+These scripts perform all install/reload/enable/verify steps and are safe to re-run (idempotent):
+- deploy/jwpc12/install-user-units.sh
+- deploy/jwpc19/install-user-units.sh
+
+What each script does:
+- creates ~/.config/systemd/user if needed
+- installs unit files from this repo into the user unit directory
+- runs systemctl --user daemon-reload
+- enables and starts required timers
+- runs verification commands (list-timers and status)
+- prints recent journal logs
+- checks linger and reminds how to enable it if missing
+
 ### Installed Unit Files (in repo)
 - deploy/jwpc12/systemd/pond-scrape.service
 - deploy/jwpc12/systemd/pond-scrape.timer
@@ -41,26 +68,19 @@ Random delay is configured with RandomizedDelaySec. For scrape, this is set to 3
 - deploy/jwpc19/systemd/pond-rsync-data.service
 - deploy/jwpc19/systemd/pond-rsync-data.timer
 
-## Suggested Install Steps on jwpc12
-1. Copy unit files to /etc/systemd/system/.
-2. Reload systemd:
-   - sudo systemctl daemon-reload
-3. Enable and start timers:
-   - sudo systemctl enable --now pond-scrape.timer
-   - sudo systemctl enable --now pond-weather.timer
-4. Verify:
-   - systemctl list-timers | grep pond-
-  - systemctl status pond-scrape.timer pond-weather.timer
+## Deploy on jwpc12 (systemctl --user)
+1. Run:
+   - ~/projects/pond/deploy/jwpc12/install-user-units.sh
+2. Optional manual verification:
+   - systemctl --user list-timers | grep pond-
+   - systemctl --user status pond-scrape.timer pond-weather.timer
 
-## Suggested Install Steps on jwpc19
-1. Copy unit files to /etc/systemd/system/.
-2. Reload systemd:
-  - sudo systemctl daemon-reload
-3. Enable and start timer:
-  - sudo systemctl enable --now pond-rsync-data.timer
-4. Verify:
-  - systemctl list-timers | grep pond-rsync-data
-  - systemctl status pond-rsync-data.timer pond-rsync-data.service
+## Deploy on jwpc19 (systemctl --user)
+1. Run:
+   - ~/projects/pond/deploy/jwpc19/install-user-units.sh
+2. Optional manual verification:
+   - systemctl --user list-timers | grep pond-rsync-data
+   - systemctl --user status pond-rsync-data.timer pond-rsync-data.service
 
 ## Script Entrypoints
 - scrape + publish: scripts/run_scrape_xnl.sh --scrape --headless --filters --rsync
