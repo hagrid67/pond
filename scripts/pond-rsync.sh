@@ -8,7 +8,8 @@ cd ~/projects/pond
 
 echo "rsync from $(hostname) to gcweb"
 
-cp -f ./output/booking-plot-*.png ./www-root/
+# No longer needed since we now write directly to www-root/ instead of output/
+# cp -f ./output/booking-plot-*.png ./www-root/
 
 SRC_DIR="./www-root/"
 DEST_DIR="gcweb1:projects/heating/dev/www-root/"
