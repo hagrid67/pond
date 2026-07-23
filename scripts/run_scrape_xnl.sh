@@ -5,9 +5,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 OUTPUT_DIR="${REPO_ROOT}/output"
 WWW_ROOT_DIR="${REPO_ROOT}/www-root"
-BOOKINGS_CSV="${OUTPUT_DIR}/bookings.csv"
-BOOKINGS_SRC="${OUTPUT_DIR}/bookings.html"
-BOOKINGS_DST="${WWW_ROOT_DIR}/bookings.html"
 LOCK_FILE="${REPO_ROOT}/output/scrape_xnl.lock"
 BROWSER_SESSION_DIR="${REPO_ROOT}/browser_session"
 RSYNC_SCRIPT="${SCRIPT_DIR}/pond-rsync.sh"
@@ -168,26 +165,17 @@ else
   echo "Skipping scrape (use --scrape to enable)."
 fi
 
-if [[ -f "${BOOKINGS_CSV}" ]]; then
-  REPORT_CMD_ARGS=( "${REPORT_SCRIPT_MODULE}" --html-output "${BOOKINGS_SRC}" )
-  if [[ ${RUN_FILTERS} -eq 1 ]]; then
-    REPORT_CMD_ARGS+=( --filters )
-  fi
-  if [[ ${RUN_WEATHER_DEBUG} -eq 1 ]]; then
-    REPORT_CMD_ARGS+=( --weather-debug )
-    if [[ -n "${WEATHER_DEBUG_LOG}" ]]; then
-      REPORT_CMD_ARGS+=( --weather-debug-log "${WEATHER_DEBUG_LOG}" )
-    fi
-  fi
-  run_python "${REPORT_CMD_ARGS[@]}"
-  cp "${BOOKINGS_SRC}" "${BOOKINGS_DST}"
-  echo "Copied ${BOOKINGS_SRC} -> ${BOOKINGS_DST}"
-elif [[ ${RUN_SCRAPE} -eq 1 ]]; then
-  echo "Error: bookings CSV not found at '${BOOKINGS_CSV}'." >&2
-  exit 1
-else
-  echo "Skipping bookings report (no CSV found at '${BOOKINGS_CSV}')."
+REPORT_CMD_ARGS=( "${REPORT_SCRIPT_MODULE}" --output-dir "${WWW_ROOT_DIR}" )
+if [[ ${RUN_FILTERS} -eq 1 ]]; then
+  REPORT_CMD_ARGS+=( --filters )
 fi
+if [[ ${RUN_WEATHER_DEBUG} -eq 1 ]]; then
+  REPORT_CMD_ARGS+=( --weather-debug )
+  if [[ -n "${WEATHER_DEBUG_LOG}" ]]; then
+    REPORT_CMD_ARGS+=( --weather-debug-log "${WEATHER_DEBUG_LOG}" )
+  fi
+fi
+run_python "${REPORT_CMD_ARGS[@]}"
 
 if [[ ${RUN_PLOT} -eq 1 ]]; then
   run_python "${PLOT_SCRIPT_MODULE}" --venue "Men's" --prevday --separate-axes --prevday --nextday --per-slot-from -3
