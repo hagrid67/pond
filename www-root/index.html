@@ -11,6 +11,7 @@
 		});
 
 		const CHARTS_HIDDEN_STORAGE_KEY = "pondChartsHidden";
+		const GALLERY_HIDDEN_STORAGE_KEY = "pondGalleryHidden";
 		const RELOAD_INTERVAL_STORAGE_KEY = "pondReloadInterval";
 		const LIVENESS_BUCKETS = {
 			bookings: [15, 60, 120],
@@ -54,6 +55,39 @@
 
 			const currentlyHidden = toggleBtn.dataset.hidden === "1";
 			set_charts_hidden(!currentlyHidden);
+		}
+
+		function set_gallery_hidden(hidden)
+		{
+			const gallerySection = document.getElementById("gallerySection");
+			const toggleBtn = document.getElementById("toggleGalleryBtn");
+			if (!toggleBtn) {
+				return;
+			}
+
+			if (gallerySection) {
+				gallerySection.style.display = hidden ? "none" : "";
+			}
+
+			toggleBtn.dataset.hidden = hidden ? "1" : "0";
+			toggleBtn.textContent = hidden ? "Show gallery" : "Hide gallery";
+
+			try {
+				window.localStorage.setItem(GALLERY_HIDDEN_STORAGE_KEY, hidden ? "1" : "0");
+			} catch (_err) {
+				// Ignore storage failures.
+			}
+		}
+
+		function toggle_gallery_visibility()
+		{
+			const toggleBtn = document.getElementById("toggleGalleryBtn");
+			if (!toggleBtn) {
+				return;
+			}
+
+			const currentlyHidden = toggleBtn.dataset.hidden === "1";
+			set_gallery_hidden(!currentlyHidden);
 		}
 
 		let reloadTimerId = null;
@@ -189,14 +223,23 @@
 
 		function default_bookings_filter_state(metadata)
 		{
+			const defaultVenueIds = (metadata.venues || [])
+				.filter((venue) => String(venue.label || "").toLowerCase() !== "lido")
+				.map((venue) => String(venue.id));
+			const defaultSlotGroupIds = (metadata.slotGroups || [])
+				.filter((slotGroup) => String(slotGroup.id) === "pond")
+				.map((slotGroup) => String(slotGroup.id));
+			const defaultTimes = (metadata.allTimes || []).filter((slotTime) => {
+				const slotGroup = metadata.timeSlotGroups ? metadata.timeSlotGroups[slotTime] : "pond";
+				return slotGroup === "pond";
+			});
 			return {
-				selectedVenues: (metadata.venues || []).map((venue) => String(venue.id)),
-				selectedDayGroups: ["past", "present", "future"],
-				selectedTimes: (metadata.allTimes || []).slice(),
-				selectedSlotGroups: (metadata.slotGroups || []).map((slotGroup) => String(slotGroup.id)),
-				darkBg: false,
+				selectedVenues: defaultVenueIds,
+				selectedDayGroups: ["present", "future"],
+				selectedTimes: defaultTimes,
+				selectedSlotGroups: defaultSlotGroupIds.length > 0 ? defaultSlotGroupIds : ["pond"],
 				showWeather: false,
-				persistPrefs: read_storage(BOOKINGS_FILTERS_CONSENT_KEY) === "accepted",
+				persistPrefs: true,
 				filtersCollapsed: read_storage(BOOKINGS_FILTERS_COLLAPSED_KEY) === "1",
 			};
 		}
@@ -231,9 +274,6 @@
 			}
 			if (Array.isArray(parsed.slotGroups)) {
 				state.selectedSlotGroups = parsed.slotGroups.map(String).filter((value) => slotGroupIds.has(value));
-			}
-			if (typeof parsed.darkBg === "boolean") {
-				state.darkBg = parsed.darkBg;
 			}
 			if (typeof parsed.showWeather === "boolean") {
 				state.showWeather = parsed.showWeather;
@@ -270,6 +310,7 @@
 			html += "<option value='15'>Every 15 minutes</option>";
 			html += "</select>";
 			html += "<button id='toggleChartsBtn' type='button' onclick='toggle_charts_visibility()'>Hide charts</button>";
+			html += "<button id='toggleGalleryBtn' type='button' onclick='toggle_gallery_visibility()'>Hide gallery</button>";
 			html += "</div>";
 			html += "<table class='liveness-table' aria-label='Data liveness'>";
 			html += "<tr><th>Dataset</th><th>Age</th></tr>";
@@ -278,7 +319,6 @@
 			html += "</table>";
 			html += "<h3>Filters</h3>";
 			html += "<div class='filter-group'>";
-			html += "<button type='button' class='filter-btn" + (state.darkBg ? " active" : "") + "' data-filter-group='ui' data-filter-value='dark-bg'>Toggle dark background</button>";
 			html += "<button type='button' class='filter-btn" + (state.showWeather ? " active" : "") + "' data-filter-group='ui' data-filter-value='weather'>Weather</button>";
 			html += "</div>";
 			html += "<div class='filter-group'>";
@@ -322,16 +362,11 @@
 			const selectedTimes = new Set(state.selectedTimes || []);
 			const selectedSlotGroups = new Set(state.selectedSlotGroups || []);
 
-			widget.classList.toggle("dark-bg", !!state.darkBg);
-
 			widget.querySelectorAll("th.weather-col, td.weather-col").forEach((cell) => {
 				cell.classList.toggle("weather-hidden", !state.showWeather);
 			});
 
 			widget.querySelectorAll(".filter-btn[data-filter-group='ui']").forEach((button) => {
-				if (button.dataset.filterValue === "dark-bg") {
-					button.classList.toggle("active", !!state.darkBg);
-				}
 				if (button.dataset.filterValue === "weather") {
 					button.classList.toggle("active", !!state.showWeather);
 				}
@@ -404,7 +439,6 @@
 				dayGroups: Array.from(state.selectedDayGroups || []),
 				times: Array.from(state.selectedTimes || []),
 				slotGroups: Array.from(state.selectedSlotGroups || []),
-				darkBg: !!state.darkBg,
 				showWeather: !!state.showWeather,
 				persistPrefs: !!state.persistPrefs,
 			};
@@ -423,6 +457,9 @@
 			const state = parse_saved_bookings_filter_state(rawState, metadata);
 			widget.insertAdjacentHTML("afterbegin", bookings_filter_panel_html(metadata, state));
 			init_page_controls();
+			if (state.persistPrefs) {
+				write_storage(BOOKINGS_FILTERS_CONSENT_KEY, "accepted");
+			}
 
 			function syncAndApply() {
 				applyBookingsFilterState(widget, state);
@@ -457,9 +494,7 @@
 
 			widget.querySelectorAll(".filter-btn[data-filter-group='ui']").forEach((button) => {
 				button.addEventListener("click", () => {
-					if (button.dataset.filterValue === "dark-bg") {
-						state.darkBg = !state.darkBg;
-					} else if (button.dataset.filterValue === "weather") {
+					if (button.dataset.filterValue === "weather") {
 						state.showWeather = !state.showWeather;
 					}
 					syncAndApply();
@@ -498,9 +533,14 @@
 					const reloadPref = window.localStorage.getItem(RELOAD_INTERVAL_STORAGE_KEY);
 					if (reloadPref && selector.querySelector("option[value='" + reloadPref + "']")) {
 						selector.value = reloadPref;
+					} else if (selector.querySelector("option[value='15']")) {
+						selector.value = "15";
 					}
 				} catch (_err) {
 					// Ignore storage failures.
+					if (selector.querySelector("option[value='15']")) {
+						selector.value = "15";
+					}
 				}
 				selector.addEventListener("change", update_reload_setting);
 			}
@@ -508,13 +548,26 @@
 
 			const toggleBtn = document.getElementById("toggleChartsBtn");
 			if (toggleBtn) {
-				let hiddenPref = false;
+				let hiddenPref = true;
 				try {
-					hiddenPref = window.localStorage.getItem(CHARTS_HIDDEN_STORAGE_KEY) === "1";
+					const stored = window.localStorage.getItem(CHARTS_HIDDEN_STORAGE_KEY);
+					hiddenPref = stored === null ? true : stored === "1";
 				} catch (_err) {
-					hiddenPref = false;
+					hiddenPref = true;
 				}
 				set_charts_hidden(hiddenPref);
+			}
+
+			const galleryToggleBtn = document.getElementById("toggleGalleryBtn");
+			if (galleryToggleBtn) {
+				let hiddenPref = true;
+				try {
+					const stored = window.localStorage.getItem(GALLERY_HIDDEN_STORAGE_KEY);
+					hiddenPref = stored === null ? true : stored === "1";
+				} catch (_err) {
+					hiddenPref = true;
+				}
+				set_gallery_hidden(hiddenPref);
 			}
 		}
 
@@ -637,6 +690,19 @@
 				justify-content: center;
 				align-items: center;
 				gap: 0.6rem;
+				flex-wrap: wrap;
+			}
+
+			#gallerySection {
+				max-width: 62rem;
+				margin: 0 auto;
+			}
+
+			.gallery-media {
+				display: flex;
+				justify-content: center;
+				align-items: center;
+				gap: 0.8rem;
 				flex-wrap: wrap;
 			}
 
@@ -801,15 +867,18 @@
 		<a href="https://www.instagram.com/colhampsteadheath/">Instagram @colhampsteadheath</a><br/>
 		<a href="https://x.com/citycorpheath">X / Twitter @citycorpheath</a><br/>
 
-		<p/>
-		<img width="300" src="20241228-cormorant-mist.jpg"></img>
-		<img width="300" src="jetty-20250102.jpg"></img>
-		<img width="300" src="jetty-250109.jpg"></img>
-		
-		<video width="320" height="240" controls autoplay >
-			<source src="JamesR-2025-0111.mp4" type="video/mp4">
-			This browser does not display the video tag.
-		</video>
+		<div id="gallerySection">
+			<h2>Gallery</h2>
+			<div class="gallery-media">
+				<img width="300" src="20241228-cormorant-mist.jpg"></img>
+				<img width="300" src="jetty-20250102.jpg"></img>
+				<img width="300" src="jetty-250109.jpg"></img>
+				<video width="320" height="240" controls autoplay >
+					<source src="JamesR-2025-0111.mp4" type="video/mp4">
+					This browser does not display the video tag.
+				</video>
+			</div>
+		</div>
 
 	</body>
 

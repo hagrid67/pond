@@ -1032,10 +1032,6 @@ def write_html_report(
 	)
 	weather_debug_log(f"Weather entries available for report slots: {len(weather_by_slot)}")
 	reference_date = reference_time.date() if reference_time is not None else None
-	has_today = bool(
-		reference_date is not None
-		and any(parse_booking_date(date) == reference_date for date in dates)
-	)
 
 	day_group_by_date: dict[str, str] = {}
 	for day in dates:
@@ -1053,25 +1049,18 @@ def write_html_report(
 	with open(html_output, "w", encoding="utf-8") as f:
 		updated_at = datetime.now().strftime("%a, %d %b %Y %H:%M")
 		f.write("<div class='bookings-widget'>\n")
-		f.write("<h2>Hampstead Heath Swimming Bookings</h2>\n")
 		f.write(
 			f"<p class='meta'>Last updated: {html_lib.escape(updated_at)} | "
 			f"<a href='{html_lib.escape(source_url)}' target='_blank' rel='noopener noreferrer'>"
 			"Open City of London bookings page</a></p>\n"
 		)
 
-		if has_today:
-			f.write("<p><a href='#today'>Jump to today</a></p>\n")
-
 		for date in dates:
 			date_value = html_lib.escape(date, quote=True)
 			day_group = day_group_by_date[date]
 			f.write(f"<div class='booking-day' data-day='{date_value}' data-day-group='{day_group}'>\n")
 			date_heading = format_booking_day_heading(date, reference_date)
-			if reference_date is not None and parse_booking_date(date) == reference_date:
-				f.write(f"<h3 id='today'>{html_lib.escape(date_heading)}</h3>\n")
-			else:
-				f.write(f"<h3>{html_lib.escape(date_heading)}</h3>\n")
+			f.write(f"<h3>{html_lib.escape(date_heading)}</h3>\n")
 			f.write(f"<table class='bookings-table' data-day='{date_value}'>\n<tr><th>Time</th>")
 			for idx, v in enumerate(venues):
 				f.write(f"<th class='venue-col' data-venue-idx='{idx}'>{html_lib.escape(v)}</th>")
