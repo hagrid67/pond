@@ -1,0 +1,14 @@
+[Unit]
+Description=Pond scrape bookings and regenerate report
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=jeremy
+Group=jeremy
+WorkingDirectory=/home/jeremy/projects/pond
+ExecStart=/home/jeremy/projects/pond/scripts/run_scrape_xnl.sh --scrape --headless --filters --rsync
+
+[Install]
+WantedBy=multi-user.target

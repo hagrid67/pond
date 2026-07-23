@@ -1,0 +1,14 @@
+[Unit]
+Description=Fetch pond weather forecast
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=jeremy
+Group=jeremy
+WorkingDirectory=/home/jeremy/projects/pond
+ExecStart=/home/jeremy/projects/pond/scripts/fetch-weather.sh
+
+[Install]
+WantedBy=multi-user.target

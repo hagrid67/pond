@@ -1,0 +1,11 @@
+[Unit]
+Description=Run pond weather fetch every 30 minutes
+
+[Timer]
+OnCalendar=*:07,37
+RandomizedDelaySec=2min
+Persistent=true
+Unit=pond-weather.service
+
+[Install]
+WantedBy=timers.target
