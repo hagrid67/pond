@@ -25,6 +25,104 @@ LIDO_SLOT_TIMES = {"10:30-13:30", "14:30-17:30", "18:00-20:00"}
 POND_ELEVATION_M = 70.0
 LAPSE_RATE_C_PER_KM = 6.5
 
+# Met Office significant weather code mapping (day/night variants use shared short labels).
+SIGNIFICANT_WEATHER_LABELS: dict[int, str] = {
+	0: "clear",
+	1: "sunny",
+	2: "partly cloudy",
+	3: "partly cloudy",
+	5: "mist",
+	6: "fog",
+	7: "cloudy",
+	8: "overcast",
+	9: "light rain shower",
+	10: "light rain shower",
+	11: "drizzle",
+	12: "light rain",
+	13: "heavy rain shower",
+	14: "heavy rain shower",
+	15: "heavy rain",
+	16: "sleet shower",
+	17: "sleet shower",
+	18: "sleet",
+	19: "hail shower",
+	20: "hail shower",
+	21: "hail",
+	22: "light snow shower",
+	23: "light snow shower",
+	24: "light snow",
+	25: "heavy snow shower",
+	26: "heavy snow shower",
+	27: "heavy snow",
+	28: "thunder shower",
+	29: "thunder shower",
+	30: "thunder",
+}
+
+SIGNIFICANT_WEATHER_ICONS: dict[int, str] = {
+	0: "🌙",
+	1: "☀",
+	2: "⛅",
+	3: "⛅",
+	5: "🌫",
+	6: "🌫",
+	7: "☁",
+	8: "☁",
+	9: "🌦",
+	10: "🌦",
+	11: "🌦",
+	12: "🌧",
+	13: "🌧",
+	14: "🌧",
+	15: "🌧",
+	16: "🌨",
+	17: "🌨",
+	18: "🌨",
+	19: "🌨",
+	20: "🌨",
+	21: "🌨",
+	22: "🌨",
+	23: "🌨",
+	24: "🌨",
+	25: "❄",
+	26: "❄",
+	27: "❄",
+	28: "⛈",
+	29: "⛈",
+	30: "🌩",
+}
+
+
+def describe_significant_weather(code_value: object) -> str:
+	"""Decode Met Office significantWeatherCode into a short lowercase label."""
+	code = parse_significant_weather_code(code_value)
+	if code is None:
+		return "unknown"
+	return SIGNIFICANT_WEATHER_LABELS.get(code, "unknown")
+
+
+def parse_significant_weather_code(code_value: object) -> int | None:
+	"""Parse significantWeatherCode to int when possible."""
+	if code_value is None:
+		return None
+	if isinstance(code_value, float) and np.isnan(code_value):
+		return None
+	try:
+		numeric = pd.to_numeric(pd.Series([code_value]), errors="coerce").iloc[0]
+		if pd.isna(numeric):
+			return None
+		return int(round(float(numeric)))
+	except (TypeError, ValueError):
+		return None
+
+
+def significant_weather_icon(code_value: object) -> str:
+	"""Return a compact weather icon for significantWeatherCode."""
+	code = parse_significant_weather_code(code_value)
+	if code is None:
+		return ""
+	return SIGNIFICANT_WEATHER_ICONS.get(code, "")
+
 
 def availability_to_count(availability_value):
 	"""Convert availability text/value into an integer ticket count."""
@@ -183,6 +281,11 @@ def _normalize_weather_snapshot(
 	else:
 		uv_index = pd.Series(np.nan, index=frame.index)
 
+	if "significantWeatherCode" in frame.columns:
+		significant_weather_code = pd.to_numeric(frame["significantWeatherCode"], errors="coerce")
+	else:
+		significant_weather_code = pd.Series(np.nan, index=frame.index)
+
 	if np.isnan(model_elevation_m):
 		adjusted_screen_temperature = pd.Series(np.nan, index=frame.index)
 	else:
@@ -195,6 +298,7 @@ def _normalize_weather_snapshot(
 			"screenTemperature": screen_temperature,
 			"adjustedScreenTemperature": adjusted_screen_temperature,
 			"uvIndex": uv_index,
+			"significantWeatherCode": significant_weather_code,
 			"source_file": source_file,
 			"source_time": frame.index,
 			"source_timestep": source_timestep,
@@ -243,6 +347,7 @@ def build_unified_weather_dataframe(n_days: int = 7, debug_log: Callable[[str], 
 	combined["screenTemperature"] = combined_numeric["screenTemperature"]
 	combined["adjustedScreenTemperature"] = combined_adjusted["adjustedScreenTemperature"]
 	combined["uvIndex"] = combined_numeric["uvIndex"]
+	combined["significantWeatherCode"] = pd.to_numeric(raw["significantWeatherCode"], errors="coerce").reindex(grid_index).ffill().bfill()
 	combined["source_file"] = raw["source_file"].reindex(grid_index).ffill()
 	combined["source_time"] = raw["source_time"].reindex(grid_index).ffill()
 	combined["source_timestep"] = raw["source_timestep"].reindex(grid_index).ffill()
@@ -261,7 +366,7 @@ def _resolve_weather_row(weather_df: pd.DataFrame | None, target_time: pd.Timest
 
 	augmented = weather_df.reindex(weather_df.index.union([target_time])).sort_index()
 	augmented[["screenTemperature", "adjustedScreenTemperature", "uvIndex"]] = augmented[["screenTemperature", "adjustedScreenTemperature", "uvIndex"]].interpolate(method="time")
-	for column in ("source_file", "source_time", "source_timestep", "source_snapshot_time", "model_elevation_m"):
+	for column in ("source_file", "source_time", "source_timestep", "source_snapshot_time", "model_elevation_m", "significantWeatherCode"):
 		if column in augmented.columns:
 			augmented[column] = augmented[column].ffill()
 	row = augmented.loc[target_time]
@@ -377,6 +482,7 @@ def build_test_weather_dataframe(
 			temp_value = lookup_row.get("screenTemperature")
 			adjusted_temp_value = lookup_row.get("adjustedScreenTemperature")
 			uv_value = lookup_row.get("uvIndex")
+			significant_weather_code = lookup_row.get("significantWeatherCode")
 			source_timestep = str(lookup_row.get("source_timestep") or "")
 
 			rows.append(
@@ -388,6 +494,8 @@ def build_test_weather_dataframe(
 					"source_file": lookup_row.get("source_file"),
 					"source_time": lookup_row.get("source_time"),
 					"model_elevation_m": lookup_row.get("model_elevation_m"),
+					"significantWeatherCode": parse_significant_weather_code(significant_weather_code),
+					"significantWeather": describe_significant_weather(significant_weather_code),
 					"is_interpolated": bool(lookup_row.get("is_interpolated", False)),
 					"screenTemperature": round(float(temp_value), 2) if not pd.isna(temp_value) else pd.NA,
 					"adjustedScreenTemperature": round(float(adjusted_temp_value), 2) if not pd.isna(adjusted_temp_value) else pd.NA,
@@ -405,7 +513,51 @@ def build_test_weather_dataframe(
 	).dt.tz_localize(london_tz)
 	result = result.set_index("slot_start_local").sort_index()
 	result.index.name = "slot_start_local"
-	return result[["slot_date", "slot_time", "lookup_time_utc", "source_timestep", "source_file", "source_time", "model_elevation_m", "is_interpolated", "screenTemperature", "adjustedScreenTemperature", "uvIndex"]]
+	return result[["slot_date", "slot_time", "lookup_time_utc", "source_timestep", "source_file", "source_time", "model_elevation_m", "significantWeatherCode", "significantWeather", "is_interpolated", "screenTemperature", "adjustedScreenTemperature", "uvIndex"]]
+
+
+def build_test_weather_short_dataframe(weather_df: pd.DataFrame) -> pd.DataFrame:
+	"""Build a compact weather dataframe for terminal display."""
+	if weather_df.empty:
+		return weather_df
+
+	compact = weather_df.copy()
+	compact = compact.rename(
+		columns={
+			"lookup_time_utc": "tLookup",
+			"source_timestep": "src_step",
+			"source_time": "src_time",
+			"model_elevation_m": "model_elev",
+			"significantWeatherCode": "SWCode",
+			"significantWeather": "SW",
+			"is_interpolated": "is_interp",
+			"screenTemperature": "scrnTemp",
+			"adjustedScreenTemperature": "adjTemp",
+		}
+	)
+
+	# Keep only HH:MM for slot index and UTC lookup/source times in short mode.
+	compact_index_dt = pd.DatetimeIndex(compact.index)
+	compact.index = pd.Index(compact_index_dt.strftime("%H:%M"), name="slot_time_local")
+	compact["tLookup"] = pd.to_datetime(compact["tLookup"], utc=True).dt.strftime("%H:%M")
+	compact["src_time"] = pd.to_datetime(compact["src_time"], utc=True).dt.strftime("%H:%M")
+
+	return compact[
+		[
+			"slot_date",
+			"slot_time",
+			"tLookup",
+			"src_step",
+			"src_time",
+			"model_elev",
+			"SWCode",
+			"SW",
+			"is_interp",
+			"scrnTemp",
+			"adjTemp",
+			"uvIndex",
+		]
+	]
 
 
 def _prepare_weather_frame(weather_df: pd.DataFrame | None, use_three_hour_mean: bool = False) -> pd.DataFrame | None:
@@ -440,7 +592,9 @@ def _format_weather_row(row: pd.Series, use_adjusted_temp: bool = True) -> str:
 
 	temp_rounded = int(round(float(temp_value)))
 	uv_rounded = int(round(float(uv_value)))
-	return f"{temp_rounded}°C, {uv_rounded}"
+	icon = significant_weather_icon(row.get("significantWeatherCode"))
+	prefix = f"{icon} " if icon else ""
+	return f"{prefix}{temp_rounded}°C, {uv_rounded}"
 
 
 def _resolve_from_hourly_frame(weather_df: pd.DataFrame | None, target_time: pd.Timestamp) -> tuple[str, str]:
@@ -956,6 +1110,11 @@ def main() -> None:
 		help="Print a slot-indexed weather dataframe for debugging interpolation and forecast source selection.",
 	)
 	parser.add_argument(
+		"--test-weather-short",
+		action="store_true",
+		help="Print a compact weather dataframe with short column names and HH:MM times.",
+	)
+	parser.add_argument(
 		"--raw-temp",
 		action="store_true",
 		help="Use raw screenTemperature instead of elevation-adjusted temperatures in booking-report weather output.",
@@ -971,13 +1130,15 @@ def main() -> None:
 	weather_debug_log = make_debug_logger(args.weather_debug, args.weather_debug_log if args.weather_debug else None)
 	weather_debug_log(f"booking-report start: input_csv={input_csv}, html_output={html_output}")
 
-	if args.test_weather:
+	if args.test_weather or args.test_weather_short:
 		weather_df = build_test_weather_dataframe(input_csv, debug_log=weather_debug_log)
 		if weather_df.empty:
 			print("ERROR: No test-weather dataframe could be built")
 			sys.exit(1)
+		if args.test_weather_short:
+			weather_df = build_test_weather_short_dataframe(weather_df)
 		with pd.option_context("display.max_rows", None, "display.max_columns", None, "display.width", 200):
-			print(weather_df.round({"screenTemperature": 2, "adjustedScreenTemperature": 2, "uvIndex": 2}).to_string())
+			print(weather_df.round({"scrnTemp": 2, "adjTemp": 2, "screenTemperature": 2, "adjustedScreenTemperature": 2, "uvIndex": 2}).to_string())
 		sys.exit()
 
 	all_slots, date_sequence, reference_time = build_report_slots(input_csv)
