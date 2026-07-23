@@ -258,9 +258,24 @@
 			};
 			let html = "<div class='filters-shell" + (filtersCollapsed ? " filters-collapsed" : "") + "'>";
 			html += "<div class='filters-controls'>";
-			html += "<button type='button' class='filters-toggle-desktop' aria-expanded='" + (!filtersCollapsed ? "true" : "false") + "'>" + (filtersCollapsed ? "Show filters" : "Hide filters") + "</button>";
+			html += "<button type='button' class='filters-toggle-desktop' aria-expanded='" + (!filtersCollapsed ? "true" : "false") + "'>" + (filtersCollapsed ? "Show controls" : "Hide controls") + "</button>";
 			html += "</div>";
 			html += "<div class='filters' id='booking-filters-panel'>";
+			html += "<h3>Controls</h3>";
+			html += "<div class='filter-group controls-row'>";
+			html += "<label for='reloadInterval'>Auto-reload:</label>";
+			html += "<select id='reloadInterval'>";
+			html += "<option value='0'>None</option>";
+			html += "<option value='1'>Every minute</option>";
+			html += "<option value='15'>Every 15 minutes</option>";
+			html += "</select>";
+			html += "<button id='toggleChartsBtn' type='button' onclick='toggle_charts_visibility()'>Hide charts</button>";
+			html += "</div>";
+			html += "<table class='liveness-table' aria-label='Data liveness'>";
+			html += "<tr><th>Dataset</th><th>Age</th></tr>";
+			html += "<tr><td>Bookings</td><td id='bookingsLivenessValue' class='liveness-unknown'>n/a</td></tr>";
+			html += "<tr><td>Weather</td><td id='weatherLivenessValue' class='liveness-unknown'>n/a</td></tr>";
+			html += "</table>";
 			html += "<h3>Filters</h3>";
 			html += "<div class='filter-group'>";
 			html += "<button type='button' class='filter-btn" + (state.darkBg ? " active" : "") + "' data-filter-group='ui' data-filter-value='dark-bg'>Toggle dark background</button>";
@@ -336,7 +351,7 @@
 				const toggleButton = shell.querySelector(".filters-toggle-desktop");
 				if (toggleButton) {
 					toggleButton.setAttribute("aria-expanded", state.filtersCollapsed ? "false" : "true");
-					toggleButton.textContent = state.filtersCollapsed ? "Show filters" : "Hide filters";
+					toggleButton.textContent = state.filtersCollapsed ? "Show controls" : "Hide controls";
 				}
 			});
 
@@ -407,6 +422,7 @@
 			const rawState = read_storage(BOOKINGS_FILTERS_STATE_KEY);
 			const state = parse_saved_bookings_filter_state(rawState, metadata);
 			widget.insertAdjacentHTML("afterbegin", bookings_filter_panel_html(metadata, state));
+			init_page_controls();
 
 			function syncAndApply() {
 				applyBookingsFilterState(widget, state);
@@ -474,6 +490,34 @@
 			syncAndApply();
 		}
 
+		function init_page_controls()
+		{
+			const selector = document.getElementById("reloadInterval");
+			if (selector) {
+				try {
+					const reloadPref = window.localStorage.getItem(RELOAD_INTERVAL_STORAGE_KEY);
+					if (reloadPref && selector.querySelector("option[value='" + reloadPref + "']")) {
+						selector.value = reloadPref;
+					}
+				} catch (_err) {
+					// Ignore storage failures.
+				}
+				selector.addEventListener("change", update_reload_setting);
+			}
+			update_reload_setting();
+
+			const toggleBtn = document.getElementById("toggleChartsBtn");
+			if (toggleBtn) {
+				let hiddenPref = false;
+				try {
+					hiddenPref = window.localStorage.getItem(CHARTS_HIDDEN_STORAGE_KEY) === "1";
+				} catch (_err) {
+					hiddenPref = false;
+				}
+				set_charts_hidden(hiddenPref);
+			}
+		}
+
 		function update_reload_setting()
 		{
 			const selector = document.getElementById("reloadInterval");
@@ -520,8 +564,8 @@
 			Promise.all([load_bookings_html(), load_bookings_metadata()])
 				.then((results) => {
 					const metadata = results[1];
-					update_liveness_table(metadata);
 					initBookingsFilters(metadata);
+					update_liveness_table(metadata);
 					refresh_visible_charts();
 					window.scrollTo(0, scrollY);
 				})
@@ -534,29 +578,7 @@
 		}
 
 		$(document).ready(function(){
-			const selector = document.getElementById("reloadInterval");
-			if (selector) {
-				try {
-					const reloadPref = window.localStorage.getItem(RELOAD_INTERVAL_STORAGE_KEY);
-					if (reloadPref && selector.querySelector("option[value='" + reloadPref + "']")) {
-						selector.value = reloadPref;
-					}
-				} catch (_err) {
-					// Ignore storage failures.
-				}
-				selector.addEventListener("change", update_reload_setting);
-			}
-			update_reload_setting();
-			const toggleBtn = document.getElementById("toggleChartsBtn");
-			if (toggleBtn) {
-				let hiddenPref = false;
-				try {
-					hiddenPref = window.localStorage.getItem(CHARTS_HIDDEN_STORAGE_KEY) === "1";
-				} catch (_err) {
-					hiddenPref = false;
-				}
-				set_charts_hidden(hiddenPref);
-			}
+			// Dynamic controls are initialized after bookings HTML/metadata are loaded.
 		});
 
 		// zoom in on click.  Doesn't work.
@@ -608,6 +630,14 @@
 			#bookings {
 			width: 100%;
 			margin: 0 auto;
+			}
+
+			.controls-row {
+				display: flex;
+				justify-content: center;
+				align-items: center;
+				gap: 0.6rem;
+				flex-wrap: wrap;
 			}
 
 			.liveness-table {
@@ -700,42 +730,13 @@
 
 	<body>
 
-		<h1 style="text-align: center">Highgate Men's Pond Booking Stats (Beta)</h1>
+		<h3 style="text-align: center">Highgate Men's Pond Booking Stats (Beta)</h3>
 
 		<p>
 			Highgate Men's Pond Association (<a href="https://www.highgatemenspond.com/visitor-info">HMPA</a>)
 			is providing a summary of the availability of tickets for the bookable swimming sessions.
 			
 		</p>
-
-		<p>
-			<label for="reloadInterval">Auto-reload:</label>
-			<select id="reloadInterval">
-				<option value="0">None</option>
-				<option value="1" selected>Every minute</option>
-				<option value="15">Every 15 minutes</option>
-			</select>
-		</p>
-
-		<table class="liveness-table" aria-label="Data liveness">
-			<tr>
-				<th>Dataset</th>
-				<th>Age</th>
-			</tr>
-			<tr>
-				<td>Bookings</td>
-				<td id="bookingsLivenessValue" class="liveness-unknown">n/a</td>
-			</tr>
-			<tr>
-				<td>Weather</td>
-				<td id="weatherLivenessValue" class="liveness-unknown">n/a</td>
-			</tr>
-		</table>
-
-		<p>
-			<button id="toggleChartsBtn" onclick="toggle_charts_visibility()">Hide charts</button>
-		</p>
-
 
 		<br/>
 
@@ -744,8 +745,8 @@
 			Promise.all([load_bookings_html(), load_bookings_metadata()])
 				.then((results) => {
 					const metadata = results[1];
-					update_liveness_table(metadata);
 					initBookingsFilters(metadata);
+					update_liveness_table(metadata);
 				})
 				.catch((error) => {
 					console.error("Failed to initialize bookings controls", error);
