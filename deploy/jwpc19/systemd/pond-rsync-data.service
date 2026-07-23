@@ -5,8 +5,6 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
-User=jeremy
-Group=jeremy
 WorkingDirectory=/home/jeremy/projects/pond
 ExecStart=/home/jeremy/projects/pond/scripts/pond-rsync-data.sh
 
