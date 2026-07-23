@@ -1002,7 +1002,6 @@ def write_html_report(
 	html_output,
 	source_url,
 	reference_time: datetime | None = None,
-	include_filters: bool = False,
 	weather_debug_log: Callable[[str], None] | None = None,
 	use_adjusted_temp: bool = True,
 ):
