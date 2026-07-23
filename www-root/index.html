@@ -235,7 +235,7 @@
 			});
 			return {
 				selectedVenues: defaultVenueIds,
-				selectedDayGroups: ["present", "future"],
+				selectedDayGroups: ["today", "tomorrow"],
 				selectedTimes: defaultTimes,
 				selectedSlotGroups: defaultSlotGroupIds.length > 0 ? defaultSlotGroupIds : ["pond"],
 				showWeather: false,
@@ -259,7 +259,7 @@
 			}
 
 			const venueIds = new Set((metadata.venues || []).map((venue) => String(venue.id)));
-			const dayGroups = new Set(["past", "present", "future"]);
+			const dayGroups = new Set(["past", "today", "tomorrow", "future"]);
 			const slotGroupIds = new Set((metadata.slotGroups || []).map((slotGroup) => String(slotGroup.id)));
 			const timeSet = new Set(metadata.allTimes || []);
 
@@ -267,7 +267,12 @@
 				state.selectedVenues = parsed.venues.map(String).filter((value) => venueIds.has(value));
 			}
 			if (Array.isArray(parsed.dayGroups)) {
-				state.selectedDayGroups = parsed.dayGroups.map(String).filter((value) => dayGroups.has(value));
+				state.selectedDayGroups = parsed.dayGroups
+					.map((value) => {
+						const normalized = String(value);
+						return normalized === "present" ? "today" : normalized;
+					})
+					.filter((value) => dayGroups.has(value));
 			}
 			if (Array.isArray(parsed.times)) {
 				state.selectedTimes = parsed.times.map(String).filter((value) => timeSet.has(value));
@@ -338,9 +343,14 @@
 			});
 			html += "</div>";
 			html += "<div class='filter-group'><span class='filter-group-label'>Day groups:</span>";
-			["past", "present", "future"].forEach((dayGroup) => {
-				const selected = selectedDayGroups.has(dayGroup);
-				html += "<button type='button' class='filter-btn" + (selected ? " active" : "") + "' data-filter-group='day-group' data-filter-value='" + escape_html(dayGroup) + "'>" + escape_html(dayGroup.charAt(0).toUpperCase() + dayGroup.slice(1)) + "</button>";
+			[
+				{ value: "past", label: "Past" },
+				{ value: "today", label: "Today" },
+				{ value: "tomorrow", label: "Tomorrow" },
+				{ value: "future", label: "Future" },
+			].forEach((dayGroup) => {
+				const selected = selectedDayGroups.has(dayGroup.value);
+				html += "<button type='button' class='filter-btn" + (selected ? " active" : "") + "' data-filter-group='day-group' data-filter-value='" + escape_html(dayGroup.value) + "'>" + escape_html(dayGroup.label) + "</button>";
 			});
 			html += "</div>";
 			html += "<div class='filter-group'><span class='filter-group-label'>Slot times:</span>";

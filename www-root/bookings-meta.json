@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
-  "reportGeneratedAt": "2026-07-23T16:46:41.917740+00:00",
-  "bookingsSnapshotAt": "2026-07-23T16:40:00+00:00",
-  "weatherForecastAt": "2026-07-23T15:00:00+00:00",
+  "reportGeneratedAt": "2026-07-23T18:32:25.446982+00:00",
+  "bookingsSnapshotAt": "2026-07-23T18:25:00+00:00",
+  "weatherForecastAt": "2026-07-23T17:00:00+00:00",
   "weatherSources": [
     {
       "modelRunAt": "2026-07-19T14:15:00+00:00",
@@ -977,6 +977,32 @@
           "timestep": "hourly"
         }
       ]
+    },
+    {
+      "modelRunAt": "2026-07-23T16:00:00+00:00",
+      "sources": [
+        {
+          "file": "pond-260723-1600-3h.json",
+          "timestep": "three-hourly"
+        },
+        {
+          "file": "pond-260723-1600.json",
+          "timestep": "hourly"
+        }
+      ]
+    },
+    {
+      "modelRunAt": "2026-07-23T17:00:00+00:00",
+      "sources": [
+        {
+          "file": "pond-260723-1700-3h.json",
+          "timestep": "three-hourly"
+        },
+        {
+          "file": "pond-260723-1700.json",
+          "timestep": "hourly"
+        }
+      ]
     }
   ],
   "reportDateRange": {
@@ -1302,7 +1328,7 @@
     },
     {
       "date": "2026-0723",
-      "dayGroup": "present",
+      "dayGroup": "today",
       "slots": [
         {
           "time": "10:30-13:30",
@@ -1348,7 +1374,7 @@
     },
     {
       "date": "2026-0724",
-      "dayGroup": "future",
+      "dayGroup": "tomorrow",
       "slots": [
         {
           "time": "10:30-13:30",

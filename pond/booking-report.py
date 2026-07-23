@@ -225,15 +225,7 @@ def build_report_metadata(
 
 	for day in date_sequence:
 		parsed_day = parse_booking_date(day)
-		if parsed_day is None:
-			day_group = "present"
-		else:
-			if parsed_day < reference_date:
-				day_group = "past"
-			elif parsed_day > reference_date:
-				day_group = "future"
-			else:
-				day_group = "present"
+		day_group = day_group_for_date(parsed_day, reference_date)
 
 		day_slots: list[dict[str, str]] = []
 		seen_day_times: set[str] = set()
@@ -856,6 +848,18 @@ def parse_booking_date(date_text: str) -> date | None:
 	return None
 
 
+def day_group_for_date(parsed_day: date | None, reference_date: date | None) -> str:
+	if parsed_day is None or reference_date is None:
+		return "today"
+	if parsed_day < reference_date:
+		return "past"
+	if parsed_day == reference_date:
+		return "today"
+	if parsed_day == (reference_date + timedelta(days=1)):
+		return "tomorrow"
+	return "future"
+
+
 def format_relative_day_label(target_date: date, reference_date: date) -> str:
 	delta_days = (target_date - reference_date).days
 	if delta_days == 0:
@@ -1036,14 +1040,7 @@ def write_html_report(
 	day_group_by_date: dict[str, str] = {}
 	for day in dates:
 		parsed_day = parse_booking_date(day)
-		if parsed_day is None or reference_date is None:
-			group = "present"
-		elif parsed_day < reference_date:
-			group = "past"
-		elif parsed_day > reference_date:
-			group = "future"
-		else:
-			group = "present"
+		group = day_group_for_date(parsed_day, reference_date)
 		day_group_by_date[day] = group
 
 	with open(html_output, "w", encoding="utf-8") as f:
