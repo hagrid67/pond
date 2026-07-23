@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = REPO_ROOT / "data"
-OUTPUT_DIR = REPO_ROOT / "output"
+OUTPUT_DIR = REPO_ROOT / "www-root"
 GLOB_PATTERN = "bookings-*.csv"
 
 
