@@ -183,7 +183,7 @@ def plot_metric(
             [p[1] for p in ewma_points],
             linewidth=2.0,
             color=color,
-            alpha=0.95,
+            alpha=0.5,
             label="EWMA",
         )
     ax.set_title(title)
