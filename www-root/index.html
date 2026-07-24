@@ -528,7 +528,7 @@
 				return found ? found.label : String(slotGroupId);
 			};
 			let html = "<div class='filters-shell" + (filtersCollapsed ? " filters-collapsed" : "") + "'>";
-			html += "<div class='filters-controls'>";
+			html += "<div class='filters-controls pond-update-controls-row'>";
 			html += "<button type='button' id='pondUpdateToggleBtn' class='pond-update-toggle' aria-expanded='true' onclick='toggle_pond_update_panel()'>Hide pond update panel</button>";
 			html += "</div>";
 			html += "<div id='pondUpdatePanel' class='pond-update-panel' style='display:block'>";
@@ -564,9 +564,9 @@
 			html += "<div id='pondUpdateSubmitStatus' class='pond-update-submit-status'></div>";
 			html += "</div>";
 			html += "</div>";
-			html += "<div class='filters-controls'>";
-			html += "<button id='toggleBookingSummaryBtn' type='button' onclick='toggle_booking_summary_visibility()'>Hide booking summary</button>";
-			html += "<button type='button' class='filters-toggle-desktop' aria-expanded='" + (!filtersCollapsed ? "true" : "false") + "'>" + (filtersCollapsed ? "Show controls" : "Hide controls") + "</button>";
+			html += "<div class='filters-controls summary-controls-row'>";
+			html += "<button id='toggleBookingSummaryBtn' type='button' class='filters-toggle-desktop booking-summary-toggle' onclick='toggle_booking_summary_visibility()'>Hide booking summary</button>";
+			html += "<button type='button' class='filters-toggle-desktop controls-toggle' aria-expanded='" + (!filtersCollapsed ? "true" : "false") + "'>" + (filtersCollapsed ? "Show controls" : "Hide controls") + "</button>";
 			html += "</div>";
 			html += "<div class='filters' id='booking-filters-panel'>";
 			html += "<h3>Controls</h3>";
@@ -657,7 +657,7 @@
 
 			widget.querySelectorAll(".filters-shell").forEach((shell) => {
 				shell.classList.toggle("filters-collapsed", !!state.filtersCollapsed);
-				const toggleButton = shell.querySelector(".filters-toggle-desktop");
+				const toggleButton = shell.querySelector(".controls-toggle");
 				if (toggleButton) {
 					toggleButton.setAttribute("aria-expanded", state.filtersCollapsed ? "false" : "true");
 					toggleButton.textContent = state.filtersCollapsed ? "Show controls" : "Hide controls";
@@ -740,7 +740,7 @@
 				persist_bookings_filter_state(state);
 			}
 
-			widget.querySelectorAll(".filters-toggle-desktop").forEach((button) => {
+			widget.querySelectorAll(".controls-toggle").forEach((button) => {
 				button.addEventListener("click", () => {
 					state.filtersCollapsed = !state.filtersCollapsed;
 					write_storage(BOOKINGS_FILTERS_COLLAPSED_KEY, state.filtersCollapsed ? "1" : "0");
@@ -1071,6 +1071,14 @@
 
 			.pond-update-toggle {
 				font-weight: 700;
+			}
+
+			.pond-update-controls-row {
+				margin-bottom: 0.7rem;
+			}
+
+			.summary-controls-row {
+				margin-top: 0.9rem;
 			}
 
 			.pond-update-panel {
