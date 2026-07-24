@@ -6,9 +6,7 @@ UNIT_SRC_DIR="${SCRIPT_DIR}/systemd"
 UNIT_DST_DIR="${HOME}/.config/systemd/user"
 
 UNITS=(
-  pond-submit-edge.service
-  pond-submit-forward.service
-  pond-submit-forward.timer
+  pond-pondupdate-api.service
 )
 
 echo "[gcweb1] Installing pond user units"
@@ -26,20 +24,18 @@ done
 echo "Reloading user systemd"
 systemctl --user daemon-reload
 
-echo "Enabling and starting submission services"
-systemctl --user enable --now pond-submit-edge.service
-systemctl --user enable --now pond-submit-forward.timer
+echo "Enabling and starting pond update API service"
+systemctl --user enable --now pond-pondupdate-api.service
 
-echo "Verifying service and timer"
-systemctl --user status pond-submit-edge.service pond-submit-forward.timer pond-submit-forward.service --no-pager || true
-systemctl --user list-timers --all | grep -E 'pond-submit-forward\.timer' || {
-  echo "Error: expected pond-submit-forward timer not found" >&2
+echo "Verifying service"
+systemctl --user status pond-pondupdate-api.service --no-pager || true
+systemctl --user list-unit-files | grep -E '^pond-pondupdate-api\.service' || {
+  echo "Error: expected pond-pondupdate-api service not found" >&2
   exit 1
 }
 
 echo "Recent service logs"
-journalctl --user -u pond-submit-edge.service -n 30 --no-pager || true
-journalctl --user -u pond-submit-forward.service -n 30 --no-pager || true
+journalctl --user -u pond-pondupdate-api.service -n 30 --no-pager || true
 
 LINGER_VALUE="$(loginctl show-user "${USER}" -p Linger --value 2>/dev/null || echo unknown)"
 if [[ "${LINGER_VALUE}" != "yes" ]]; then

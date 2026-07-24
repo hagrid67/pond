@@ -4,10 +4,10 @@ Web host notes for Debian 12 on Google Cloud.
 
 This folder is intended for nginx/static serving notes and host-specific deployment details.
 
-Planned anonymous submission role:
-- public ingress host for browser POSTs to /api/submit
-- short-lived local queue if jwpc12 is unreachable
-- immediate forwarder to jwpc12 when available
+Current pond update role:
+- public ingress host for browser POSTs to /api/pondupdate
+- reverse proxy from nginx to local uvicorn on 127.0.0.1:9000
+- local JSONL logging via `pond.dev_web_api` (`output/pond-updates.jsonl`)
 
 See also:
 - deploy/gcweb1/systemd/

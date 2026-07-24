@@ -1,0 +1,14 @@
+[Unit]
+Description=Pond update API on gcweb1 (JSONL logging mode)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/jeremy/projects/pond
+ExecStart=/usr/bin/env python3 -m uvicorn pond.dev_web_api:app --host 127.0.0.1 --port 9000
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

@@ -101,9 +101,7 @@ What each script does:
 - deploy/jwpc12/systemd/pond-submit-ingest.service
 - deploy/jwpc12/systemd/pond-weather.service
 - deploy/jwpc12/systemd/pond-weather.timer
-- deploy/gcweb1/systemd/pond-submit-edge.service
-- deploy/gcweb1/systemd/pond-submit-forward.service
-- deploy/gcweb1/systemd/pond-submit-forward.timer
+- deploy/gcweb1/systemd/pond-pondupdate-api.service
 - deploy/jwpc19/systemd/pond-dev-sync.service
 - deploy/jwpc19/systemd/pond-dev-sync.timer
 
@@ -114,6 +112,7 @@ Deprecated (kept in repo for migration reference):
 ### nginx Config Files (in repo)
 - deploy/gcweb1/nginx/http-pond-submit-rate-limit.conf
 - deploy/gcweb1/nginx/site-pond-submit-api.conf
+- deploy/gcweb1/nginx/site-pond-pondupdate-api.conf
 - deploy/jwpc12/nginx/site-pond-submit-ingest.conf
 
 ## Deploy on jwpc12 (systemctl --user)
@@ -133,11 +132,10 @@ Deprecated (kept in repo for migration reference):
 1. Run:
   - ~/projects/pond/deploy/gcweb1/install-user-units.sh
 2. Optional manual verification:
-  - systemctl --user status pond-submit-edge.service pond-submit-forward.timer pond-submit-forward.service
-  - systemctl --user list-timers | grep pond-submit-forward
+  - systemctl --user status pond-pondupdate-api.service
 3. Install nginx config manually as root:
   - add deploy/gcweb1/nginx/http-pond-submit-rate-limit.conf in the nginx http block include path
-  - add deploy/gcweb1/nginx/site-pond-submit-api.conf in the server/site include path for the pond site
+  - add deploy/gcweb1/nginx/site-pond-pondupdate-api.conf in the server/site include path for the pond site
   - test and reload nginx:
   - sudo nginx -t
   - sudo systemctl reload nginx
