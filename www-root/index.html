@@ -563,6 +563,10 @@
 			html += "<button type='button' id='pondUpdateSubmitBtn' class='pond-update-submit-btn' onclick='submit_pond_update()'>Submit pond update</button>";
 			html += "<div id='pondUpdateSubmitStatus' class='pond-update-submit-status'></div>";
 			html += "</div>";
+			html += "<div class='filter-group pond-update-row pond-update-chart-row'>";
+			html += "<h4 class='pond-update-chart-title'>Recent user updates</h4>";
+			html += "<img class='pond-update-chart' src='/user-updates.png' alt='Chart of recent user updates for slots, queue length, and grass counts' loading='lazy'>";
+			html += "</div>";
 			html += "</div>";
 			html += "<div class='filters-controls summary-controls-row'>";
 			html += "<button id='toggleBookingSummaryBtn' type='button' class='filters-toggle-desktop booking-summary-toggle' onclick='toggle_booking_summary_visibility()'>Hide booking summary</button>";
@@ -1139,6 +1143,26 @@
 			.pond-update-submit-btn:disabled {
 				opacity: 0.65;
 				cursor: wait;
+			}
+
+			.pond-update-chart-row {
+				align-items: stretch;
+			}
+
+			.pond-update-chart-title {
+				margin: 0;
+				font-size: 0.95rem;
+				font-weight: 700;
+				color: #d9efef;
+			}
+
+			.pond-update-chart {
+				display: block;
+				width: 100%;
+				height: auto;
+				border: 1px solid #5d6d6d;
+				border-radius: 8px;
+				background: #ffffff;
 			}
 
 			.pond-update-submit-status {
