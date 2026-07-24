@@ -43,8 +43,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--halflife-hours",
         type=float,
-        default=3.0,
-        help="EWMA half-life in hours (default: 3).",
+        default=0.5,
+        help="EWMA half-life in hours (default: 0.5, i.e. 30 minutes).",
     )
     parser.add_argument(
         "--input-dir",
@@ -148,6 +148,8 @@ def plot_metric(
     ax: plt.Axes,
     points: list[tuple[datetime, float]],
     ewma_points: list[tuple[datetime, float]],
+    unknown_times: list[datetime],
+    unknown_y: float,
     title: str,
     y_label: str,
     color: str,
@@ -156,10 +158,24 @@ def plot_metric(
         ax.scatter(
             [p[0] for p in points],
             [p[1] for p in points],
-            s=22,
+            s=28,
             alpha=0.75,
             color=color,
             label="submissions",
+            zorder=3,
+        )
+    if unknown_times:
+        ax.scatter(
+            unknown_times,
+            [unknown_y] * len(unknown_times),
+            s=52,
+            alpha=0.5,
+            marker="X",
+            color="#5f6368",
+            edgecolors="#f1f3f4",
+            linewidths=0.8,
+            label="unknown",
+            zorder=5,
         )
     if ewma_points:
         ax.plot(
@@ -193,6 +209,9 @@ def main() -> int:
     slots_points: list[tuple[datetime, float]] = []
     queue_points: list[tuple[datetime, float]] = []
     grass_points: list[tuple[datetime, float]] = []
+    slots_unknown_times: list[datetime] = []
+    queue_unknown_times: list[datetime] = []
+    grass_unknown_times: list[datetime] = []
 
     for record in records:
         ts = record["timestamp"]
@@ -203,14 +222,20 @@ def main() -> int:
         v_slots = slots_value(payload)
         if v_slots is not None:
             slots_points.append((ts, v_slots))
+        else:
+            slots_unknown_times.append(ts)
 
         v_queue = slider_count_value(payload, "queue")
         if v_queue is not None:
             queue_points.append((ts, v_queue))
+        else:
+            queue_unknown_times.append(ts)
 
         v_grass = slider_count_value(payload, "grass")
         if v_grass is not None:
             grass_points.append((ts, v_grass))
+        else:
+            grass_unknown_times.append(ts)
 
     slots_ewma = ewma_time_series(slots_points, args.halflife_hours)
     queue_ewma = ewma_time_series(queue_points, args.halflife_hours)
@@ -226,6 +251,8 @@ def main() -> int:
         axes[0],
         slots_points,
         slots_ewma,
+        slots_unknown_times,
+        0.5,
         title="Slots enforced",
         y_label="No/Yes",
         color="#2b8a3e",
@@ -237,6 +264,8 @@ def main() -> int:
         axes[1],
         queue_points,
         queue_ewma,
+        queue_unknown_times,
+        36.5,
         title="Queue length",
         y_label="People",
         color="#1c7ed6",
@@ -247,6 +276,8 @@ def main() -> int:
         axes[2],
         grass_points,
         grass_ewma,
+        grass_unknown_times,
+        36.5,
         title="People on grass",
         y_label="People",
         color="#e67700",
