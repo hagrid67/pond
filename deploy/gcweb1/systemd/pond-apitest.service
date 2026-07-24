@@ -1,0 +1,12 @@
+[Unit]
+Description=Submit random pond update sample from gcweb1
+After=network-online.target pond-pondupdate-api.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/projects/pond
+ExecStart=%h/projects/heating/dev/ve311/bin/python %h/projects/pond/pond/apitest.py --url http://127.0.0.1:9000/api/pondupdate
+
+[Install]
+WantedBy=default.target

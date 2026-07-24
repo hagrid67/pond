@@ -1,0 +1,11 @@
+[Unit]
+Description=Run pond apitest submission every minute with jitter
+
+[Timer]
+OnCalendar=*:0/1
+RandomizedDelaySec=60
+Persistent=true
+Unit=pond-apitest.service
+
+[Install]
+WantedBy=timers.target

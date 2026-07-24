@@ -1,0 +1,10 @@
+[Unit]
+Description=Regenerate pond user updates chart every minute
+
+[Timer]
+OnCalendar=*:0/1
+Persistent=true
+Unit=pond-user-chart.service
+
+[Install]
+WantedBy=timers.target
