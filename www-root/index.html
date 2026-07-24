@@ -16,6 +16,7 @@
 		const BOOKING_SUMMARY_HIDDEN_STORAGE_KEY = "pondBookingSummaryHidden";
 		const RELOAD_INTERVAL_STORAGE_KEY = "pondReloadInterval";
 		const POND_UPDATE_PANEL_OPEN_STORAGE_KEY = "pondUpdatePanelOpen";
+		const POND_UPDATE_INCLUDE_TEST_DATA_STORAGE_KEY = "pondUpdateIncludeTestData";
 		const POND_UPDATE_API_URL = "/api/pondupdate";
 		const QUEUE_LABELS = ["don't know", "no queue", "5", "10", "20", "30", "50", "long!"];
 		const GRASS_LABELS = ["don't know", "none", "5", "10", "20", "30", "50", "loads!"];
@@ -70,6 +71,25 @@
 			}
 			const currentlyOpen = button.getAttribute("aria-expanded") === "true";
 			set_pond_update_panel_open(!currentlyOpen);
+		}
+
+		function set_pond_update_include_test_data(includeTest)
+		{
+			const checkbox = document.getElementById("pondUpdateIncludeTestData");
+			const chartImg = document.getElementById("pondUpdateChartImage");
+			if (!checkbox || !chartImg) {
+				return;
+			}
+
+			checkbox.checked = !!includeTest;
+			const chartPath = includeTest ? "/user-updates-test.png" : "/user-updates.png";
+			chartImg.src = chartPath + "?v=" + Date.now();
+
+			try {
+				window.localStorage.setItem(POND_UPDATE_INCLUDE_TEST_DATA_STORAGE_KEY, includeTest ? "1" : "0");
+			} catch (_err) {
+				// Ignore storage failures.
+			}
 		}
 
 		function collect_pond_update_payload()
@@ -580,8 +600,11 @@
 			html += "<div id='pondUpdateSubmitStatus' class='pond-update-submit-status'></div>";
 			html += "</div>";
 			html += "<div class='filter-group pond-update-row pond-update-chart-row'>";
+			html += "<div class='pond-update-chart-header'>";
 			html += "<h4 class='pond-update-chart-title'>Recent user updates</h4>";
-			html += "<img class='pond-update-chart' src='/user-updates.png?v=" + Date.now() + "' alt='Chart of recent user updates for slots, queue length, and grass counts' loading='lazy'>";
+			html += "<label class='pond-update-chart-toggle'><input type='checkbox' id='pondUpdateIncludeTestData'> include test data</label>";
+			html += "</div>";
+			html += "<img id='pondUpdateChartImage' class='pond-update-chart' src='/user-updates.png?v=" + Date.now() + "' alt='Chart of recent user updates for slots, queue length, and grass counts' loading='lazy'>";
 			html += "</div>";
 			html += "</div>";
 			html += "<div class='filters-controls summary-controls-row'>";
@@ -902,6 +925,20 @@
 				set_pond_update_panel_open(openPref);
 			}
 
+			const includeTestCheckbox = document.getElementById("pondUpdateIncludeTestData");
+			if (includeTestCheckbox) {
+				let includeTestPref = false;
+				try {
+					includeTestPref = window.localStorage.getItem(POND_UPDATE_INCLUDE_TEST_DATA_STORAGE_KEY) === "1";
+				} catch (_err) {
+					includeTestPref = false;
+				}
+				set_pond_update_include_test_data(includeTestPref);
+				includeTestCheckbox.addEventListener("change", () => {
+					set_pond_update_include_test_data(includeTestCheckbox.checked);
+				});
+			}
+
 			const queueSlider = document.getElementById("queueLengthSlider");
 			const queueValue = document.getElementById("queueLengthValue");
 			if (queueSlider && queueValue) {
@@ -1177,10 +1214,26 @@
 				align-items: stretch;
 			}
 
+			.pond-update-chart-header {
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				gap: 0.8rem;
+				width: min(540px, 94%);
+			}
+
 			.pond-update-chart-title {
 				margin: 0;
 				font-size: 0.95rem;
 				font-weight: 700;
+				color: #d9efef;
+			}
+
+			.pond-update-chart-toggle {
+				display: inline-flex;
+				align-items: center;
+				gap: 0.35rem;
+				font-size: 0.85rem;
 				color: #d9efef;
 			}
 

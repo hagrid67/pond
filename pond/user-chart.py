@@ -46,8 +46,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--halflife-hours",
         type=float,
-        default=0.5,
-        help="EWMA half-life in hours (default: 0.5, i.e. 30 minutes).",
+        default=10.0 / 60.0,
+        help="EWMA half-life in hours (default: 0.1667, i.e. 10 minutes).",
     )
     parser.add_argument(
         "--input-dir",
@@ -261,7 +261,7 @@ def build_chart(
 
     fig, axes = plt.subplots(3, 1, figsize=(6, 4), sharex=True)
     fig.suptitle(
-        f"{title_prefix}: last {hours:g}h (EWMA half-life {halflife_hours:g}h)",
+        f"{title_prefix}: last {hours:g}h",
         fontsize=13,
     )
 
