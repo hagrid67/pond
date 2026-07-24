@@ -10,14 +10,43 @@ import urllib.request
 from datetime import datetime, timezone
 
 
+QUEUE_LABELS = ["don't know", "no queue", "5", "10", "20", "30", "50", "long!"]
+GRASS_LABELS = ["don't know", "none", "5", "10", "20", "30", "50", "loads!"]
+
+
+def slider_label(labels: list[str], index: int) -> str:
+    if 0 <= index < len(labels):
+        return labels[index]
+    return labels[0]
+
+
 def build_random_payload() -> dict[str, object]:
     slots_options = ["yes", "no", "dont-know"]
+    now_iso = datetime.now(timezone.utc).isoformat()
+    queue_index = random.randint(1, 7)
+    grass_index = random.randint(1, 7)
+    water_temp_index = random.randint(0, 29)
+
     payload = {
+        "type": "pond-update",
+        "submittedAt": now_iso,
+        "submittedDate": now_iso[:10],
         "slotsEnforced": random.choice(slots_options),
-        "waterTempC": round(random.uniform(12.0, 25.0), 1),
-        "confidence": random.randint(1, 5),
-        "note": f"api-test sample at {datetime.now(timezone.utc).isoformat()}",
-        "source": "api-test.py",
+        "queue": {
+            "index": queue_index,
+            "label": slider_label(QUEUE_LABELS, queue_index),
+        },
+        "grass": {
+            "index": grass_index,
+            "label": slider_label(GRASS_LABELS, grass_index),
+        },
+        "waterTemperature": {
+            "index": water_temp_index,
+            "label": "don't know" if water_temp_index == 0 else f"{water_temp_index - 1}",
+            "celsius": None if water_temp_index == 0 else water_temp_index - 1,
+        },
+        "note": f"apitest sample at {now_iso}",
+        "source": "apitest.py",
     }
     return payload
 

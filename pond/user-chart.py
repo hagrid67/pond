@@ -6,6 +6,7 @@ import json
 import math
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import matplotlib
 
@@ -17,6 +18,7 @@ import matplotlib.pyplot as plt
 REPO_ROOT = Path(__file__).resolve().parents[1]
 UPDATES_DIR = REPO_ROOT / "user-updates"
 OUTPUT_PNG = REPO_ROOT / "www-root" / "user-updates.png"
+LONDON_TZ = ZoneInfo("Europe/London")
 
 # Approximate count mappings for slider values from the UI.
 QUEUE_GRASS_COUNT_MAP = {
@@ -153,6 +155,7 @@ def plot_metric(
     title: str,
     y_label: str,
     color: str,
+    point_colors: list[str] | None = None,
 ) -> None:
     if points:
         ax.scatter(
@@ -160,7 +163,7 @@ def plot_metric(
             [p[1] for p in points],
             s=28,
             alpha=0.75,
-            color=color,
+            color=point_colors if point_colors else color,
             label="submissions",
             zorder=3,
         )
@@ -241,6 +244,9 @@ def main() -> int:
     queue_ewma = ewma_time_series(queue_points, args.halflife_hours)
     grass_ewma = ewma_time_series(grass_points, args.halflife_hours)
 
+    # In the slots panel, highlight "yes" in red and keep "no" green.
+    slots_point_colors = ["#e03131" if value >= 0.5 else "#2b8a3e" for _, value in slots_points]
+
     fig, axes = plt.subplots(3, 1, figsize=(13, 9), sharex=True)
     fig.suptitle(
         f"Pond user updates: last {args.hours:g}h (EWMA half-life {args.halflife_hours:g}h)",
@@ -256,6 +262,7 @@ def main() -> int:
         title="Slots enforced",
         y_label="No/Yes",
         color="#2b8a3e",
+        point_colors=slots_point_colors,
     )
     axes[0].set_yticks([0.0, 1.0], labels=["No", "Yes"])
     axes[0].set_ylim(-0.2, 1.2)
@@ -284,8 +291,8 @@ def main() -> int:
     )
     axes[2].set_ylim(-2, 75)
 
-    axes[2].set_xlabel("Time (UTC)")
-    axes[2].xaxis.set_major_formatter(mdates.DateFormatter("%m-%d %H:%M", tz=timezone.utc))
+    axes[2].set_xlabel("Time (Europe/London)")
+    axes[2].xaxis.set_major_formatter(mdates.DateFormatter("%m-%d %H:%M", tz=LONDON_TZ))
     fig.autofmt_xdate()
 
     output_path.parent.mkdir(parents=True, exist_ok=True)

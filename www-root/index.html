@@ -554,7 +554,7 @@
 			html += "<div id='grassCountValue' class='pond-update-value'>don't know</div>";
 			html += "<datalist id='grassCountTicks'><option value='0' label='don't know'></option><option value='1' label='none'></option><option value='2' label='5'></option><option value='3' label='10'></option><option value='4' label='20'></option><option value='5' label='30'></option><option value='6' label='50'></option><option value='7' label='loads!'></option></datalist>";
 			html += "</div>";
-			html += "<div class='filter-group pond-update-row'>";
+			html += "<div class='filter-group pond-update-row pond-update-water-temp-row'>";
 			html += "<label class='pond-update-slider-label' for='waterTempSlider'>Lifeguards' water temperature?</label>";
 			html += "<input id='waterTempSlider' class='pond-update-slider' type='range' min='0' max='29' step='1' value='0'>";
 			html += "<div id='waterTempValue' class='pond-update-value'>don't know</div>";
@@ -565,7 +565,7 @@
 			html += "</div>";
 			html += "<div class='filter-group pond-update-row pond-update-chart-row'>";
 			html += "<h4 class='pond-update-chart-title'>Recent user updates</h4>";
-			html += "<img class='pond-update-chart' src='/user-updates.png' alt='Chart of recent user updates for slots, queue length, and grass counts' loading='lazy'>";
+			html += "<img class='pond-update-chart' src='/user-updates.png?v=" + Date.now() + "' alt='Chart of recent user updates for slots, queue length, and grass counts' loading='lazy'>";
 			html += "</div>";
 			html += "</div>";
 			html += "<div class='filters-controls summary-controls-row'>";
@@ -1128,6 +1128,10 @@
 
 			.pond-update-submit-row {
 				margin-top: 0.8rem;
+			}
+
+			.pond-update-water-temp-row {
+				display: none;
 			}
 
 			.pond-update-submit-btn {
