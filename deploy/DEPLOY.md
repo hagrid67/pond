@@ -21,7 +21,7 @@ Using hostname subfolders keeps machine-specific settings separate and makes it 
 ## Current Scheduled Jobs (jwpc12)
 - bookings scrape job
 - weather fetch job
-- publish to gcweb1 runs via --rsync in the scrape job
+- publish generated bookings artefacts to gcweb1 runs via --rsync in the scrape job
 - planned submission ingest API service for anonymous user input
 
 ## Current Scheduled Jobs (jwpc19)
@@ -153,6 +153,7 @@ Deprecated (kept in repo for migration reference):
 - scrape + publish: scripts/run_scrape_xnl.sh --scrape --headless --filters --rsync
 - weather: scripts/fetch-weather.sh
 - publish helper (called by scrape runner): scripts/pond-rsync.sh
+  - syncs generated artefacts only: bookings.html, bookings-meta.json, booking-plot-*.png
 - jwpc19 dev sync: scripts/pond-dev-sync.sh
 
 ## Planned Submission Service Ports

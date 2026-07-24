@@ -35,7 +35,7 @@ Options:
   --filters      Enable filter controls in generated bookings report HTML.
   --weather-debug Enable verbose weather debug logs in booking-report.py.
   --weather-debug-log PATH  Write weather debug logs to PATH.
-  --rsync        Run scripts/pond-rsync.sh.
+  --rsync        Publish generated web artefacts via scripts/pond-rsync.sh.
   --cron         Emit extra timestamped separators and blank lines for cron logs.
   -h, --help     Show this help message.
 
