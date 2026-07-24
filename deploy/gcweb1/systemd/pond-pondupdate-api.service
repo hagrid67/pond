@@ -6,7 +6,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=%h/projects/pond
-ExecStart=/usr/bin/env python3 -m uvicorn pond.dev_web_api:app --host 127.0.0.1 --port 9000
+ExecStart=%h/projects/heating/dev/ve311/bin/python -m uvicorn pond.dev_web_api:app --host 127.0.0.1 --port 9000
 Restart=on-failure
 RestartSec=5
 
