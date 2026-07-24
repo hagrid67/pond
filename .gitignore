@@ -34,6 +34,7 @@ Thumbs.db
 
 # Local runtime/output data
 output/
+user-updates/
 browser_session/
 data/*.csv
 !data/.gitkeep

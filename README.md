@@ -24,4 +24,4 @@ Endpoints:
 - `POST /api/pondupdate` accepts pond update JSON payloads
 - `GET /api/health` simple health check
 
-Submitted updates are appended to `output/pond-updates.jsonl`.
+Submitted updates are appended to `user-updates/user-updates-yymmdd.jsonl` (daily rolling file names).

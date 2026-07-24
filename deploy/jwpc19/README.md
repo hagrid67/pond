@@ -16,4 +16,4 @@ cd ~/projects/pond
 python -m uvicorn pond.dev_web_api:app --host 0.0.0.0 --port 8000
 ```
 
-- Pond update submissions from `/api/pondupdate` are logged to `output/pond-updates.jsonl`.
+- Pond update submissions from `/api/pondupdate` are logged to `user-updates/user-updates-yymmdd.jsonl` (daily rolling).

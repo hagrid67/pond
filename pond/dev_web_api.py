@@ -13,8 +13,7 @@ from fastapi.staticfiles import StaticFiles
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 STATIC_DIR = REPO_ROOT / "www-root"
-OUTPUT_DIR = REPO_ROOT / "output"
-UPDATES_JSONL = OUTPUT_DIR / "pond-updates.jsonl"
+USER_UPDATES_DIR = REPO_ROOT / "user-updates"
 
 app = FastAPI(title="Pond Dev Web API")
 
@@ -29,7 +28,8 @@ def post_pond_update(payload: dict[str, Any]) -> JSONResponse:
     if not isinstance(payload, dict):
         raise HTTPException(status_code=400, detail="Expected JSON object payload")
 
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_utc = datetime.now(timezone.utc)
+    now_iso = now_utc.isoformat()
     record_id = str(uuid.uuid4())
     record = {
         "id": record_id,
@@ -37,8 +37,9 @@ def post_pond_update(payload: dict[str, Any]) -> JSONResponse:
         "payload": payload,
     }
 
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    with UPDATES_JSONL.open("a", encoding="utf-8") as fp:
+    updates_jsonl = USER_UPDATES_DIR / f"user-updates-{now_utc:%y%m%d}.jsonl"
+    USER_UPDATES_DIR.mkdir(parents=True, exist_ok=True)
+    with updates_jsonl.open("a", encoding="utf-8") as fp:
         fp.write(json.dumps(record, ensure_ascii=False) + "\n")
 
     return JSONResponse(
