@@ -248,9 +248,22 @@
 			}
 
 			if (widget) {
-				widget.querySelectorAll(".booking-day, .bookings-table").forEach((node) => {
-					node.style.display = hidden ? "none" : "";
-				});
+				if (hidden) {
+					widget.querySelectorAll(".booking-day").forEach((node) => {
+						node.style.display = "none";
+					});
+				} else {
+					const state = {
+						selectedVenues: Array.from(widget.querySelectorAll(".filter-btn[data-filter-group='venue'].active")).map((btn) => btn.dataset.filterValue),
+						selectedDayGroups: Array.from(widget.querySelectorAll(".filter-btn[data-filter-group='day-group'].active")).map((btn) => btn.dataset.filterValue),
+						selectedTimes: Array.from(widget.querySelectorAll(".filter-btn[data-filter-group='time'].active")).map((btn) => btn.dataset.filterValue),
+						selectedSlotGroups: Array.from(widget.querySelectorAll(".filter-btn[data-filter-group='slot-group'].active")).map((btn) => btn.dataset.filterValue),
+						showWeather: !!widget.querySelector(".filter-btn[data-filter-group='ui'][data-filter-value='weather'].active"),
+						persistPrefs: !!widget.querySelector(".filter-btn[data-filter-group='prefs'][data-filter-value='remember'].active"),
+						filtersCollapsed: !!widget.querySelector(".filters-shell.filters-collapsed"),
+					};
+					applyBookingsFilterState(widget, state);
+				}
 			}
 
 			toggleBtn.dataset.hidden = hidden ? "1" : "0";
@@ -542,18 +555,21 @@
 			html += "</div>";
 			html += "<div id='slotsEnforcedStatus' class='pond-update-value'>Please try to ask politely if slots are being enforced.</div>";
 			html += "</div>";
+			html += "<hr class='pond-update-separator'>";
 			html += "<div class='filter-group pond-update-row'>";
 			html += "<label class='pond-update-slider-label' for='queueLengthSlider'>How many people in the queue?</label>";
 			html += "<input id='queueLengthSlider' class='pond-update-slider' type='range' min='0' max='7' step='1' value='0' list='queueLengthTicks'>";
 			html += "<div id='queueLengthValue' class='pond-update-value'>don't know</div>";
 			html += "<datalist id='queueLengthTicks'><option value='0' label='don't know'></option><option value='1' label='no queue'></option><option value='2' label='5'></option><option value='3' label='10'></option><option value='4' label='20'></option><option value='5' label='30'></option><option value='6' label='50'></option><option value='7' label='long!'></option></datalist>";
 			html += "</div>";
+			html += "<hr class='pond-update-separator'>";
 			html += "<div class='filter-group pond-update-row'>";
 			html += "<label class='pond-update-slider-label' for='grassCountSlider'>How many people on the grass?</label>";
 			html += "<input id='grassCountSlider' class='pond-update-slider' type='range' min='0' max='7' step='1' value='0' list='grassCountTicks'>";
 			html += "<div id='grassCountValue' class='pond-update-value'>don't know</div>";
 			html += "<datalist id='grassCountTicks'><option value='0' label='don't know'></option><option value='1' label='none'></option><option value='2' label='5'></option><option value='3' label='10'></option><option value='4' label='20'></option><option value='5' label='30'></option><option value='6' label='50'></option><option value='7' label='loads!'></option></datalist>";
 			html += "</div>";
+			html += "<hr class='pond-update-separator'>";
 			html += "<div class='filter-group pond-update-row pond-update-water-temp-row'>";
 			html += "<label class='pond-update-slider-label' for='waterTempSlider'>Lifeguards' water temperature?</label>";
 			html += "<input id='waterTempSlider' class='pond-update-slider' type='range' min='0' max='29' step='1' value='0'>";
@@ -1098,6 +1114,14 @@
 				flex-direction: column;
 				gap: 0.35rem;
 				align-items: center;
+			}
+
+			.pond-update-separator {
+				width: min(540px, 94%);
+				margin: 0.2rem auto 0.45rem auto;
+				border: 0;
+				border-top: 1px solid #5d6d6d;
+				opacity: 0.75;
 			}
 
 			.pond-update-options {
