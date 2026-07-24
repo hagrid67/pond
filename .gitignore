@@ -47,3 +47,6 @@ logs/*
 www-root/booking-plot*.png
 www-root/bookings.html
 www-root/bookings-meta.json
+
+# Local nginx backup snapshots on gcweb1 deploy path
+deploy/gcweb1/nginx/nginx.conf.*
