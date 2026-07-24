@@ -18,6 +18,7 @@ import matplotlib.pyplot as plt
 REPO_ROOT = Path(__file__).resolve().parents[1]
 UPDATES_DIR = REPO_ROOT / "user-updates"
 OUTPUT_PNG = REPO_ROOT / "www-root" / "user-updates.png"
+OUTPUT_TEST_PNG = REPO_ROOT / "www-root" / "user-updates-test.png"
 LONDON_TZ = ZoneInfo("Europe/London")
 
 # Approximate count mappings for slider values from the UI.
@@ -56,7 +57,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output",
         default=str(OUTPUT_PNG),
-        help="Output PNG path.",
+        help="Primary output PNG path for filtered (non-apitest) chart.",
+    )
+    parser.add_argument(
+        "--output-test",
+        default=str(OUTPUT_TEST_PNG),
+        help="Output PNG path for full-data test chart.",
     )
     return parser.parse_args()
 
@@ -192,23 +198,29 @@ def plot_metric(
     ax.set_title(title)
     ax.set_ylabel(y_label)
     ax.grid(True, linestyle="--", linewidth=0.6, alpha=0.35)
-    ax.legend(loc="upper left")
 
 
-def main() -> int:
-    args = parse_args()
+def is_apitest_payload(payload: dict[str, object]) -> bool:
+    source = payload.get("source")
+    if isinstance(source, str) and source in {"apitest.py", "api-test.py"}:
+        return True
 
-    input_dir = Path(args.input_dir)
-    output_path = Path(args.output)
+    note = payload.get("note")
+    if isinstance(note, str):
+        note_lower = note.lower()
+        if "apitest sample" in note_lower or "api-test sample" in note_lower:
+            return True
 
-    now_utc = datetime.now(timezone.utc)
-    since_utc = now_utc - timedelta(hours=args.hours)
+    return False
 
-    if not input_dir.exists():
-        raise SystemExit(f"Input directory not found: {input_dir}")
 
-    records = load_records(input_dir=input_dir, since_utc=since_utc)
-
+def build_chart(
+    records: list[dict[str, object]],
+    output_path: Path,
+    hours: float,
+    halflife_hours: float,
+    title_prefix: str,
+) -> tuple[int, int, int]:
     slots_points: list[tuple[datetime, float]] = []
     queue_points: list[tuple[datetime, float]] = []
     grass_points: list[tuple[datetime, float]] = []
@@ -240,16 +252,16 @@ def main() -> int:
         else:
             grass_unknown_times.append(ts)
 
-    slots_ewma = ewma_time_series(slots_points, args.halflife_hours)
-    queue_ewma = ewma_time_series(queue_points, args.halflife_hours)
-    grass_ewma = ewma_time_series(grass_points, args.halflife_hours)
+    slots_ewma = ewma_time_series(slots_points, halflife_hours)
+    queue_ewma = ewma_time_series(queue_points, halflife_hours)
+    grass_ewma = ewma_time_series(grass_points, halflife_hours)
 
     # In the slots panel, highlight "yes" in red and keep "no" green.
     slots_point_colors = ["#e03131" if value >= 0.5 else "#2b8a3e" for _, value in slots_points]
 
-    fig, axes = plt.subplots(3, 1, figsize=(13, 9), sharex=True)
+    fig, axes = plt.subplots(3, 1, figsize=(6, 4), sharex=True)
     fig.suptitle(
-        f"Pond user updates: last {args.hours:g}h (EWMA half-life {args.halflife_hours:g}h)",
+        f"{title_prefix}: last {hours:g}h (EWMA half-life {halflife_hours:g}h)",
         fontsize=13,
     )
 
@@ -292,7 +304,7 @@ def main() -> int:
     axes[2].set_ylim(-2, 75)
 
     axes[2].set_xlabel("Time (Europe/London)")
-    axes[2].xaxis.set_major_formatter(mdates.DateFormatter("%m-%d %H:%M", tz=LONDON_TZ))
+    axes[2].xaxis.set_major_formatter(mdates.DateFormatter("%a %H:%M", tz=LONDON_TZ))
     fig.autofmt_xdate()
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -300,10 +312,53 @@ def main() -> int:
     fig.savefig(output_path, dpi=160)
     plt.close(fig)
 
-    print(f"Wrote chart: {output_path}")
-    print(f"Processed records: {len(records)}")
+    return len(slots_points), len(queue_points), len(grass_points)
+
+
+def main() -> int:
+    args = parse_args()
+
+    input_dir = Path(args.input_dir)
+    output_path = Path(args.output)
+    output_test_path = Path(args.output_test)
+
+    now_utc = datetime.now(timezone.utc)
+    since_utc = now_utc - timedelta(hours=args.hours)
+
+    if not input_dir.exists():
+        raise SystemExit(f"Input directory not found: {input_dir}")
+
+    records = load_records(input_dir=input_dir, since_utc=since_utc)
+
+    test_slots, test_queue, test_grass = build_chart(
+        records=records,
+        output_path=output_test_path,
+        hours=args.hours,
+        halflife_hours=args.halflife_hours,
+        title_prefix="Pond user updates (all submissions)",
+    )
+
+    filtered_records = [
+        record
+        for record in records
+        if isinstance(record.get("payload"), dict) and not is_apitest_payload(record["payload"])
+    ]
+
+    live_slots, live_queue, live_grass = build_chart(
+        records=filtered_records,
+        output_path=output_path,
+        hours=args.hours,
+        halflife_hours=args.halflife_hours,
+        title_prefix="Pond user updates",
+    )
+
+    print(f"Wrote chart: {output_test_path}")
     print(
-        f"Valid points: slots={len(slots_points)}, queue={len(queue_points)}, grass={len(grass_points)}"
+        f"All submissions: records={len(records)}, slots={test_slots}, queue={test_queue}, grass={test_grass}"
+    )
+    print(f"Wrote chart: {output_path}")
+    print(
+        f"Non-apitest submissions: records={len(filtered_records)}, slots={live_slots}, queue={live_queue}, grass={live_grass}"
     )
     return 0
 
