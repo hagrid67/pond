@@ -1,0 +1,10 @@
+[Unit]
+Description=Run pond dev sync on jwpc19 every 5 minutes
+
+[Timer]
+OnCalendar=*:0/5
+Persistent=true
+Unit=pond-dev-sync.service
+
+[Install]
+WantedBy=timers.target

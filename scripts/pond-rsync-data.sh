@@ -1,16 +1,9 @@
-#!/bin/bash
-
-# fail fast on error, unset variable, or pipe failure
+#!/usr/bin/env bash
 set -euo pipefail
 
-echo `date` start rsync data
-cd ~/projects/pond
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-echo rsync from jwpc12 to `hostname`
-
-rsync -av jwpc12:projects/pond/data .
-rsync -av jwpc12:projects/pond/metoffice-data .
-
-echo `date` end pond data rsync
+echo "Warning: pond-rsync-data.sh is deprecated; use pond-dev-sync.sh" >&2
+exec "${SCRIPT_DIR}/pond-dev-sync.sh" "$@"
 
 

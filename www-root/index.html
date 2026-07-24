@@ -13,11 +13,137 @@
 		const CHARTS_HIDDEN_STORAGE_KEY = "pondChartsHidden";
 		const GALLERY_HIDDEN_STORAGE_KEY = "pondGalleryHidden";
 		const WATER_TEMP_HIDDEN_STORAGE_KEY = "pondWaterTempHidden";
+		const BOOKING_SUMMARY_HIDDEN_STORAGE_KEY = "pondBookingSummaryHidden";
 		const RELOAD_INTERVAL_STORAGE_KEY = "pondReloadInterval";
+		const POND_UPDATE_PANEL_OPEN_STORAGE_KEY = "pondUpdatePanelOpen";
+		const POND_UPDATE_API_URL = "/api/pondupdate";
+		const QUEUE_LABELS = ["don't know", "no queue", "5", "10", "20", "30", "50", "long!"];
+		const GRASS_LABELS = ["don't know", "none", "5", "10", "20", "30", "50", "loads!"];
+		const WATER_TEMP_UNKNOWN_INDEX = 0;
 		const LIVENESS_BUCKETS = {
 			bookings: [15, 60, 120],
 			weather: [120, 240, 720],
 		};
+
+		function pond_update_label(values, index)
+		{
+			const parsed = Number.parseInt(index, 10);
+			if (!Number.isInteger(parsed) || parsed < 0 || parsed >= values.length) {
+				return values[0];
+			}
+			return values[parsed];
+		}
+
+		function pond_water_temp_label(index)
+		{
+			const parsed = Number.parseInt(index, 10);
+			if (!Number.isInteger(parsed) || parsed <= WATER_TEMP_UNKNOWN_INDEX) {
+				return "don't know";
+			}
+			return String(parsed - 1) + " C";
+		}
+
+		function set_pond_update_panel_open(open)
+		{
+			const panel = document.getElementById("pondUpdatePanel");
+			const button = document.getElementById("pondUpdateToggleBtn");
+			if (!panel || !button) {
+				return;
+			}
+
+			panel.style.display = open ? "block" : "none";
+			button.setAttribute("aria-expanded", open ? "true" : "false");
+			button.textContent = open ? "Hide pond update panel" : "Give us a pond update!";
+
+			try {
+				window.localStorage.setItem(POND_UPDATE_PANEL_OPEN_STORAGE_KEY, open ? "1" : "0");
+			} catch (_err) {
+				// Ignore storage failures.
+			}
+		}
+
+		function toggle_pond_update_panel()
+		{
+			const button = document.getElementById("pondUpdateToggleBtn");
+			if (!button) {
+				return;
+			}
+			const currentlyOpen = button.getAttribute("aria-expanded") === "true";
+			set_pond_update_panel_open(!currentlyOpen);
+		}
+
+		function collect_pond_update_payload()
+		{
+			const nowIso = new Date().toISOString();
+			const queueSlider = document.getElementById("queueLengthSlider");
+			const grassSlider = document.getElementById("grassCountSlider");
+			const waterTempSlider = document.getElementById("waterTempSlider");
+			const selectedSlots = document.querySelector("input[name='slotsEnforced']:checked");
+
+			const queueIndex = queueSlider ? Number.parseInt(queueSlider.value, 10) : 0;
+			const grassIndex = grassSlider ? Number.parseInt(grassSlider.value, 10) : 0;
+			const waterTempIndex = waterTempSlider ? Number.parseInt(waterTempSlider.value, 10) : WATER_TEMP_UNKNOWN_INDEX;
+
+			return {
+				type: "pond-update",
+				submittedAt: nowIso,
+				submittedDate: nowIso.slice(0, 10),
+				slotsEnforced: selectedSlots ? selectedSlots.value : null,
+				queue: {
+					index: Number.isInteger(queueIndex) ? queueIndex : 0,
+					label: pond_update_label(QUEUE_LABELS, Number.isInteger(queueIndex) ? queueIndex : 0),
+				},
+				grass: {
+					index: Number.isInteger(grassIndex) ? grassIndex : 0,
+					label: pond_update_label(GRASS_LABELS, Number.isInteger(grassIndex) ? grassIndex : 0),
+				},
+				waterTemperature: {
+					index: Number.isInteger(waterTempIndex) ? waterTempIndex : WATER_TEMP_UNKNOWN_INDEX,
+					label: pond_water_temp_label(Number.isInteger(waterTempIndex) ? waterTempIndex : WATER_TEMP_UNKNOWN_INDEX),
+					celsius: Number.isInteger(waterTempIndex) && waterTempIndex > WATER_TEMP_UNKNOWN_INDEX ? waterTempIndex - 1 : null,
+				},
+			};
+		}
+
+		async function submit_pond_update()
+		{
+			const submitBtn = document.getElementById("pondUpdateSubmitBtn");
+			const statusEl = document.getElementById("pondUpdateSubmitStatus");
+			if (!submitBtn || !statusEl) {
+				return;
+			}
+
+			submitBtn.disabled = true;
+			submitBtn.textContent = "Submitting...";
+			statusEl.className = "pond-update-submit-status";
+			statusEl.textContent = "Sending update...";
+
+			const payload = collect_pond_update_payload();
+
+			try {
+				const response = await fetch(POND_UPDATE_API_URL, {
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+					},
+					body: JSON.stringify(payload),
+				});
+
+				if (!response.ok) {
+					throw new Error("HTTP " + response.status);
+				}
+
+				statusEl.className = "pond-update-submit-status pond-update-submit-success";
+				statusEl.textContent = "Thanks. Pond update submitted.";
+			} catch (error) {
+				console.error("Failed to submit pond update", error);
+				statusEl.className = "pond-update-submit-status pond-update-submit-error";
+				statusEl.textContent = "Submit failed: " + (error && error.message ? error.message : "unknown error");
+			} finally {
+				submitBtn.disabled = false;
+				submitBtn.textContent = "Submit pond update";
+			}
+		}
 
 		function set_charts_hidden(hidden)
 		{
@@ -111,6 +237,41 @@
 			} catch (_err) {
 				// Ignore storage failures.
 			}
+		}
+
+		function set_booking_summary_hidden(hidden)
+		{
+			const widget = document.querySelector("#bookings .bookings-widget");
+			const toggleBtn = document.getElementById("toggleBookingSummaryBtn");
+			if (!toggleBtn) {
+				return;
+			}
+
+			if (widget) {
+				widget.querySelectorAll(".booking-day, .bookings-table").forEach((node) => {
+					node.style.display = hidden ? "none" : "";
+				});
+			}
+
+			toggleBtn.dataset.hidden = hidden ? "1" : "0";
+			toggleBtn.textContent = hidden ? "Show booking summary" : "Hide booking summary";
+
+			try {
+				window.localStorage.setItem(BOOKING_SUMMARY_HIDDEN_STORAGE_KEY, hidden ? "1" : "0");
+			} catch (_err) {
+				// Ignore storage failures.
+			}
+		}
+
+		function toggle_booking_summary_visibility()
+		{
+			const toggleBtn = document.getElementById("toggleBookingSummaryBtn");
+			if (!toggleBtn) {
+				return;
+			}
+
+			const currentlyHidden = toggleBtn.dataset.hidden === "1";
+			set_booking_summary_hidden(!currentlyHidden);
 		}
 
 		function toggle_water_temp_visibility()
@@ -368,6 +529,43 @@
 			};
 			let html = "<div class='filters-shell" + (filtersCollapsed ? " filters-collapsed" : "") + "'>";
 			html += "<div class='filters-controls'>";
+			html += "<button type='button' id='pondUpdateToggleBtn' class='pond-update-toggle' aria-expanded='true' onclick='toggle_pond_update_panel()'>Hide pond update panel</button>";
+			html += "</div>";
+			html += "<div id='pondUpdatePanel' class='pond-update-panel' style='display:block'>";
+			html += "<h3>Pond Update</h3>";
+			html += "<div class='filter-group pond-update-row'>";
+			html += "<span class='filter-group-label'>Are slots being enforced right now?</span>";
+			html += "<div class='pond-update-options'>";
+			html += "<label><input type='radio' name='slotsEnforced' value='yes'> yes</label>";
+			html += "<label><input type='radio' name='slotsEnforced' value='no'> no</label>";
+			html += "<label><input type='radio' name='slotsEnforced' value='dont-know'> don't know</label>";
+			html += "</div>";
+			html += "<div id='slotsEnforcedStatus' class='pond-update-value'>Please try to ask politely if slots are being enforced.</div>";
+			html += "</div>";
+			html += "<div class='filter-group pond-update-row'>";
+			html += "<label class='pond-update-slider-label' for='queueLengthSlider'>How many people in the queue?</label>";
+			html += "<input id='queueLengthSlider' class='pond-update-slider' type='range' min='0' max='7' step='1' value='0' list='queueLengthTicks'>";
+			html += "<div id='queueLengthValue' class='pond-update-value'>don't know</div>";
+			html += "<datalist id='queueLengthTicks'><option value='0' label='don't know'></option><option value='1' label='no queue'></option><option value='2' label='5'></option><option value='3' label='10'></option><option value='4' label='20'></option><option value='5' label='30'></option><option value='6' label='50'></option><option value='7' label='long!'></option></datalist>";
+			html += "</div>";
+			html += "<div class='filter-group pond-update-row'>";
+			html += "<label class='pond-update-slider-label' for='grassCountSlider'>How many people on the grass?</label>";
+			html += "<input id='grassCountSlider' class='pond-update-slider' type='range' min='0' max='7' step='1' value='0' list='grassCountTicks'>";
+			html += "<div id='grassCountValue' class='pond-update-value'>don't know</div>";
+			html += "<datalist id='grassCountTicks'><option value='0' label='don't know'></option><option value='1' label='none'></option><option value='2' label='5'></option><option value='3' label='10'></option><option value='4' label='20'></option><option value='5' label='30'></option><option value='6' label='50'></option><option value='7' label='loads!'></option></datalist>";
+			html += "</div>";
+			html += "<div class='filter-group pond-update-row'>";
+			html += "<label class='pond-update-slider-label' for='waterTempSlider'>Lifeguards' water temperature?</label>";
+			html += "<input id='waterTempSlider' class='pond-update-slider' type='range' min='0' max='29' step='1' value='0'>";
+			html += "<div id='waterTempValue' class='pond-update-value'>don't know</div>";
+			html += "</div>";
+			html += "<div class='filter-group pond-update-row pond-update-submit-row'>";
+			html += "<button type='button' id='pondUpdateSubmitBtn' class='pond-update-submit-btn' onclick='submit_pond_update()'>Submit pond update</button>";
+			html += "<div id='pondUpdateSubmitStatus' class='pond-update-submit-status'></div>";
+			html += "</div>";
+			html += "</div>";
+			html += "<div class='filters-controls'>";
+			html += "<button id='toggleBookingSummaryBtn' type='button' onclick='toggle_booking_summary_visibility()'>Hide booking summary</button>";
 			html += "<button type='button' class='filters-toggle-desktop' aria-expanded='" + (!filtersCollapsed ? "true" : "false") + "'>" + (filtersCollapsed ? "Show controls" : "Hide controls") + "</button>";
 			html += "</div>";
 			html += "<div class='filters' id='booking-filters-panel'>";
@@ -657,6 +855,85 @@
 				}
 				set_water_temp_hidden(hiddenPref);
 			}
+
+			const bookingSummaryToggleBtn = document.getElementById("toggleBookingSummaryBtn");
+			if (bookingSummaryToggleBtn) {
+				let hiddenPref = true;
+				try {
+					const stored = window.localStorage.getItem(BOOKING_SUMMARY_HIDDEN_STORAGE_KEY);
+					hiddenPref = stored === null ? true : stored === "1";
+				} catch (_err) {
+					hiddenPref = true;
+				}
+				set_booking_summary_hidden(hiddenPref);
+			}
+
+			const pondUpdateToggleBtn = document.getElementById("pondUpdateToggleBtn");
+			if (pondUpdateToggleBtn) {
+				let openPref = true;
+				try {
+					const stored = window.localStorage.getItem(POND_UPDATE_PANEL_OPEN_STORAGE_KEY);
+					if (stored !== null) {
+						openPref = stored === "1";
+					}
+				} catch (_err) {
+					openPref = true;
+				}
+				set_pond_update_panel_open(openPref);
+			}
+
+			const queueSlider = document.getElementById("queueLengthSlider");
+			const queueValue = document.getElementById("queueLengthValue");
+			if (queueSlider && queueValue) {
+				const updateQueueValue = () => {
+					queueValue.textContent = pond_update_label(QUEUE_LABELS, queueSlider.value);
+				};
+				queueSlider.addEventListener("input", updateQueueValue);
+				updateQueueValue();
+			}
+
+			const grassSlider = document.getElementById("grassCountSlider");
+			const grassValue = document.getElementById("grassCountValue");
+			if (grassSlider && grassValue) {
+				const updateGrassValue = () => {
+					grassValue.textContent = pond_update_label(GRASS_LABELS, grassSlider.value);
+				};
+				grassSlider.addEventListener("input", updateGrassValue);
+				updateGrassValue();
+			}
+
+			const waterTempSlider = document.getElementById("waterTempSlider");
+			const waterTempValue = document.getElementById("waterTempValue");
+			if (waterTempSlider && waterTempValue) {
+				const updateWaterTempValue = () => {
+					waterTempValue.textContent = pond_water_temp_label(waterTempSlider.value);
+				};
+				waterTempSlider.addEventListener("input", updateWaterTempValue);
+				updateWaterTempValue();
+			}
+
+			const slotsRadios = Array.from(document.querySelectorAll("input[name='slotsEnforced']"));
+			const slotsStatus = document.getElementById("slotsEnforcedStatus");
+			if (slotsStatus && slotsRadios.length > 0) {
+				const updateSlotsStatus = () => {
+					const selected = slotsRadios.find((radio) => radio.checked);
+					if (!selected) {
+						slotsStatus.textContent = "Please try to ask politely if slots are being enforced.";
+						return;
+					}
+					if (selected.value === "dont-know") {
+						slotsStatus.textContent = "Selected: don't know";
+						return;
+					}
+					slotsStatus.textContent = "Selected: " + selected.value;
+				};
+
+				slotsRadios.forEach((radio) => {
+					radio.addEventListener("change", updateSlotsStatus);
+				});
+
+				updateSlotsStatus();
+			}
 		}
 
 		function update_reload_setting()
@@ -792,6 +1069,84 @@
 				background: rgba(15, 25, 25, 0.45);
 			}
 
+			.pond-update-toggle {
+				font-weight: 700;
+			}
+
+			.pond-update-panel {
+				border: 1px solid #8db4b4;
+				border-radius: 8px;
+				padding: 0.9rem;
+				margin: 0.8rem 0;
+				background: rgba(25, 38, 38, 0.7);
+			}
+
+			.pond-update-row {
+				display: flex;
+				flex-direction: column;
+				gap: 0.35rem;
+				align-items: center;
+			}
+
+			.pond-update-options {
+				display: flex;
+				gap: 0.8rem;
+				flex-wrap: wrap;
+				justify-content: center;
+			}
+
+			.pond-update-options label {
+				display: inline-flex;
+				gap: 0.3rem;
+				align-items: center;
+			}
+
+			.pond-update-slider-label {
+				font-weight: 600;
+			}
+
+			.pond-update-slider {
+				width: min(540px, 94%);
+			}
+
+			.pond-update-value {
+				font-weight: 700;
+				color: #d3f1f1;
+			}
+
+			.pond-update-submit-row {
+				margin-top: 0.8rem;
+			}
+
+			.pond-update-submit-btn {
+				padding: 0.35rem 0.9rem;
+				border: 1px solid #6a8080;
+				background: #1d2b2b;
+				color: #d9efef;
+				border-radius: 5px;
+				cursor: pointer;
+				font-weight: 700;
+			}
+
+			.pond-update-submit-btn:disabled {
+				opacity: 0.65;
+				cursor: wait;
+			}
+
+			.pond-update-submit-status {
+				min-height: 1.2rem;
+				font-size: 0.95rem;
+				color: #d9efef;
+			}
+
+			.pond-update-submit-success {
+				color: #84e184;
+			}
+
+			.pond-update-submit-error {
+				color: #ff9a9a;
+			}
+
 			#gallerySection {
 				max-width: 62rem;
 				margin: 0 auto;
@@ -899,7 +1254,7 @@
 
 		<p id="pageIntro">
 			Highgate Men's Pond Association (<a href="https://www.highgatemenspond.com/visitor-info">HMPA</a>)
-			is providing a summary of the availability of tickets for the bookable swimming sessions.
+			would like your help to keep track of how busy the pond is!
 			
 		</p>
 

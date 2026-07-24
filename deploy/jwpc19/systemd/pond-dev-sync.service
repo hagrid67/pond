@@ -1,0 +1,12 @@
+[Unit]
+Description=Sync pond external data from jwpc12 and regenerate bookings outputs
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/jeremy/projects/pond
+ExecStart=/home/jeremy/projects/pond/scripts/pond-dev-sync.sh
+
+[Install]
+WantedBy=multi-user.target

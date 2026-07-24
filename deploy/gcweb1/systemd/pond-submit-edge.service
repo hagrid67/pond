@@ -1,0 +1,17 @@
+[Unit]
+Description=Pond public submission edge API on gcweb1
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/jeremy/projects/pond
+Environment=POND_EDGE_QUEUE_DB=/home/jeremy/projects/pond/data/submit-edge.sqlite
+Environment=POND_FORWARD_URL=https://jwpc12.example.net/internal-api/ingest
+Environment=POND_FORWARD_SHARED_SECRET=change-me
+ExecStart=/usr/bin/env python3 -m uvicorn pond.submit_edge_api:app --host 127.0.0.1 --port 9000
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

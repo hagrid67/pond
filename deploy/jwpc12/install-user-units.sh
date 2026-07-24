@@ -8,6 +8,7 @@ UNIT_DST_DIR="${HOME}/.config/systemd/user"
 UNITS=(
   pond-scrape.service
   pond-scrape.timer
+  pond-submit-ingest.service
   pond-weather.service
   pond-weather.timer
 )
@@ -30,6 +31,7 @@ systemctl --user daemon-reload
 echo "Enabling and starting timers"
 systemctl --user enable --now pond-scrape.timer
 systemctl --user enable --now pond-weather.timer
+systemctl --user enable --now pond-submit-ingest.service
 
 echo "Verifying timers"
 systemctl --user list-timers --all | grep -E 'pond-scrape\.timer|pond-weather\.timer' || {
@@ -37,11 +39,12 @@ systemctl --user list-timers --all | grep -E 'pond-scrape\.timer|pond-weather\.t
   exit 1
 }
 
-systemctl --user status pond-scrape.timer pond-weather.timer --no-pager
+systemctl --user status pond-scrape.timer pond-weather.timer pond-submit-ingest.service --no-pager
 
 echo "Recent service logs"
 journalctl --user -u pond-scrape.service -n 30 --no-pager || true
 journalctl --user -u pond-weather.service -n 30 --no-pager || true
+journalctl --user -u pond-submit-ingest.service -n 30 --no-pager || true
 
 LINGER_VALUE="$(loginctl show-user "${USER}" -p Linger --value 2>/dev/null || echo unknown)"
 if [[ "${LINGER_VALUE}" != "yes" ]]; then

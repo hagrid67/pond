@@ -1,5 +1,6 @@
 [Unit]
-Description=Sync pond data from jwpc12 to jwpc19 dev environment
+# DEPRECATED: replaced by pond-dev-sync.service.
+Description=DEPRECATED legacy pond data sync (use pond-dev-sync.service)
 After=network-online.target
 Wants=network-online.target
 

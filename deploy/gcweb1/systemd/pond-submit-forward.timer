@@ -1,0 +1,10 @@
+[Unit]
+Description=Retry queued pond submission forwarding every minute
+
+[Timer]
+OnCalendar=*:0/1
+Persistent=true
+Unit=pond-submit-forward.service
+
+[Install]
+WantedBy=timers.target

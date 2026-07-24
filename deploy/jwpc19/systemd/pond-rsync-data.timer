@@ -1,5 +1,6 @@
 [Unit]
-Description=Run pond data sync to jwpc19 every 5 minutes
+# DEPRECATED: replaced by pond-dev-sync.timer.
+Description=DEPRECATED legacy pond data sync timer (use pond-dev-sync.timer)
 
 [Timer]
 OnCalendar=*:0/5

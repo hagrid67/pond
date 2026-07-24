@@ -22,10 +22,12 @@ Using hostname subfolders keeps machine-specific settings separate and makes it 
 - bookings scrape job
 - weather fetch job
 - publish to gcweb1 runs via --rsync in the scrape job
+- planned submission ingest API service for anonymous user input
 
 ## Current Scheduled Jobs (jwpc19)
-- pond-rsync-data job
-  - Pulls bookings/weather data from jwpc12 to keep the jwpc19 dev environment up to date.
+- pond-dev-sync job
+  - Pulls external data (bookings/weather inputs) from jwpc12 to keep the jwpc19 dev environment up to date.
+  - Regenerates booking report and booking plots locally on jwpc19 after sync.
   - Runs every 5 minutes with no jitter.
 
 ## systemd Timer Approach
@@ -46,10 +48,43 @@ Check linger status:
 
 Note: enabling linger is typically a one-time admin action. After that, all timer lifecycle commands below can be run without sudo.
 
+## Anonymous Submission Architecture
+Planned shape for anonymous pond-status submissions:
+
+1. Browser on the public site sends POST requests to gcweb1 at /api/submit.
+2. nginx on gcweb1 proxies /api/submit to a local Python API on 127.0.0.1:9000.
+3. The gcweb1 edge API validates the payload, writes a short-lived local queue entry, and tries to forward the submission immediately to jwpc12.
+4. nginx on jwpc12 exposes an internal-only ingest path and proxies it to a local Python API on 127.0.0.1:9100.
+5. The jwpc12 ingest API stores the canonical record in the primary datastore.
+6. If jwpc12 is temporarily unreachable, gcweb1 keeps the queued entry and a retry timer forwards it later.
+
+Recommended initial storage:
+- gcweb1: short-lived SQLite or JSONL queue used only for retry resilience
+- jwpc12: primary SQLite database table for reporting and later sharing
+
+Recommended minimal payload:
+- submission type, for example slot-enforced
+- value, for example yes/no/unsure or a small numeric score
+- optional free-text note
+- optional nickname if enabled later
+- server-generated receipt timestamp
+- submission UUID for deduplication between gcweb1 and jwpc12
+
+Recommended Python services:
+- gcweb1 edge submit API: pond.submit_edge_api:app via uvicorn on 127.0.0.1:9000
+- gcweb1 forwarder worker: pond.submit_forwarder via a oneshot retry service
+- jwpc12 ingest API: pond.submit_ingest_api:app via uvicorn on 127.0.0.1:9100
+
+The deploy files below assume those Python entry points will be implemented in the repo.
+
 ## One-Command Host Deployment Scripts
 These scripts perform all install/reload/enable/verify steps and are safe to re-run (idempotent):
 - deploy/jwpc12/install-user-units.sh
 - deploy/jwpc19/install-user-units.sh
+
+Migration helper scripts:
+- deploy/jwpc19/remove-old-units.sh
+  - removes deprecated pond-rsync-data user units from ~/.config/systemd/user and disables them
 
 What each script does:
 - creates ~/.config/systemd/user if needed
@@ -63,27 +98,65 @@ What each script does:
 ### Installed Unit Files (in repo)
 - deploy/jwpc12/systemd/pond-scrape.service
 - deploy/jwpc12/systemd/pond-scrape.timer
+- deploy/jwpc12/systemd/pond-submit-ingest.service
 - deploy/jwpc12/systemd/pond-weather.service
 - deploy/jwpc12/systemd/pond-weather.timer
+- deploy/gcweb1/systemd/pond-submit-edge.service
+- deploy/gcweb1/systemd/pond-submit-forward.service
+- deploy/gcweb1/systemd/pond-submit-forward.timer
+- deploy/jwpc19/systemd/pond-dev-sync.service
+- deploy/jwpc19/systemd/pond-dev-sync.timer
+
+Deprecated (kept in repo for migration reference):
 - deploy/jwpc19/systemd/pond-rsync-data.service
 - deploy/jwpc19/systemd/pond-rsync-data.timer
+
+### nginx Config Files (in repo)
+- deploy/gcweb1/nginx/http-pond-submit-rate-limit.conf
+- deploy/gcweb1/nginx/site-pond-submit-api.conf
+- deploy/jwpc12/nginx/site-pond-submit-ingest.conf
 
 ## Deploy on jwpc12 (systemctl --user)
 1. Run:
    - ~/projects/pond/deploy/jwpc12/install-user-units.sh
 2. Optional manual verification:
    - systemctl --user list-timers | grep pond-
-   - systemctl --user status pond-scrape.timer pond-weather.timer
+  - systemctl --user status pond-scrape.timer pond-weather.timer pond-submit-ingest.service
+3. Install nginx config manually as root:
+  - copy deploy/jwpc12/nginx/site-pond-submit-ingest.conf into the nginx site/include location used on jwpc12
+  - set the allowed gcweb1 IP or CIDR in the config
+  - test and reload nginx:
+  - sudo nginx -t
+  - sudo systemctl reload nginx
+
+## Deploy on gcweb1 (systemctl --user)
+1. Run:
+  - ~/projects/pond/deploy/gcweb1/install-user-units.sh
+2. Optional manual verification:
+  - systemctl --user status pond-submit-edge.service pond-submit-forward.timer pond-submit-forward.service
+  - systemctl --user list-timers | grep pond-submit-forward
+3. Install nginx config manually as root:
+  - add deploy/gcweb1/nginx/http-pond-submit-rate-limit.conf in the nginx http block include path
+  - add deploy/gcweb1/nginx/site-pond-submit-api.conf in the server/site include path for the pond site
+  - test and reload nginx:
+  - sudo nginx -t
+  - sudo systemctl reload nginx
 
 ## Deploy on jwpc19 (systemctl --user)
 1. Run:
+  - ~/projects/pond/deploy/jwpc19/remove-old-units.sh
+2. Run:
    - ~/projects/pond/deploy/jwpc19/install-user-units.sh
-2. Optional manual verification:
-   - systemctl --user list-timers | grep pond-rsync-data
-   - systemctl --user status pond-rsync-data.timer pond-rsync-data.service
+3. Optional manual verification:
+  - systemctl --user list-timers | grep pond-dev-sync
+  - systemctl --user status pond-dev-sync.timer pond-dev-sync.service
 
 ## Script Entrypoints
 - scrape + publish: scripts/run_scrape_xnl.sh --scrape --headless --filters --rsync
 - weather: scripts/fetch-weather.sh
 - publish helper (called by scrape runner): scripts/pond-rsync.sh
-- jwpc19 data pull: scripts/pond-rsync-data.sh
+- jwpc19 dev sync: scripts/pond-dev-sync.sh
+
+## Planned Submission Service Ports
+- gcweb1 edge API: 127.0.0.1:9000
+- jwpc12 ingest API: 127.0.0.1:9100

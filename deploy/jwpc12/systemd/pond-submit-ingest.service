@@ -1,0 +1,16 @@
+[Unit]
+Description=Pond internal submission ingest API on jwpc12
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/jeremy/projects/pond
+Environment=POND_SUBMISSION_DB=/home/jeremy/projects/pond/data/submissions.sqlite
+Environment=POND_INGEST_SHARED_SECRET=change-me
+ExecStart=/usr/bin/env python3 -m uvicorn pond.submit_ingest_api:app --host 127.0.0.1 --port 9100
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
