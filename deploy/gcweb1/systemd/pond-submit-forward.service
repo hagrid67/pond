@@ -5,8 +5,8 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
-WorkingDirectory=/home/jeremy/projects/pond
-Environment=POND_EDGE_QUEUE_DB=/home/jeremy/projects/pond/data/submit-edge.sqlite
+WorkingDirectory=%h/projects/pond
+Environment=POND_EDGE_QUEUE_DB=%h/projects/pond/data/submit-edge.sqlite
 Environment=POND_FORWARD_URL=https://jwpc12.example.net/internal-api/ingest
 Environment=POND_FORWARD_SHARED_SECRET=change-me
 ExecStart=/usr/bin/env python3 -m pond.submit_forwarder --once
