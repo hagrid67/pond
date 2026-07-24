@@ -23,7 +23,11 @@ def slider_label(labels: list[str], index: int) -> str:
 def build_random_payload() -> dict[str, object]:
     slots_options = ["yes", "no", "dont-know"]
     now_iso = datetime.now(timezone.utc).isoformat()
-    queue_index = random.randint(1, 7)
+    queue_index = random.choices(
+        population=[0, 1, 2, 3, 4, 5, 6, 7],
+        weights=[50, 25, 15, 5, 2, 1, 1, 1],
+        k=1,
+    )[0]
     grass_index = random.randint(1, 7)
     water_temp_index = random.randint(0, 29)
 
