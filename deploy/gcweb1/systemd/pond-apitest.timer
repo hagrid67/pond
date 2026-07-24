@@ -1,10 +1,9 @@
 [Unit]
-Description=Run pond apitest submission every minute from 10:00 to 20:30
+Description=Run pond apitest submissions (10:00 to 20:30, 1-10 minute jitter)
 
 [Timer]
 OnCalendar=*-*-* 10..19:*:00
 OnCalendar=*-*-* 20:00..30:00
-RandomizedDelaySec=60
 Persistent=true
 Unit=pond-apitest.service
 
