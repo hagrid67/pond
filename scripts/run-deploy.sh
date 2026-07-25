@@ -292,6 +292,8 @@ run_crontab_check() {
   local crontab_file err_file
   crontab_file="/tmp/pond-crontab.$$"
   err_file="/tmp/pond-crontab.err.$$"
+  local pond_count
+  pond_count=0
 
   if crontab -l >"${crontab_file}" 2>"${err_file}"; then
     local line shown_count
@@ -302,6 +304,7 @@ run_crontab_check() {
       [[ "${line}" =~ ^[[:space:]]*# ]] && continue
       shown_count=$((shown_count + 1))
       if [[ "${line}" =~ [Pp][Oo][Nn][Dd] ]]; then
+        pond_count=$((pond_count + 1))
         status_error "${line}"
       else
         echo "${line}"
@@ -323,6 +326,13 @@ run_crontab_check() {
     fi
   fi
   rm -f "${crontab_file}" "${err_file}"
+
+  if [[ ${pond_count} -gt 0 ]]; then
+    status_error "crontab check completed: found ${pond_count} active pond entries"
+    return 1
+  fi
+
+  status_ok "crontab check completed: no active pond entries"
   return 0
 }
 
@@ -416,8 +426,6 @@ run_local_checks() {
   echo "=== cron audit ==="
   if ! run_crontab_check; then
     record_failure "check" "${host_id}" "crontab check failed"
-  else
-    status_ok "crontab check completed"
   fi
 
   log "Checks completed on ${host_id}"
