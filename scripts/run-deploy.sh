@@ -353,12 +353,88 @@ run_local_mode() {
   return 0
 }
 
+run_remote_bootstrap() {
+  local host_id="$1"
+  local ssh_target repo_subpath
+
+  ssh_target="$(host_ssh_target "${host_id}")"
+  repo_subpath="$(host_repo_subpath "${host_id}")"
+
+  log "Remote ${host_id}: bootstrap via ssh ${ssh_target}"
+  if ssh "${ssh_target}" "bash -s -- ${host_id} ${repo_subpath}" <<'EOF'
+set -euo pipefail
+
+HOST_ID="$1"
+REPO_SUBPATH="$2"
+REPO_DIR="${HOME}/${REPO_SUBPATH}"
+
+if [[ -x "${REPO_DIR}/scripts/deploy-bootstrap.sh" ]]; then
+  cd "${REPO_DIR}"
+  bash scripts/deploy-bootstrap.sh --host-id "${HOST_ID}"
+  exit 0
+fi
+
+echo "[deploy-bootstrap:inline] scripts/deploy-bootstrap.sh not found; running minimal fallback"
+
+if ! command -v git >/dev/null 2>&1; then
+  echo "[deploy-bootstrap:inline] missing git" >&2
+  exit 1
+fi
+
+if [[ ! -d "${REPO_DIR}" ]]; then
+  echo "[deploy-bootstrap:inline] missing repo directory: ${REPO_DIR}" >&2
+  exit 1
+fi
+
+cd "${REPO_DIR}"
+
+if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  echo "[deploy-bootstrap:inline] ${REPO_DIR} is not a git repository" >&2
+  exit 1
+fi
+
+if [[ -n "$(git status --porcelain)" ]]; then
+  echo "[deploy-bootstrap:inline] dirty worktree; refusing pull" >&2
+  exit 1
+fi
+
+if ! git rev-parse --abbrev-ref --symbolic-full-name @{u} >/dev/null 2>&1; then
+  echo "[deploy-bootstrap:inline] no upstream tracking branch configured" >&2
+  exit 1
+fi
+
+git fetch --prune
+git pull --ff-only
+
+if [[ ! -f scripts/deploy-bootstrap.sh ]]; then
+  echo "[deploy-bootstrap:inline] scripts/deploy-bootstrap.sh still missing after pull" >&2
+  exit 1
+fi
+
+bash scripts/deploy-bootstrap.sh --host-id "${HOST_ID}"
+EOF
+  then
+    return 0
+  fi
+
+  return 1
+}
+
 run_remote_host() {
   local host_id="$1"
-  local ssh_target cmd
+  local ssh_target repo_subpath cmd mode
   ssh_target="$(host_ssh_target "${host_id}")"
+  repo_subpath="$(host_repo_subpath "${host_id}")"
 
-  cmd="cd ~/projects/pond && bash scripts/run-deploy.sh --local --host-id ${host_id}"
+  mode="deploy"
+  [[ ${CHECK_ONLY} -eq 1 ]] && mode="check"
+
+  if ! run_remote_bootstrap "${host_id}"; then
+    record_failure "${mode}" "${host_id}" "bootstrap failed"
+    return 1
+  fi
+
+  cmd="cd ~/${repo_subpath} && bash scripts/run-deploy.sh --local --host-id ${host_id}"
   if [[ ${CHECK_ONLY} -eq 1 ]]; then
     cmd+=" --check"
   fi
@@ -368,11 +444,11 @@ run_remote_host() {
 
   log "Remote ${host_id}: ssh ${ssh_target}"
   if ! ssh "${ssh_target}" "${cmd}"; then
-    local mode
-    mode="deploy"
-    [[ ${CHECK_ONLY} -eq 1 ]] && mode="check"
     record_failure "${mode}" "${host_id}" "remote execution failed"
+    return 1
   fi
+
+  return 0
 }
 
 run_controller_mode() {

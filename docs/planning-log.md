@@ -215,3 +215,110 @@ Practical recommendation:
   - a --no-pull mode that requires jwpc19 to already be up to date.
 
 Given your workflow, I would not switch to always-fail-on-behind right now. The current policy is the right balance of safety and low friction.
+
+### Prompt
+Please append this prompt and the response onto the planning-log.  Duplicate the response here in the chat.
+
+The first run of  `run-deploy.sh --jwpc12 --check` failed because the run-deploy script does not yet exist on the remote host.  I think it's fair enough that I do a manual git pull for the first time to install it.  However it raises the question of how changes to run-deploy.sh are handled - the local dev version may differ from the remote one.  Should we provide for a double invocation, where the first invoke does some initial checks and the git pull, and then the  second invocation runs the script remotely "for real"?  What initial sanity checks should we run the first time on the remote?
+
+### Response
+This is a good catch, and yes, it is worth designing explicitly.
+
+Short recommendation:
+- Keep your manual first-time bootstrap as acceptable.
+- Add a controller-side bootstrap path so future first-runs are automatic.
+- Use a two-phase remote flow, but inside one local command invocation (not requiring the operator to run the command twice).
+
+Why the current failure happens:
+- The controller currently assumes scripts/run-deploy.sh already exists remotely.
+- On an uninitialized host, ssh can connect, but the remote script path is missing, so execution fails before remote checks can run.
+
+How to handle script drift safely:
+- Prefer "remote host self-updates from Git" over copying the local script via scp.
+- This keeps all hosts aligned to committed history, and avoids running an uncommitted local variant remotely.
+- If local working tree is dirty on jwpc19, deploy already fails before pull, which is the right safety behavior.
+
+Proposed execution model (single command, two phases):
+1. Bootstrap phase (controller runs lightweight remote shell block):
+   - Verify remote repo directory exists (or fail with clear message).
+   - Verify remote git is available.
+   - cd to repo and verify branch/upstream basics.
+   - Optionally check remote worktree cleanliness (recommended default: require clean).
+   - Run git fetch --prune and git pull --ff-only.
+   - Confirm scripts/run-deploy.sh now exists and is executable.
+2. Execution phase:
+   - Invoke remote scripts/run-deploy.sh --local --host-id <host> [--check|deploy].
+
+This gives you the double-invocation behavior logically, while remaining one operator command.
+
+First-time remote sanity checks to include:
+- SSH identity:
+  - Print hostname, user, and pwd at session start.
+- Repo presence:
+  - Ensure ~/projects/pond exists and is a git repo.
+- Branch/upstream:
+  - Print current branch, HEAD, upstream.
+  - Fail if upstream missing.
+- Cleanliness policy:
+  - Fail if git status --porcelain is non-empty.
+  - If you later want flexibility, add explicit override flag (for example --allow-dirty-remote) but default should stay fail.
+- Fast-forward only:
+  - Require git pull --ff-only; fail on divergence.
+- Script presence:
+  - test -x scripts/run-deploy.sh after pull.
+- Basic prerequisites:
+  - command -v systemctl, crontab, git.
+  - Optional: systemctl --user is-system-running or a benign status probe, mainly to surface user-session issues early.
+
+Policy decision for differing local vs remote run-deploy.sh:
+- Best policy: remote always runs the committed version at its current checked-out commit after ff pull.
+- Do not run local uncommitted script content on remote hosts.
+- This enforces your "aggressive small commits" workflow and keeps behavior reproducible.
+
+Operationally, this means:
+- If you edit run-deploy.sh locally, commit and push first.
+- Then run deploy; bootstrap phase pulls that commit remotely; execution phase uses that exact committed script.
+
+If you want, next step can be to implement this as a dedicated bootstrap helper in the controller path (for non-jwpc19 targets) so first-run and normal-run share the same command UX.
+
+### Prompt
+Can I check what you mean for the first phase: do you mean pass the commands directly in ssh, rather than attempting to run whatever version of the script is present on the remote host?
+This is OK; but my experience has been it can be fragile to run too many commands in an ssh.  Would it be better to have a second script, maybe "deploy-bootstrap.sh", present on all the hosts?  The idea being that this script is kept simple and rarely changes, whereas the main run-deploy.sh is where most new behaviour is added.
+Or is this too fussy?
+
+Please append the query and response into the planning log.
+
+### Response
+Yes, exactly: for phase 1 I meant running a small bootstrap command block over ssh directly, before invoking the main script.
+
+Your concern is valid. A long inline ssh command can become fragile and hard to maintain. A small dedicated bootstrap script is not too fussy here, it is a good design choice.
+
+Recommendation:
+- Add a second script at scripts/deploy-bootstrap.sh.
+- Keep it intentionally narrow and stable.
+- Controller flow becomes:
+  1. ssh host and run scripts/deploy-bootstrap.sh (or bootstrap fallback if missing).
+  2. then run scripts/run-deploy.sh --local --host-id <host> with check or deploy mode.
+
+Why this is better:
+- Less shell quoting complexity in ssh invocations.
+- Easier to test bootstrap logic independently.
+- Clear separation of concerns:
+  - deploy-bootstrap.sh: repo/upstream/cleanliness/ff-pull/script-presence checks.
+  - run-deploy.sh: orchestration, unit install/reconcile, reporting.
+- Lower churn risk: bootstrap can remain small and rarely changed.
+
+Suggested bootstrap responsibilities:
+- Verify repo path exists and is a git repository.
+- Verify required commands exist (git, bash).
+- Print branch, head, upstream.
+- Fail if upstream missing.
+- Fail on dirty worktree by default.
+- Run git fetch --prune and git pull --ff-only.
+- Verify scripts/run-deploy.sh exists after pull.
+
+A pragmatic hybrid is best:
+- Primary path: call scripts/deploy-bootstrap.sh remotely.
+- First-run fallback: if bootstrap script is absent, run a minimal inline ssh bootstrap that only updates repo enough to obtain deploy-bootstrap.sh, then re-run bootstrap script.
+
+So no, this is not over-engineering in your setup. It is a sensible reliability upgrade for multi-host operations.
