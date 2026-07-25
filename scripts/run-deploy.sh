@@ -13,6 +13,7 @@ fi
 # shellcheck source=/dev/null
 source "${INVENTORY_FILE}"
 
+MODE=""
 CHECK_ONLY=1
 DRY_RUN=0
 NO_PULL=0
@@ -20,9 +21,6 @@ NO_CRON=0
 LOCAL_MODE=0
 VERBOSE=0
 HOST_ID_OVERRIDE=""
-
-SEEN_CHECK=0
-SEEN_DEPLOY=0
 
 TARGET_JWPC19=0
 TARGET_JWPC12=0
@@ -41,13 +39,13 @@ COLOR_RESET=""
 usage() {
   cat <<'EOF'
 Usage:
-  scripts/run-deploy.sh [--check|--deploy] [--dry-run] [--no-pull] [--no-cron] [--jwpc19|--dev] [--jwpc12] [--gcweb1]
-  scripts/run-deploy.sh [--check|--deploy] [--dry-run] [--no-pull] [--no-cron] --local [--host-id HOST]
+  scripts/run-deploy.sh (--check|--dry-run|--deploy) [--no-pull] [--no-cron] [--jwpc19|--dev] [--jwpc12] [--gcweb1]
+  scripts/run-deploy.sh (--check|--dry-run|--deploy) [--no-pull] [--no-cron] --local [--host-id HOST]
 
 Options:
-  --check      Run checks only (skip deploy actions).
-  --deploy     Run deploy actions and then checks.
-  --dry-run    Print commands that would run; skip mutating actions.
+  --check      Run checks only.
+  --dry-run    Run checks and print proposed deploy commands (no deploy mutations).
+  --deploy     Run checks, execute deploy mutations, then re-run checks.
   --no-pull    Skip bootstrap git pull (allowed with --check and --dry-run only).
   --no-cron    Skip cron audit check.
   --jwpc19     Target jwpc19 host.
@@ -60,11 +58,10 @@ Options:
   -h, --help   Show this help.
 
 Notes:
-  - Default mode is check-only unless --deploy is provided.
+  - Exactly one mode is required: --check, --dry-run, or --deploy.
   - --no-pull is rejected with --deploy.
   - Without --local, at least one host flag is required.
-  - In deploy mode (--deploy), deploy actions are run first, then checks.
-  - In check mode (--check), deploy actions are skipped.
+  - Deploy mode performs checks before and after deploy actions.
 EOF
 }
 
@@ -164,14 +161,28 @@ parse_args() {
   while (($#)); do
     case "$1" in
       --check)
-        SEEN_CHECK=1
-        CHECK_ONLY=1
+        if [[ -n "${MODE}" ]]; then
+          echo "Error: --check, --dry-run, and --deploy are mutually exclusive." >&2
+          usage >&2
+          exit 2
+        fi
+        MODE="check"
         ;;
       --deploy)
-        SEEN_DEPLOY=1
-        CHECK_ONLY=0
+        if [[ -n "${MODE}" ]]; then
+          echo "Error: --check, --dry-run, and --deploy are mutually exclusive." >&2
+          usage >&2
+          exit 2
+        fi
+        MODE="deploy"
         ;;
       --dry-run)
+        if [[ -n "${MODE}" ]]; then
+          echo "Error: --check, --dry-run, and --deploy are mutually exclusive." >&2
+          usage >&2
+          exit 2
+        fi
+        MODE="dry-run"
         DRY_RUN=1
         ;;
       --no-pull)
@@ -216,13 +227,24 @@ parse_args() {
     shift
   done
 
-  if [[ ${SEEN_CHECK} -eq 1 && ${SEEN_DEPLOY} -eq 1 ]]; then
-    echo "Error: --check and --deploy are mutually exclusive." >&2
+  if [[ -z "${MODE}" ]]; then
+    echo "Error: one mode is required: --check, --dry-run, or --deploy." >&2
     usage >&2
     exit 2
   fi
 
-  if [[ ${NO_PULL} -eq 1 && ${CHECK_ONLY} -eq 0 ]]; then
+  if [[ "${MODE}" == "check" ]]; then
+    CHECK_ONLY=1
+    DRY_RUN=0
+  elif [[ "${MODE}" == "dry-run" ]]; then
+    CHECK_ONLY=0
+    DRY_RUN=1
+  else
+    CHECK_ONLY=0
+    DRY_RUN=0
+  fi
+
+  if [[ ${NO_PULL} -eq 1 && "${MODE}" == "deploy" ]]; then
     echo "Error: --no-pull cannot be used with --deploy." >&2
     usage >&2
     exit 2
@@ -267,10 +289,8 @@ run_git_pull_with_checks() {
 
   preview_command "git fetch --prune"
   preview_command "git pull --ff-only"
-  if [[ ${DRY_RUN} -eq 0 ]]; then
-    git fetch --prune
-    git pull --ff-only
-  fi
+  git fetch --prune
+  git pull --ff-only
   log "Git state after pull: $(git_state_report)"
   return 0
 }
@@ -538,12 +558,18 @@ run_local_mode() {
   repo_subpath="$(host_repo_subpath "${host_id}")"
   cd "${HOME}/${repo_subpath}"
 
-  if [[ ${CHECK_ONLY} -eq 0 ]]; then
-    run_local_deploy "${host_id}" || true
-  else
+  if [[ "${MODE}" == "check" ]]; then
     vlog "Deploy actions skipped for ${host_id}; use --deploy to enable deploy phase."
+    run_local_checks "${host_id}" || true
+  else
+    echo "=== pre-deploy checks ==="
+    run_local_checks "${host_id}" || true
+
+    run_local_deploy "${host_id}" || true
+
+    echo "=== post-deploy checks ==="
+    run_local_checks "${host_id}" || true
   fi
-  run_local_checks "${host_id}" || true
 
   return 0
 }
@@ -684,16 +710,15 @@ run_remote_host() {
   echo
 
   cmd="cd ~/${repo_subpath} && FORCE_COLOR=1 bash scripts/run-deploy.sh --local --host-id ${host_id}"
-  if [[ ${CHECK_ONLY} -eq 1 ]]; then
+  if [[ "${MODE}" == "check" ]]; then
     cmd+=" --check"
+  elif [[ "${MODE}" == "dry-run" ]]; then
+    cmd+=" --dry-run"
   else
     cmd+=" --deploy"
   fi
   if [[ ${VERBOSE} -eq 1 ]]; then
     cmd+=" --verbose"
-  fi
-  if [[ ${DRY_RUN} -eq 1 ]]; then
-    cmd+=" --dry-run"
   fi
   if [[ ${NO_PULL} -eq 1 ]]; then
     cmd+=" --no-pull"
@@ -736,9 +761,9 @@ run_controller_mode() {
   fi
 
   log "Selected targets: ${selected[*]}"
-  log "Mode: $([[ ${CHECK_ONLY} -eq 1 ]] && echo check-only || echo deploy+check)"
+  log "Mode: ${MODE}"
   if [[ ${DRY_RUN} -eq 1 ]]; then
-    status_warn "dry-run enabled: mutating actions will be skipped"
+    status_warn "dry-run mode enabled: deploy mutations will be skipped"
   fi
 
   local host_id
@@ -746,13 +771,14 @@ run_controller_mode() {
     if [[ "${host_id}" == "jwpc19" ]]; then
       local local_cmd
       local_cmd="bash ${SCRIPT_DIR}/run-deploy.sh --local --host-id jwpc19"
-      if [[ ${CHECK_ONLY} -eq 1 ]]; then
+      if [[ "${MODE}" == "check" ]]; then
         local_cmd+=" --check"
+      elif [[ "${MODE}" == "dry-run" ]]; then
+        local_cmd+=" --dry-run"
       else
         local_cmd+=" --deploy"
       fi
       [[ ${VERBOSE} -eq 1 ]] && local_cmd+=" --verbose"
-      [[ ${DRY_RUN} -eq 1 ]] && local_cmd+=" --dry-run"
       [[ ${NO_PULL} -eq 1 ]] && local_cmd+=" --no-pull"
       [[ ${NO_CRON} -eq 1 ]] && local_cmd+=" --no-cron"
 
@@ -777,7 +803,7 @@ run_controller_mode() {
 print_summary() {
   echo
   echo "=== deploy summary ==="
-  echo "check_only=${CHECK_ONLY} dry_run=${DRY_RUN} no_pull=${NO_PULL} no_cron=${NO_CRON} local_mode=${LOCAL_MODE}"
+  echo "mode=${MODE} check_only=${CHECK_ONLY} dry_run=${DRY_RUN} no_pull=${NO_PULL} no_cron=${NO_CRON} local_mode=${LOCAL_MODE}"
   if [[ ${FAIL_COUNT} -gt 0 ]]; then
     status_error "total_failures=${FAIL_COUNT} deploy_failures=${DEPLOY_FAIL_COUNT} check_failures=${CHECK_FAIL_COUNT}"
   else
