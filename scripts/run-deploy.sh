@@ -568,7 +568,7 @@ run_remote_host() {
 
   log "Remote ${host_id}: ssh ${ssh_target}"
   if ! ssh "${ssh_target}" "${cmd}"; then
-    record_failure "${mode}" "${host_id}" "remote execution failed"
+    record_failure "${mode}" "${host_id}" "remote ${mode} failed (see remote output above)"
     return 1
   fi
 
