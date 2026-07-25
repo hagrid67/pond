@@ -26,6 +26,12 @@ FAIL_COUNT=0
 CHECK_FAIL_COUNT=0
 DEPLOY_FAIL_COUNT=0
 
+COLOR_RED=""
+COLOR_GREEN=""
+COLOR_YELLOW=""
+COLOR_BLUE=""
+COLOR_RESET=""
+
 usage() {
   cat <<'EOF'
 Usage:
@@ -51,20 +57,42 @@ EOF
 }
 
 log() {
-  echo "[run-deploy] $*"
+  echo "${COLOR_BLUE}[run-deploy]${COLOR_RESET} $*"
 }
 
 vlog() {
   if [[ ${VERBOSE} -eq 1 ]]; then
-    echo "[run-deploy][verbose] $*"
+    echo "${COLOR_BLUE}[run-deploy][verbose]${COLOR_RESET} $*"
   fi
+}
+
+init_colors() {
+  if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
+    COLOR_RED=$'\033[31m'
+    COLOR_GREEN=$'\033[32m'
+    COLOR_YELLOW=$'\033[33m'
+    COLOR_BLUE=$'\033[36m'
+    COLOR_RESET=$'\033[0m'
+  fi
+}
+
+status_ok() {
+  echo "${COLOR_GREEN}[OK]${COLOR_RESET} $*"
+}
+
+status_warn() {
+  echo "${COLOR_YELLOW}[WARN]${COLOR_RESET} $*"
+}
+
+status_error() {
+  echo "${COLOR_RED}[ERROR]${COLOR_RESET} $*"
 }
 
 record_failure() {
   local category="$1"
   local host_id="$2"
   local msg="$3"
-  echo "[run-deploy][${category}] ${host_id}: ${msg}" >&2
+  echo "${COLOR_RED}[run-deploy][${category}]${COLOR_RESET} ${host_id}: ${msg}" >&2
   FAIL_COUNT=$((FAIL_COUNT + 1))
   if [[ "${category}" == "check" ]]; then
     CHECK_FAIL_COUNT=$((CHECK_FAIL_COUNT + 1))
@@ -294,9 +322,13 @@ run_local_checks() {
   for unit in ${expected_raw}; do
     active="$(read_unit_state is-active "${unit}")"
     enabled="$(read_unit_state is-enabled "${unit}")"
-    echo "${unit}: active=${active} enabled=${enabled}"
     if [[ "${active}" == "unknown" || "${enabled}" == "unknown" ]]; then
+      status_error "${unit}: active=${active} enabled=${enabled}"
       record_failure "check" "${host_id}" "unable to resolve unit state for ${unit}"
+    elif [[ "${active}" == "active" && "${enabled}" == "enabled" ]]; then
+      status_ok "${unit}: active=${active} enabled=${enabled}"
+    else
+      status_warn "${unit}: active=${active} enabled=${enabled}"
     fi
   done
 
@@ -307,9 +339,9 @@ run_local_checks() {
   else
     for unit in ${deprecated_raw}; do
       if systemctl --user list-unit-files "${unit}" --no-legend 2>/dev/null | grep -q "${unit}"; then
-        echo "${unit}: present"
+        status_warn "${unit}: present"
       else
-        echo "${unit}: absent"
+        status_ok "${unit}: absent"
       fi
     done
   fi
@@ -320,6 +352,8 @@ run_local_checks() {
   echo "=== cron audit ==="
   if ! run_crontab_check; then
     record_failure "check" "${host_id}" "crontab check failed"
+  else
+    status_ok "crontab check completed"
   fi
 
   log "Checks completed on ${host_id}"
@@ -487,11 +521,16 @@ print_summary() {
   echo
   echo "=== deploy summary ==="
   echo "check_only=${CHECK_ONLY} local_mode=${LOCAL_MODE}"
-  echo "total_failures=${FAIL_COUNT} deploy_failures=${DEPLOY_FAIL_COUNT} check_failures=${CHECK_FAIL_COUNT}"
+  if [[ ${FAIL_COUNT} -gt 0 ]]; then
+    status_error "total_failures=${FAIL_COUNT} deploy_failures=${DEPLOY_FAIL_COUNT} check_failures=${CHECK_FAIL_COUNT}"
+  else
+    status_ok "total_failures=${FAIL_COUNT} deploy_failures=${DEPLOY_FAIL_COUNT} check_failures=${CHECK_FAIL_COUNT}"
+  fi
 }
 
 main() {
   parse_args "$@"
+  init_colors
 
   if [[ ${LOCAL_MODE} -eq 1 ]]; then
     run_local_mode || {
