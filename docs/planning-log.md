@@ -177,3 +177,41 @@ After agreement, implement in this order:
 4. local deploy function
 5. remote self-invocation wrapper
 6. summary output and exit codes
+
+### Prompt
+Please append this prompt and the response onto the planning-log.  Duplicate the response here in the chat.
+
+I guess we might want different behaviour for git on the dev host jwpc19, in case there are uncommitted changes when we run the deploy: I think it should just fail.  Perhaps it already does this? 
+
+Also, if there are upstream commits not present on the dev host, do we want to ff pull them?  or just fail?  I occasionally commit changes on another host.  Is it safe to ff pull them on the dev host?  Give me your thoughts.  FWIW I am trying to "aggressively" commit small changes wherever they are made so that the local copies do not diverge.
+
+### Response
+Short answer:
+- Dirty working tree on jwpc19: yes, this should fail, and it already does.
+- Upstream commits missing locally: fast-forward pull is usually the right default for your workflow, with one operational caveat.
+
+What the current script already does:
+- In deploy mode, before pull, it checks for a dirty worktree via git status --porcelain and fails deploy if anything is uncommitted.
+- It requires an upstream tracking branch.
+- It then runs git pull --ff-only, so it will only move forward without merge commits.
+- If histories diverge, ff-only fails, which is a good safety stop.
+
+So your first concern is already implemented exactly as you described: uncommitted changes block deploy.
+
+Thoughts on ff pull vs fail when upstream is ahead:
+- For your stated habit (frequent small commits on whichever host you are on), ff pull on jwpc19 is a good fit.
+- It is safe in the Git-history sense: ff-only never rewrites local commits and never creates a merge commit.
+- It also reduces host drift, which is exactly what you are trying to prevent.
+
+The caveat:
+- Auto-pulling means deployment can advance to commits you did not just review on jwpc19 at that moment.
+- That is often fine, but operationally it can feel less explicit.
+
+Practical recommendation:
+- Keep current default behavior (clean-tree required + ff-only pull).
+- Continue your aggressive small-commit discipline.
+- If you want stricter release control later, add an opt-in guard such as:
+  - "fail if local HEAD is behind upstream" unless --allow-pull is passed, or
+  - a --no-pull mode that requires jwpc19 to already be up to date.
+
+Given your workflow, I would not switch to always-fail-on-behind right now. The current policy is the right balance of safety and low friction.
