@@ -103,6 +103,23 @@ contains_word() {
   return 1
 }
 
+expand_expected_units_for_inventory() {
+  local expected_raw="$1"
+  local expanded="${expected_raw}"
+  local unit service_unit
+
+  for unit in ${expected_raw}; do
+    if [[ "${unit}" == *.timer ]]; then
+      service_unit="${unit%.timer}.service"
+      if ! contains_word "${expanded}" "${service_unit}"; then
+        expanded+=" ${service_unit}"
+      fi
+    fi
+  done
+
+  echo "${expanded}"
+}
+
 status_ok() {
   echo "${COLOR_GREEN}[OK]${COLOR_RESET} $*"
 }
@@ -441,7 +458,7 @@ read_unit_state() {
 
 run_local_checks() {
   local host_id="$1"
-  local expected_raw deprecated_raw unit active enabled
+  local expected_raw expected_effective deprecated_raw unit active enabled
   local installed_lines installed_units line unit_name unit_state
   local actual_host git_state upstream
 
@@ -471,6 +488,7 @@ run_local_checks() {
 
   echo "=== expected units ==="
   expected_raw="$(host_expected_units "${host_id}")"
+  expected_effective="$(expand_expected_units_for_inventory "${expected_raw}")"
   for unit in ${expected_raw}; do
     active="$(read_unit_state is-active "${unit}")"
     enabled="$(read_unit_state is-enabled "${unit}")"
@@ -512,14 +530,14 @@ run_local_checks() {
 
       if contains_word "${deprecated_raw}" "${unit_name}"; then
         status_error "${unit_name}: ${unit_state} (deprecated in inventory)"
-      elif contains_word "${expected_raw}" "${unit_name}"; then
+      elif contains_word "${expected_effective}" "${unit_name}"; then
         status_ok "${unit_name}: ${unit_state} (expected)"
       else
         status_warn "${unit_name}: ${unit_state} (not in inventory)"
       fi
     done <<<"${installed_lines}"
 
-    for unit in ${expected_raw}; do
+    for unit in ${expected_effective}; do
       if ! contains_word "${installed_units}" "${unit}"; then
         status_warn "${unit}: missing from installed unit-files output"
       fi
