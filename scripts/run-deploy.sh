@@ -67,13 +67,31 @@ vlog() {
 }
 
 init_colors() {
-  if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
+  if [[ -n "${NO_COLOR:-}" ]]; then
+    return 0
+  fi
+
+  # Enable colors in interactive terminals and also in SSH-driven checks
+  # where output is relayed but no TTY is allocated.
+  if [[ -n "${FORCE_COLOR:-}" || -t 1 || -n "${SSH_CONNECTION:-}" ]]; then
     COLOR_RED=$'\033[31m'
     COLOR_GREEN=$'\033[32m'
     COLOR_YELLOW=$'\033[33m'
     COLOR_BLUE=$'\033[36m'
     COLOR_RESET=$'\033[0m'
   fi
+}
+
+contains_word() {
+  local list="$1"
+  local word="$2"
+  local item
+  for item in ${list}; do
+    if [[ "${item}" == "${word}" ]]; then
+      return 0
+    fi
+  done
+  return 1
 }
 
 status_ok() {
@@ -271,20 +289,40 @@ run_local_deploy() {
 
 run_crontab_check() {
   echo "--- crontab -l (${USER}) ---"
-  if crontab -l 2>/tmp/pond-crontab.err; then
-    :
+  local crontab_file err_file
+  crontab_file="/tmp/pond-crontab.$$"
+  err_file="/tmp/pond-crontab.err.$$"
+
+  if crontab -l >"${crontab_file}" 2>"${err_file}"; then
+    local line shown_count
+    shown_count=0
+    # Show only non-empty, non-comment lines.
+    while IFS= read -r line; do
+      [[ -z "${line//[[:space:]]/}" ]] && continue
+      [[ "${line}" =~ ^[[:space:]]*# ]] && continue
+      shown_count=$((shown_count + 1))
+      if [[ "${line}" =~ [Pp][Oo][Nn][Dd] ]]; then
+        status_error "${line}"
+      else
+        echo "${line}"
+      fi
+    done <"${crontab_file}"
+
+    if [[ ${shown_count} -eq 0 ]]; then
+      echo "(no active non-comment crontab entries)"
+    fi
   else
     local err
-    err="$(cat /tmp/pond-crontab.err 2>/dev/null || true)"
+    err="$(cat "${err_file}" 2>/dev/null || true)"
     if [[ "${err}" == *"no crontab for"* ]]; then
       echo "(no crontab for ${USER})"
     else
       echo "(error reading crontab) ${err}" >&2
-      rm -f /tmp/pond-crontab.err
+      rm -f "${crontab_file}" "${err_file}"
       return 1
     fi
   fi
-  rm -f /tmp/pond-crontab.err
+  rm -f "${crontab_file}" "${err_file}"
   return 0
 }
 
@@ -304,6 +342,7 @@ read_unit_state() {
 run_local_checks() {
   local host_id="$1"
   local expected_raw deprecated_raw unit active enabled
+  local installed_lines installed_units line unit_name unit_state
 
   log "Starting checks on ${host_id}"
   echo "=== host identity ==="
@@ -346,8 +385,33 @@ run_local_checks() {
     done
   fi
 
-  echo "=== installed pond-* unit files ==="
-  systemctl --user list-unit-files --no-legend | grep -E '^pond-.*\.(service|timer|target)\s' || echo "(none)"
+  echo "=== installed pond-* unit files (vs inventory) ==="
+  installed_lines="$(systemctl --user list-unit-files --no-legend | grep -E '^pond-.*\.(service|timer|target)[[:space:]]' || true)"
+  if [[ -z "${installed_lines}" ]]; then
+    echo "(none)"
+  else
+    installed_units=""
+    while IFS= read -r line; do
+      [[ -z "${line}" ]] && continue
+      unit_name="$(awk '{print $1}' <<<"${line}")"
+      unit_state="$(awk '{print $2}' <<<"${line}")"
+      installed_units+=" ${unit_name}"
+
+      if contains_word "${deprecated_raw}" "${unit_name}"; then
+        status_error "${unit_name}: ${unit_state} (deprecated in inventory)"
+      elif contains_word "${expected_raw}" "${unit_name}"; then
+        status_ok "${unit_name}: ${unit_state} (expected)"
+      else
+        status_warn "${unit_name}: ${unit_state} (not in inventory)"
+      fi
+    done <<<"${installed_lines}"
+
+    for unit in ${expected_raw}; do
+      if ! contains_word "${installed_units}" "${unit}"; then
+        status_warn "${unit}: missing from installed unit-files output"
+      fi
+    done
+  fi
 
   echo "=== cron audit ==="
   if ! run_crontab_check; then
@@ -395,7 +459,7 @@ run_remote_bootstrap() {
   repo_subpath="$(host_repo_subpath "${host_id}")"
 
   log "Remote ${host_id}: bootstrap via ssh ${ssh_target}"
-  if ssh "${ssh_target}" "bash -s -- ${host_id} ${repo_subpath}" <<'EOF'
+  if ssh "${ssh_target}" "FORCE_COLOR=1 bash -s -- ${host_id} ${repo_subpath}" <<'EOF'
 set -euo pipefail
 
 HOST_ID="$1"
@@ -468,7 +532,7 @@ run_remote_host() {
     return 1
   fi
 
-  cmd="cd ~/${repo_subpath} && bash scripts/run-deploy.sh --local --host-id ${host_id}"
+  cmd="cd ~/${repo_subpath} && FORCE_COLOR=1 bash scripts/run-deploy.sh --local --host-id ${host_id}"
   if [[ ${CHECK_ONLY} -eq 1 ]]; then
     cmd+=" --check"
   fi
