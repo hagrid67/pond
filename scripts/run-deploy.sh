@@ -16,6 +16,7 @@ source "${INVENTORY_FILE}"
 CHECK_ONLY=1
 DRY_RUN=0
 NO_PULL=0
+NO_CRON=0
 LOCAL_MODE=0
 VERBOSE=0
 HOST_ID_OVERRIDE=""
@@ -40,14 +41,15 @@ COLOR_RESET=""
 usage() {
   cat <<'EOF'
 Usage:
-  scripts/run-deploy.sh [--check|--deploy] [--dry-run] [--no-pull] [--jwpc19|--dev] [--jwpc12] [--gcweb1]
-  scripts/run-deploy.sh [--check|--deploy] [--dry-run] [--no-pull] --local [--host-id HOST]
+  scripts/run-deploy.sh [--check|--deploy] [--dry-run] [--no-pull] [--no-cron] [--jwpc19|--dev] [--jwpc12] [--gcweb1]
+  scripts/run-deploy.sh [--check|--deploy] [--dry-run] [--no-pull] [--no-cron] --local [--host-id HOST]
 
 Options:
   --check      Run checks only (skip deploy actions).
   --deploy     Run deploy actions and then checks.
   --dry-run    Print commands that would run; skip mutating actions.
   --no-pull    Skip bootstrap git pull (allowed with --check and --dry-run only).
+  --no-cron    Skip cron audit check.
   --jwpc19     Target jwpc19 host.
   --dev        Alias for --jwpc19.
   --jwpc12     Target jwpc12 host.
@@ -174,6 +176,9 @@ parse_args() {
         ;;
       --no-pull)
         NO_PULL=1
+        ;;
+      --no-cron)
+        NO_CRON=1
         ;;
       --local)
         LOCAL_MODE=1
@@ -502,8 +507,12 @@ run_local_checks() {
   fi
 
   echo "=== cron audit ==="
-  if ! run_crontab_check; then
-    record_failure "check" "${host_id}" "crontab check failed"
+  if [[ ${NO_CRON} -eq 1 ]]; then
+    status_warn "cron audit skipped (--no-cron)"
+  else
+    if ! run_crontab_check; then
+      record_failure "check" "${host_id}" "crontab check failed"
+    fi
   fi
 
   log "Checks completed on ${host_id}"
@@ -657,7 +666,7 @@ EOF
 
 run_remote_host() {
   local host_id="$1"
-  local ssh_target repo_subpath cmd mode
+  local ssh_target repo_subpath cmd mode remote_no_cron_supported
   ssh_target="$(host_ssh_target "${host_id}")"
   repo_subpath="$(host_repo_subpath "${host_id}")"
 
@@ -686,11 +695,25 @@ run_remote_host() {
   if [[ ${DRY_RUN} -eq 1 ]]; then
     cmd+=" --dry-run"
   fi
+  if [[ ${NO_PULL} -eq 1 ]]; then
+    cmd+=" --no-pull"
+  fi
+  if [[ ${NO_CRON} -eq 1 ]]; then
+    remote_no_cron_supported=0
+    if ssh "${ssh_target}" "cd ~/${repo_subpath} && bash scripts/run-deploy.sh --help 2>/dev/null | grep -q -- '--no-cron'"; then
+      remote_no_cron_supported=1
+    fi
+
+    if [[ ${remote_no_cron_supported} -eq 1 ]]; then
+      cmd+=" --no-cron"
+    else
+      status_warn "Remote ${host_id} script does not support --no-cron yet; continuing without remote cron-skip flag"
+    fi
+  fi
 
   log "Remote ${host_id}: ssh ${ssh_target}"
   if [[ ${DRY_RUN} -eq 1 ]]; then
     status_cmd "ssh ${ssh_target} '${cmd}'"
-    return 0
   fi
   if ! ssh "${ssh_target}" "${cmd}"; then
     record_failure "${mode}" "${host_id}" "remote ${mode} failed (see remote output above)"
@@ -731,6 +754,7 @@ run_controller_mode() {
       [[ ${VERBOSE} -eq 1 ]] && local_cmd+=" --verbose"
       [[ ${DRY_RUN} -eq 1 ]] && local_cmd+=" --dry-run"
       [[ ${NO_PULL} -eq 1 ]] && local_cmd+=" --no-pull"
+      [[ ${NO_CRON} -eq 1 ]] && local_cmd+=" --no-cron"
 
       if [[ ${DRY_RUN} -eq 1 ]]; then
         status_cmd "${local_cmd}"
@@ -753,7 +777,7 @@ run_controller_mode() {
 print_summary() {
   echo
   echo "=== deploy summary ==="
-  echo "check_only=${CHECK_ONLY} dry_run=${DRY_RUN} no_pull=${NO_PULL} local_mode=${LOCAL_MODE}"
+  echo "check_only=${CHECK_ONLY} dry_run=${DRY_RUN} no_pull=${NO_PULL} no_cron=${NO_CRON} local_mode=${LOCAL_MODE}"
   if [[ ${FAIL_COUNT} -gt 0 ]]; then
     status_error "total_failures=${FAIL_COUNT} deploy_failures=${DEPLOY_FAIL_COUNT} check_failures=${CHECK_FAIL_COUNT}"
   else
@@ -767,6 +791,9 @@ main() {
 
   if [[ ${NO_PULL} -eq 1 ]]; then
     status_warn "--no-pull enabled: bootstrap pull is disabled"
+  fi
+  if [[ ${NO_CRON} -eq 1 ]]; then
+    status_warn "--no-cron enabled: cron audit is disabled"
   fi
 
   if [[ ${LOCAL_MODE} -eq 1 ]]; then
