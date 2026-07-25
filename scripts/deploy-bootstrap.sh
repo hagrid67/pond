@@ -4,6 +4,11 @@ set -euo pipefail
 HOST_ID=""
 REPO_SUBPATH="projects/pond"
 
+COLOR_RED=""
+COLOR_GREEN=""
+COLOR_BLUE=""
+COLOR_RESET=""
+
 usage() {
   cat <<'EOF'
 Usage:
@@ -17,7 +22,28 @@ EOF
 }
 
 log() {
-  echo "[deploy-bootstrap] $*"
+  echo "${COLOR_BLUE}[deploy-bootstrap]${COLOR_RESET} $*"
+}
+
+status_ok() {
+  echo "${COLOR_GREEN}[OK]${COLOR_RESET} $*"
+}
+
+status_error() {
+  echo "${COLOR_RED}[ERROR]${COLOR_RESET} $*" >&2
+}
+
+init_colors() {
+  if [[ -n "${NO_COLOR:-}" ]]; then
+    return 0
+  fi
+
+  if [[ -n "${FORCE_COLOR:-}" || -t 1 || -n "${SSH_CONNECTION:-}" ]]; then
+    COLOR_RED=$'\033[31m'
+    COLOR_GREEN=$'\033[32m'
+    COLOR_BLUE=$'\033[36m'
+    COLOR_RESET=$'\033[0m'
+  fi
 }
 
 parse_args() {
@@ -63,6 +89,7 @@ git_state_report() {
 
 main() {
   parse_args "$@"
+  init_colors
 
   local repo_dir
   repo_dir="${HOME}/${REPO_SUBPATH}"
@@ -70,36 +97,36 @@ main() {
   log "host_id=${HOST_ID:-unknown} hostname=$(hostname -s 2>/dev/null || hostname) user=${USER}"
 
   if ! command -v git >/dev/null 2>&1; then
-    echo "Error: missing required command: git" >&2
+    status_error "missing required command: git"
     exit 1
   fi
 
   if ! command -v bash >/dev/null 2>&1; then
-    echo "Error: missing required command: bash" >&2
+    status_error "missing required command: bash"
     exit 1
   fi
 
   if [[ ! -d "${repo_dir}" ]]; then
-    echo "Error: missing repo directory: ${repo_dir}" >&2
+    status_error "missing repo directory: ${repo_dir}"
     exit 1
   fi
 
   cd "${repo_dir}"
 
   if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-    echo "Error: ${repo_dir} is not a git repository" >&2
+    status_error "${repo_dir} is not a git repository"
     exit 1
   fi
 
   log "Git state before pull: $(git_state_report)"
 
   if [[ -n "$(git status --porcelain)" ]]; then
-    echo "Error: working tree is not clean; refusing bootstrap pull." >&2
+    status_error "working tree is not clean; refusing bootstrap pull"
     exit 1
   fi
 
   if ! git rev-parse --abbrev-ref --symbolic-full-name @{u} >/dev/null 2>&1; then
-    echo "Error: no upstream tracking branch configured for current branch." >&2
+    status_error "no upstream tracking branch configured for current branch"
     exit 1
   fi
 
@@ -107,11 +134,12 @@ main() {
   git pull --ff-only
 
   if [[ ! -f scripts/run-deploy.sh ]]; then
-    echo "Error: missing scripts/run-deploy.sh after pull." >&2
+    status_error "missing scripts/run-deploy.sh after pull"
     exit 1
   fi
 
   log "Git state after pull: $(git_state_report)"
+  status_ok "bootstrap checks and pull completed"
   return 0
 }
 

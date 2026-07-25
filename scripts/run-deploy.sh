@@ -353,17 +353,30 @@ run_local_checks() {
   local host_id="$1"
   local expected_raw deprecated_raw unit active enabled
   local installed_lines installed_units line unit_name unit_state
+  local actual_host git_state upstream
 
   log "Starting checks on ${host_id}"
   echo "=== host identity ==="
-  echo "host_id=${host_id} hostname=$(hostname -s 2>/dev/null || hostname) user=${USER} cwd=$(pwd)"
+  actual_host="$(hostname -s 2>/dev/null || hostname)"
+  if [[ "${host_id}" == "${actual_host}" ]]; then
+    status_ok "host_id=${host_id} hostname=${actual_host} user=${USER} cwd=$(pwd)"
+  else
+    status_warn "host_id=${host_id} hostname=${actual_host} user=${USER} cwd=$(pwd)"
+  fi
 
   echo "=== git state ==="
-  echo "$(git_state_report)"
-  if [[ -n "$(git status --porcelain)" ]]; then
-    echo "worktree=dirty"
+  git_state="$(git_state_report)"
+  upstream="${git_state##*upstream=}"
+  if [[ "${upstream}" == "(none)" ]]; then
+    status_error "${git_state}"
+    record_failure "check" "${host_id}" "missing upstream tracking branch"
   else
-    echo "worktree=clean"
+    status_ok "${git_state}"
+  fi
+  if [[ -n "$(git status --porcelain)" ]]; then
+    status_warn "worktree=dirty"
+  else
+    status_ok "worktree=clean"
   fi
 
   echo "=== expected units ==="
@@ -539,6 +552,11 @@ run_remote_host() {
     record_failure "${mode}" "${host_id}" "bootstrap failed"
     return 1
   fi
+
+  echo
+  log "Remote ${host_id}: bootstrap complete"
+  echo "------------------------------------------------------------"
+  echo
 
   cmd="cd ~/${repo_subpath} && FORCE_COLOR=1 bash scripts/run-deploy.sh --local --host-id ${host_id}"
   if [[ ${CHECK_ONLY} -eq 1 ]]; then
