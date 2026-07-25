@@ -22,7 +22,7 @@ Using hostname subfolders keeps machine-specific settings separate and makes it 
 - bookings scrape job
 - weather fetch job
 - publish generated bookings artefacts to gcweb1 runs via --rsync in the scrape job
-- planned submission ingest API service for anonymous user input
+- submission ingest API service for anonymous user input
 
 ## Current Scheduled Jobs (jwpc19)
 - pond-dev-sync job
@@ -75,7 +75,9 @@ Recommended Python services:
 - gcweb1 forwarder worker: pond.submit_forwarder via a oneshot retry service
 - jwpc12 ingest API: pond.submit_ingest_api:app via uvicorn on 127.0.0.1:9100
 
-The deploy files below assume those Python entry points will be implemented in the repo.
+Current repo status:
+- implemented: jwpc12 ingest API entrypoint pond.submit_ingest_api:app
+- not yet implemented: gcweb1 edge API/forwarder entrypoints
 
 ## One-Command Host Deployment Scripts
 These scripts perform all install/reload/enable/verify steps and are safe to re-run (idempotent):
