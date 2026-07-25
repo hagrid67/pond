@@ -13,10 +13,15 @@ fi
 # shellcheck source=/dev/null
 source "${INVENTORY_FILE}"
 
-CHECK_ONLY=0
+CHECK_ONLY=1
+DRY_RUN=0
+NO_PULL=0
 LOCAL_MODE=0
 VERBOSE=0
 HOST_ID_OVERRIDE=""
+
+SEEN_CHECK=0
+SEEN_DEPLOY=0
 
 TARGET_JWPC19=0
 TARGET_JWPC12=0
@@ -35,11 +40,14 @@ COLOR_RESET=""
 usage() {
   cat <<'EOF'
 Usage:
-  scripts/run-deploy.sh [--check] [--jwpc19|--dev] [--jwpc12] [--gcweb1]
-  scripts/run-deploy.sh [--check] --local [--host-id HOST]
+  scripts/run-deploy.sh [--check|--deploy] [--dry-run] [--no-pull] [--jwpc19|--dev] [--jwpc12] [--gcweb1]
+  scripts/run-deploy.sh [--check|--deploy] [--dry-run] [--no-pull] --local [--host-id HOST]
 
 Options:
   --check      Run checks only (skip deploy actions).
+  --deploy     Run deploy actions and then checks.
+  --dry-run    Print commands that would run; skip mutating actions.
+  --no-pull    Skip bootstrap git pull (allowed with --check and --dry-run only).
   --jwpc19     Target jwpc19 host.
   --dev        Alias for --jwpc19.
   --jwpc12     Target jwpc12 host.
@@ -50,8 +58,10 @@ Options:
   -h, --help   Show this help.
 
 Notes:
+  - Default mode is check-only unless --deploy is provided.
+  - --no-pull is rejected with --deploy.
   - Without --local, at least one host flag is required.
-  - In deploy mode (default), deploy actions are run first, then checks.
+  - In deploy mode (--deploy), deploy actions are run first, then checks.
   - In check mode (--check), deploy actions are skipped.
 EOF
 }
@@ -106,6 +116,16 @@ status_error() {
   echo "${COLOR_RED}[ERROR]${COLOR_RESET} $*"
 }
 
+status_cmd() {
+  echo "${COLOR_YELLOW}[CMD]${COLOR_RESET} $*"
+}
+
+preview_command() {
+  if [[ ${DRY_RUN} -eq 1 ]]; then
+    status_cmd "$*"
+  fi
+}
+
 record_failure() {
   local category="$1"
   local host_id="$2"
@@ -142,7 +162,18 @@ parse_args() {
   while (($#)); do
     case "$1" in
       --check)
+        SEEN_CHECK=1
         CHECK_ONLY=1
+        ;;
+      --deploy)
+        SEEN_DEPLOY=1
+        CHECK_ONLY=0
+        ;;
+      --dry-run)
+        DRY_RUN=1
+        ;;
+      --no-pull)
+        NO_PULL=1
         ;;
       --local)
         LOCAL_MODE=1
@@ -179,6 +210,18 @@ parse_args() {
     esac
     shift
   done
+
+  if [[ ${SEEN_CHECK} -eq 1 && ${SEEN_DEPLOY} -eq 1 ]]; then
+    echo "Error: --check and --deploy are mutually exclusive." >&2
+    usage >&2
+    exit 2
+  fi
+
+  if [[ ${NO_PULL} -eq 1 && ${CHECK_ONLY} -eq 0 ]]; then
+    echo "Error: --no-pull cannot be used with --deploy." >&2
+    usage >&2
+    exit 2
+  fi
 }
 
 host_targets_csv() {
@@ -217,8 +260,12 @@ run_git_pull_with_checks() {
     return 1
   fi
 
-  git fetch --prune
-  git pull --ff-only
+  preview_command "git fetch --prune"
+  preview_command "git pull --ff-only"
+  if [[ ${DRY_RUN} -eq 0 ]]; then
+    git fetch --prune
+    git pull --ff-only
+  fi
   log "Git state after pull: $(git_state_report)"
   return 0
 }
@@ -235,16 +282,28 @@ reconcile_deprecated_units() {
   local unit
   for unit in ${deprecated_raw}; do
     vlog "Reconciling deprecated unit ${unit}"
-    systemctl --user stop "${unit}" >/dev/null 2>&1 || true
-    systemctl --user disable "${unit}" >/dev/null 2>&1 || true
-    systemctl --user reset-failed "${unit}" >/dev/null 2>&1 || true
+    preview_command "systemctl --user stop ${unit}"
+    preview_command "systemctl --user disable ${unit}"
+    preview_command "systemctl --user reset-failed ${unit}"
+    preview_command "rm -f ${HOME}/.config/systemd/user/${unit}"
+    preview_command "rm -f ${HOME}/.config/systemd/user/timers.target.wants/${unit}"
+    preview_command "rm -f ${HOME}/.config/systemd/user/default.target.wants/${unit}"
 
-    rm -f "${HOME}/.config/systemd/user/${unit}" || true
-    rm -f "${HOME}/.config/systemd/user/timers.target.wants/${unit}" || true
-    rm -f "${HOME}/.config/systemd/user/default.target.wants/${unit}" || true
+    if [[ ${DRY_RUN} -eq 0 ]]; then
+      systemctl --user stop "${unit}" >/dev/null 2>&1 || true
+      systemctl --user disable "${unit}" >/dev/null 2>&1 || true
+      systemctl --user reset-failed "${unit}" >/dev/null 2>&1 || true
+
+      rm -f "${HOME}/.config/systemd/user/${unit}" || true
+      rm -f "${HOME}/.config/systemd/user/timers.target.wants/${unit}" || true
+      rm -f "${HOME}/.config/systemd/user/default.target.wants/${unit}" || true
+    fi
   done
 
-  systemctl --user daemon-reload
+  preview_command "systemctl --user daemon-reload"
+  if [[ ${DRY_RUN} -eq 0 ]]; then
+    systemctl --user daemon-reload
+  fi
   return 0
 }
 
@@ -264,8 +323,11 @@ run_local_deploy() {
 
   if [[ -n "${remove_script}" && -x "${remove_script}" ]]; then
     log "Running migration cleanup script: ${remove_script}"
-    if ! "${remove_script}"; then
-      record_failure "deploy" "${host_id}" "migration cleanup failed"
+    preview_command "${remove_script}"
+    if [[ ${DRY_RUN} -eq 0 ]]; then
+      if ! "${remove_script}"; then
+        record_failure "deploy" "${host_id}" "migration cleanup failed"
+      fi
     fi
   fi
 
@@ -278,9 +340,12 @@ run_local_deploy() {
     return 1
   fi
 
-  if ! "${install_script}"; then
-    record_failure "deploy" "${host_id}" "install-user-units script failed"
-    return 1
+  preview_command "${install_script}"
+  if [[ ${DRY_RUN} -eq 0 ]]; then
+    if ! "${install_script}"; then
+      record_failure "deploy" "${host_id}" "install-user-units script failed"
+      return 1
+    fi
   fi
 
   log "Deploy completed on ${host_id}"
@@ -466,6 +531,8 @@ run_local_mode() {
 
   if [[ ${CHECK_ONLY} -eq 0 ]]; then
     run_local_deploy "${host_id}" || true
+  else
+    vlog "Deploy actions skipped for ${host_id}; use --deploy to enable deploy phase."
   fi
   run_local_checks "${host_id}" || true
 
@@ -478,14 +545,59 @@ run_remote_bootstrap() {
 
   ssh_target="$(host_ssh_target "${host_id}")"
   repo_subpath="$(host_repo_subpath "${host_id}")"
+  if [[ ${DRY_RUN} -eq 1 ]]; then
+    status_cmd "ssh ${ssh_target} 'FORCE_COLOR=1 bash -s -- ${host_id} ${repo_subpath} ${NO_PULL} <bootstrap-block>'"
+  fi
 
   log "Remote ${host_id}: bootstrap via ssh ${ssh_target}"
-  if ssh "${ssh_target}" "FORCE_COLOR=1 bash -s -- ${host_id} ${repo_subpath}" <<'EOF'
+  if ssh "${ssh_target}" "FORCE_COLOR=1 bash -s -- ${host_id} ${repo_subpath} ${NO_PULL}" <<'EOF'
 set -euo pipefail
 
 HOST_ID="$1"
 REPO_SUBPATH="$2"
+NO_PULL="$3"
 REPO_DIR="${HOME}/${REPO_SUBPATH}"
+
+if [[ "${NO_PULL}" == "1" ]]; then
+  echo "[deploy-bootstrap:inline][WARN] --no-pull enabled: skipping git pull"
+
+  if ! command -v git >/dev/null 2>&1; then
+    echo "[deploy-bootstrap:inline] missing git" >&2
+    exit 1
+  fi
+
+  if [[ ! -d "${REPO_DIR}" ]]; then
+    echo "[deploy-bootstrap:inline] missing repo directory: ${REPO_DIR}" >&2
+    exit 1
+  fi
+
+  cd "${REPO_DIR}"
+
+  if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    echo "[deploy-bootstrap:inline] ${REPO_DIR} is not a git repository" >&2
+    exit 1
+  fi
+
+  if [[ -n "$(git status --porcelain)" ]]; then
+    echo "[deploy-bootstrap:inline] dirty worktree; refusing bootstrap checks" >&2
+    exit 1
+  fi
+
+  if ! git rev-parse --abbrev-ref --symbolic-full-name @{u} >/dev/null 2>&1; then
+    echo "[deploy-bootstrap:inline] no upstream tracking branch configured" >&2
+    exit 1
+  fi
+
+  git fetch --prune
+  divergence="$(git rev-list --left-right --count HEAD...@{u} 2>/dev/null || echo "0 0")"
+  read -r ahead behind <<<"${divergence}"
+  if [[ "${behind}" =~ ^[0-9]+$ ]] && [[ ${behind} -gt 0 ]]; then
+    echo "[deploy-bootstrap:inline][WARN] local copy is behind upstream by ${behind} commit(s)"
+  else
+    echo "[deploy-bootstrap:inline][OK] local copy is not behind upstream (ahead=${ahead} behind=${behind})"
+  fi
+  exit 0
+fi
 
 if [[ -x "${REPO_DIR}/scripts/deploy-bootstrap.sh" ]]; then
   cd "${REPO_DIR}"
@@ -530,7 +642,11 @@ if [[ ! -f scripts/deploy-bootstrap.sh ]]; then
   exit 1
 fi
 
-bash scripts/deploy-bootstrap.sh --host-id "${HOST_ID}"
+if [[ "${NO_PULL}" == "1" ]]; then
+  bash scripts/deploy-bootstrap.sh --host-id "${HOST_ID}" --no-pull
+else
+  bash scripts/deploy-bootstrap.sh --host-id "${HOST_ID}"
+fi
 EOF
   then
     return 0
@@ -561,12 +677,21 @@ run_remote_host() {
   cmd="cd ~/${repo_subpath} && FORCE_COLOR=1 bash scripts/run-deploy.sh --local --host-id ${host_id}"
   if [[ ${CHECK_ONLY} -eq 1 ]]; then
     cmd+=" --check"
+  else
+    cmd+=" --deploy"
   fi
   if [[ ${VERBOSE} -eq 1 ]]; then
     cmd+=" --verbose"
   fi
+  if [[ ${DRY_RUN} -eq 1 ]]; then
+    cmd+=" --dry-run"
+  fi
 
   log "Remote ${host_id}: ssh ${ssh_target}"
+  if [[ ${DRY_RUN} -eq 1 ]]; then
+    status_cmd "ssh ${ssh_target} '${cmd}'"
+    return 0
+  fi
   if ! ssh "${ssh_target}" "${cmd}"; then
     record_failure "${mode}" "${host_id}" "remote ${mode} failed (see remote output above)"
     return 1
@@ -589,11 +714,29 @@ run_controller_mode() {
 
   log "Selected targets: ${selected[*]}"
   log "Mode: $([[ ${CHECK_ONLY} -eq 1 ]] && echo check-only || echo deploy+check)"
+  if [[ ${DRY_RUN} -eq 1 ]]; then
+    status_warn "dry-run enabled: mutating actions will be skipped"
+  fi
 
   local host_id
   for host_id in "${selected[@]}"; do
     if [[ "${host_id}" == "jwpc19" ]]; then
-      bash "${SCRIPT_DIR}/run-deploy.sh" --local --host-id jwpc19 $([[ ${CHECK_ONLY} -eq 1 ]] && echo --check) $([[ ${VERBOSE} -eq 1 ]] && echo --verbose) || {
+      local local_cmd
+      local_cmd="bash ${SCRIPT_DIR}/run-deploy.sh --local --host-id jwpc19"
+      if [[ ${CHECK_ONLY} -eq 1 ]]; then
+        local_cmd+=" --check"
+      else
+        local_cmd+=" --deploy"
+      fi
+      [[ ${VERBOSE} -eq 1 ]] && local_cmd+=" --verbose"
+      [[ ${DRY_RUN} -eq 1 ]] && local_cmd+=" --dry-run"
+      [[ ${NO_PULL} -eq 1 ]] && local_cmd+=" --no-pull"
+
+      if [[ ${DRY_RUN} -eq 1 ]]; then
+        status_cmd "${local_cmd}"
+      fi
+
+      eval "${local_cmd}" || {
         local mode
         mode="deploy"
         [[ ${CHECK_ONLY} -eq 1 ]] && mode="check"
@@ -610,7 +753,7 @@ run_controller_mode() {
 print_summary() {
   echo
   echo "=== deploy summary ==="
-  echo "check_only=${CHECK_ONLY} local_mode=${LOCAL_MODE}"
+  echo "check_only=${CHECK_ONLY} dry_run=${DRY_RUN} no_pull=${NO_PULL} local_mode=${LOCAL_MODE}"
   if [[ ${FAIL_COUNT} -gt 0 ]]; then
     status_error "total_failures=${FAIL_COUNT} deploy_failures=${DEPLOY_FAIL_COUNT} check_failures=${CHECK_FAIL_COUNT}"
   else
@@ -621,6 +764,10 @@ print_summary() {
 main() {
   parse_args "$@"
   init_colors
+
+  if [[ ${NO_PULL} -eq 1 ]]; then
+    status_warn "--no-pull enabled: bootstrap pull is disabled"
+  fi
 
   if [[ ${LOCAL_MODE} -eq 1 ]]; then
     run_local_mode || {

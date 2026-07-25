@@ -3,20 +3,23 @@ set -euo pipefail
 
 HOST_ID=""
 REPO_SUBPATH="projects/pond"
+NO_PULL=0
 
 COLOR_RED=""
 COLOR_GREEN=""
+COLOR_YELLOW=""
 COLOR_BLUE=""
 COLOR_RESET=""
 
 usage() {
   cat <<'EOF'
 Usage:
-  scripts/deploy-bootstrap.sh [--host-id HOST] [--repo-subpath PATH]
+  scripts/deploy-bootstrap.sh [--host-id HOST] [--repo-subpath PATH] [--no-pull]
 
 Options:
   --host-id       Optional host identifier for logging.
   --repo-subpath  Repo path under $HOME. Default: projects/pond
+  --no-pull       Run bootstrap checks but skip git pull.
   -h, --help      Show this help.
 EOF
 }
@@ -33,6 +36,10 @@ status_error() {
   echo "${COLOR_RED}[ERROR]${COLOR_RESET} $*" >&2
 }
 
+status_warn() {
+  echo "${COLOR_YELLOW}[WARN]${COLOR_RESET} $*"
+}
+
 init_colors() {
   if [[ -n "${NO_COLOR:-}" ]]; then
     return 0
@@ -41,6 +48,7 @@ init_colors() {
   if [[ -n "${FORCE_COLOR:-}" || -t 1 || -n "${SSH_CONNECTION:-}" ]]; then
     COLOR_RED=$'\033[31m'
     COLOR_GREEN=$'\033[32m'
+    COLOR_YELLOW=$'\033[33m'
     COLOR_BLUE=$'\033[36m'
     COLOR_RESET=$'\033[0m'
   fi
@@ -64,6 +72,9 @@ parse_args() {
           exit 2
         fi
         REPO_SUBPATH="$1"
+        ;;
+      --no-pull)
+        NO_PULL=1
         ;;
       -h|--help)
         usage
@@ -95,6 +106,9 @@ main() {
   repo_dir="${HOME}/${REPO_SUBPATH}"
 
   log "host_id=${HOST_ID:-unknown} hostname=$(hostname -s 2>/dev/null || hostname) user=${USER}"
+  if [[ ${NO_PULL} -eq 1 ]]; then
+    status_warn "--no-pull enabled: bootstrap will not run git pull"
+  fi
 
   if ! command -v git >/dev/null 2>&1; then
     status_error "missing required command: git"
@@ -131,7 +145,18 @@ main() {
   fi
 
   git fetch --prune
-  git pull --ff-only
+  if [[ ${NO_PULL} -eq 1 ]]; then
+    local divergence ahead behind
+    divergence="$(git rev-list --left-right --count HEAD...@{u} 2>/dev/null || echo "0 0")"
+    read -r ahead behind <<<"${divergence}"
+    if [[ "${behind}" =~ ^[0-9]+$ ]] && [[ ${behind} -gt 0 ]]; then
+      status_warn "local copy is behind upstream by ${behind} commit(s)"
+    else
+      status_ok "local copy is not behind upstream (ahead=${ahead} behind=${behind})"
+    fi
+  else
+    git pull --ff-only
+  fi
 
   if [[ ! -f scripts/run-deploy.sh ]]; then
     status_error "missing scripts/run-deploy.sh after pull"
@@ -139,7 +164,11 @@ main() {
   fi
 
   log "Git state after pull: $(git_state_report)"
-  status_ok "bootstrap checks and pull completed"
+  if [[ ${NO_PULL} -eq 1 ]]; then
+    status_ok "bootstrap checks completed (pull skipped)"
+  else
+    status_ok "bootstrap checks and pull completed"
+  fi
   return 0
 }
 
