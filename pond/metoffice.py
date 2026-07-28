@@ -115,7 +115,7 @@ def load_merged_recent_data(nDays=7, file_suffix="", verbose=True):
         print("ERROR: No JSON files found in ./metoffice-data/")
         return
 
-    cutoff = pd.Timestamp.utcnow() - pd.Timedelta(days=nDays)
+    cutoff = pd.Timestamp.now("UTC") - pd.Timedelta(days=nDays)
     recent_files = []
 
     for file_path in files:

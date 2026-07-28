@@ -174,7 +174,7 @@ def _timestep_label_from_suffix(snapshot_suffix: str) -> str:
 def collect_weather_source_runs(n_days: int = 7) -> list[dict[str, object]]:
 	"""Collect grouped weather model runs used to build the report."""
 	data_dir = REPO_ROOT / "metoffice-data"
-	cutoff = pd.Timestamp.utcnow() - pd.Timedelta(days=n_days)
+	cutoff = pd.Timestamp.now("UTC") - pd.Timedelta(days=n_days)
 	runs_by_time: dict[str, dict[str, object]] = {}
 	from pond.metoffice import parse_snapshot_metadata_from_filename
 
@@ -333,7 +333,7 @@ def _load_recent_weather_snapshots(
 		return []
 
 	data_dir = REPO_ROOT / "metoffice-data"
-	cutoff = pd.Timestamp.utcnow() - pd.Timedelta(days=n_days)
+	cutoff = pd.Timestamp.now("UTC") - pd.Timedelta(days=n_days)
 	snapshot_frames: list[pd.DataFrame] = []
 
 	for file_path in sorted(data_dir.glob("pond-*.json")):
