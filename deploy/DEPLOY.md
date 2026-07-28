@@ -48,6 +48,17 @@ Check linger status:
 
 Note: enabling linger is typically a one-time admin action. After that, all timer lifecycle commands below can be run without sudo.
 
+## Python Environment Convention
+
+Use one shared pond venv per host (not per service), with Python minor in the name:
+- `ve312pond` on Python 3.12 hosts
+- `ve311pond` on Python 3.11 hosts
+
+Install dependencies from the pinned repo spec:
+- `python -m pip install -r requirements.txt`
+
+Avoid service-specific ad hoc venvs (for example `.venv-submit-ingest`) once host venvs are in place.
+
 ## Anonymous Submission Architecture
 Planned shape for anonymous pond-status submissions:
 

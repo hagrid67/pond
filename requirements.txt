@@ -1,0 +1,10 @@
+# Shared runtime/development environment for the pond repository.
+# Create one host-local venv per machine, with python minor in the name.
+# Example: ve312pond on Ubuntu 24.04, ve311pond on Debian 12.
+
+-e .
+
+# API/runtime dependencies (pinned)
+fastapi==0.140.0
+uvicorn==0.51.0
+pydantic==2.13.4

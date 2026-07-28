@@ -4,11 +4,34 @@ Initial repository setup.
 
 ## Development install
 
-Create or activate your virtual environment, then install in editable mode:
+Use one shared pond venv per host, including Python minor in the venv name.
+
+Examples:
+- Ubuntu 24.04 hosts (Python 3.12): `ve312pond`
+- Debian 12 hosts (Python 3.11): `ve311pond`
+
+Create or activate your venv, then install from pinned requirements:
 
 ```bash
-pip install -e .
+python3 -m venv ve312pond
+source ve312pond/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
 ```
+
+## Dependency refresh workflow
+
+Pinned versions are tracked in `requirements.txt`.
+
+When you want to refresh periodically:
+
+```bash
+source ve312pond/bin/activate
+python -m pip install --upgrade fastapi uvicorn pydantic
+python -m pip freeze | rg "fastapi|uvicorn|pydantic"
+```
+
+Then update `requirements.txt`, test deploy/check flows, and commit.
 
 ## Dev web + API server (single port)
 
