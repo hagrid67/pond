@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-VENV_ACTIVATE="/home/jeremy/projects/heating/dev/ve312heat/bin/activate"
+VENV_ACTIVATE="${REPO_ROOT}/ve312pond/bin/activate"
 PYTHON_BIN="${PYTHON_BIN:-python}"
 LOCK_FILE="${REPO_ROOT}/output/fetch_weather.lock"
 LOG_DIR="${REPO_ROOT}/logs"
