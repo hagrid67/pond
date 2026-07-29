@@ -9,7 +9,7 @@ WorkingDirectory=%h/projects/pond
 Environment=POND_EDGE_QUEUE_DB=%h/projects/pond/data/submit-edge.sqlite
 Environment=POND_FORWARD_URL=https://jwpc12.example.net/internal-api/ingest
 Environment=POND_FORWARD_SHARED_SECRET=change-me
-ExecStart=/usr/bin/env python3 -m pond.submit_forwarder --once
+ExecStart=%h/projects/pond/ve311pond/bin/python -m pond.submit_forwarder --once
 
 [Install]
 WantedBy=default.target

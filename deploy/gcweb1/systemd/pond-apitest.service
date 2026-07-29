@@ -7,7 +7,7 @@ Wants=network-online.target
 Type=oneshot
 WorkingDirectory=%h/projects/pond
 ExecStartPre=/usr/bin/env bash -lc 'sleep "$((RANDOM % 541 + 60))"'
-ExecStart=%h/projects/heating/dev/ve311/bin/python %h/projects/pond/pond/apitest.py --url http://127.0.0.1:9000/api/pondupdate
+ExecStart=%h/projects/pond/ve311pond/bin/python %h/projects/pond/pond/apitest.py --url http://127.0.0.1:9000/api/pondupdate
 
 [Install]
 WantedBy=default.target

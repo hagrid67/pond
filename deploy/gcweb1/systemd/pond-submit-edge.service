@@ -9,7 +9,7 @@ WorkingDirectory=%h/projects/pond
 Environment=POND_EDGE_QUEUE_DB=%h/projects/pond/data/submit-edge.sqlite
 Environment=POND_FORWARD_URL=https://jwpc12.example.net/internal-api/ingest
 Environment=POND_FORWARD_SHARED_SECRET=change-me
-ExecStart=/usr/bin/env python3 -m uvicorn pond.submit_edge_api:app --host 127.0.0.1 --port 9000
+ExecStart=%h/projects/pond/ve311pond/bin/python -m uvicorn pond.submit_edge_api:app --host 127.0.0.1 --port 9000
 Restart=on-failure
 RestartSec=5
 
