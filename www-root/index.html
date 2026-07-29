@@ -269,7 +269,10 @@
 			}
 
 			if (!response.ok) {
-				const detail = responseData && responseData.detail ? responseData.detail : ("HTTP " + response.status);
+				let detail = responseData && responseData.detail ? responseData.detail : ("HTTP " + response.status);
+				if (response.status === 405) {
+					detail = "Method Not Allowed: auth API may not be deployed/restarted on this host yet.";
+				}
 				throw new Error(detail);
 			}
 
@@ -836,9 +839,11 @@
 			let html = "<div class='filters-shell" + (filtersCollapsed ? " filters-collapsed" : "") + "'>";
 			html += "<div class='filters-controls pond-update-controls-row'>";
 			html += "<button type='button' id='pondUpdateToggleBtn' class='pond-update-toggle' aria-expanded='true' onclick='toggle_pond_update_panel()'>Hide pond update panel</button>";
-			html += "<button type='button' id='pondAuthToggleBtn' class='pond-auth-toggle' aria-expanded='false' onclick='toggle_auth_panel()'>Login</button>";
 			html += "</div>";
 			html += "<div id='pondUpdatePanel' class='pond-update-panel' style='display:block'>";
+			html += "<div class='pond-auth-controls-row'>";
+			html += "<button type='button' id='pondAuthToggleBtn' class='pond-auth-toggle' aria-expanded='false' onclick='toggle_auth_panel()'>Login</button>";
+			html += "</div>";
 			html += "<div id='pondAuthPanel' class='pond-auth-panel' style='display:none'>";
 			html += "<h4 class='pond-auth-title'>Login or register</h4>";
 			html += "<div id='pondAuthSummary' class='pond-auth-summary'>Not logged in. Anonymous update submission still works.</div>";
@@ -1439,6 +1444,12 @@
 				color: #e7f1ff;
 				border-radius: 5px;
 				cursor: pointer;
+			}
+
+			.pond-auth-controls-row {
+				display: flex;
+				justify-content: center;
+				margin-bottom: 0.55rem;
 			}
 
 			.pond-update-controls-row {
