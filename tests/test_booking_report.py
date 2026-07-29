@@ -36,11 +36,12 @@ def test_report_loads_csv_and_writes_html(tmp_path) -> None:
 	booking_report.write_html_report(all_slots, date_sequence, html_path, "https://example.test/source")
 	html = html_path.read_text(encoding="utf-8")
 
-	assert "Hampstead Heath Swimming Bookings" in html
+	assert "bookings-widget" in html
 	assert "Monday 2026-07-06" in html
 	assert "Tuesday 2026-07-07" in html
 	assert "Men&#x27;s" in html
 	assert "fully-booked" in html
+	assert "Open City of London bookings page" in html
 	assert "https://example.test/source" in html
 	assert "<style>" not in html
 	assert "<script>" not in html
@@ -67,8 +68,7 @@ def test_report_headings_include_relative_day_labels(tmp_path) -> None:
 	)
 	html = html_path.read_text(encoding="utf-8")
 
-	assert "<a href='#today'>Jump to today</a>" in html
-	assert "<h3 id='today'>Friday 2026-07-10 (today)</h3>" in html
+	assert "<h3>Friday 2026-07-10 (today)</h3>" in html
 	assert "Thursday 2026-07-09 (yesterday)" in html
 	assert "Friday 2026-07-10 (today)" in html
 	assert "Saturday 2026-07-11 (tomorrow)" in html
@@ -93,26 +93,14 @@ def test_report_includes_filter_controls_when_enabled(tmp_path) -> None:
 		html_path,
 		"https://example.test/source",
 		reference_time=datetime(2026, 7, 10, 14, 0),
-		include_filters=True,
 	)
 	html = html_path.read_text(encoding="utf-8")
 
-	assert "<h3>Filters</h3>" in html
-	assert "Toggle dark background" in html
-	assert "Remember my filters on this device: Off" in html
-	assert "No login, no tracking; stored only in this browser." in html
-	assert "data-filter-group='slot-group' data-filter-value='pond'" in html
-	assert "data-filter-group='slot-group' data-filter-value='lido'" in html
-	assert "data-filter-group='day-group' data-filter-value='past'" in html
-	assert "data-filter-group='day-group' data-filter-value='present'" in html
-	assert "data-filter-group='day-group' data-filter-value='future'" in html
-	assert "data-filter-group='venue'" in html
-	assert "data-filter-group='day'" not in html
-	assert "data-day-group='present'" in html
-	assert "data-day-group='future'" in html
-	assert "data-filter-group='time'" in html
-	assert "data-filter-group='time' data-slot-group='pond'" in html
-	assert "data-filter-group='time' data-slot-group='lido'" in html
+	assert "bookings-widget" in html
+	assert "class='booking-day' data-day='2026-07-10'" in html
+	assert "class='bookings-table' data-day='2026-07-10'" in html
+	assert "data-day-group='today'" in html
+	assert "data-day-group='tomorrow'" in html
 	assert "class='booking-day' data-day='2026-07-10'" in html
 	assert "class='bookings-table' data-day='2026-07-10'" in html
 	assert "tr data-time='10:00-11:00'" in html

@@ -38,6 +38,7 @@ Thumbs.db
 output/
 user-updates/
 browser_session/
+membermojo/
 data/submissions.sqlite
 data/auth.sqlite
 data/*.csv
