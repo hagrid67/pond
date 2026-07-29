@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pond Account</title>
+  <style>
+    :root {
+      --bg: #f5f7fb;
+      --card: #ffffff;
+      --ink: #1e2430;
+      --muted: #60708a;
+      --accent: #006b6f;
+      --accent-2: #1c9a90;
+      --warn: #8c3f00;
+      --ok: #0b6d2f;
+      --error: #8f1d2c;
+      --line: #dde4ef;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+      background: linear-gradient(180deg, #eef4fb 0%, #f9fbfe 70%);
+      color: var(--ink);
+    }
+    main {
+      max-width: 900px;
+      margin: 24px auto;
+      padding: 0 16px 32px;
+    }
+    .hero {
+      margin-bottom: 16px;
+      padding: 20px;
+      border-radius: 16px;
+      background: radial-gradient(circle at top right, #d7f0f2, #f7fbff 55%);
+      border: 1px solid #d9ebed;
+    }
+    h1 { margin: 0 0 6px; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 12px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px;
+      box-shadow: 0 2px 12px rgba(16, 30, 54, 0.06);
+    }
+    h2 {
+      font-size: 1.05rem;
+      margin: 0 0 10px;
+    }
+    label {
+      display: block;
+      margin: 8px 0 4px;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+    input {
+      width: 100%;
+      border: 1px solid #c8d3e3;
+      border-radius: 8px;
+      padding: 10px;
+      font-size: 0.95rem;
+    }
+    button {
+      margin-top: 10px;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 12px;
+      background: var(--accent);
+      color: #fff;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button:hover { background: var(--accent-2); }
+    .status {
+      margin-top: 8px;
+      min-height: 20px;
+      font-size: 0.9rem;
+      color: var(--muted);
+      white-space: pre-wrap;
+    }
+    .status.ok { color: var(--ok); }
+    .status.warn { color: var(--warn); }
+    .status.error { color: var(--error); }
+    .small { font-size: 0.85rem; color: var(--muted); }
+    .top-links {
+      margin-top: 12px;
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    a { color: #084e96; }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="hero">
+      <h1>Pond Account Registration and Login</h1>
+      <div class="small">Anonymous pond updates still work as before. Account features are optional.</div>
+      <div class="top-links">
+        <a href="/">Back to pond updates</a>
+        <a href="/gdpr-policy.html">GDPR and Privacy Policy</a>
+      </div>
+    </section>
+
+    <section class="grid">
+      <article class="card">
+        <h2>Register with Email</h2>
+        <label for="regEmail">Email</label>
+        <input id="regEmail" type="email" autocomplete="email">
+        <label for="regEmailPassword">Password</label>
+        <input id="regEmailPassword" type="password" autocomplete="new-password">
+        <label for="regEmailNickname">Nickname (optional)</label>
+        <input id="regEmailNickname" type="text" autocomplete="nickname">
+        <button onclick="registerWithEmail()">Create account</button>
+        <div class="small">You must verify by opening the emailed link.</div>
+        <div id="regEmailStatus" class="status"></div>
+      </article>
+
+      <article class="card">
+        <h2>Register with Nickname</h2>
+        <label for="regNick">Nickname</label>
+        <input id="regNick" type="text" autocomplete="nickname">
+        <label for="regNickPassword">Password</label>
+        <input id="regNickPassword" type="password" autocomplete="new-password">
+        <button onclick="registerWithNickname()">Create nickname account</button>
+        <div class="small">You can add an email later for verification and member lookup.</div>
+        <div id="regNickStatus" class="status"></div>
+      </article>
+
+      <article class="card">
+        <h2>Login</h2>
+        <label for="loginUser">Username (email or nickname)</label>
+        <input id="loginUser" type="text" autocomplete="username">
+        <label for="loginPassword">Password</label>
+        <input id="loginPassword" type="password" autocomplete="current-password">
+        <button onclick="login()">Login</button>
+        <div id="loginStatus" class="status"></div>
+      </article>
+
+      <article class="card">
+        <h2>Add or Update Email</h2>
+        <label for="authToken">Auth token</label>
+        <input id="authToken" type="text" autocomplete="off">
+        <label for="newEmail">Email</label>
+        <input id="newEmail" type="email" autocomplete="email">
+        <button onclick="addEmail()">Send verification email</button>
+        <div id="addEmailStatus" class="status"></div>
+      </article>
+
+      <article class="card">
+        <h2>Profile Check</h2>
+        <label for="meToken">Auth token</label>
+        <input id="meToken" type="text" autocomplete="off">
+        <button onclick="loadProfile()">Load profile</button>
+        <div id="meStatus" class="status"></div>
+      </article>
+    </section>
+  </main>
+
+  <script>
+    function setStatus(id, message, cls) {
+      const el = document.getElementById(id);
+      el.className = "status" + (cls ? " " + cls : "");
+      el.textContent = message;
+    }
+
+    async function apiPost(path, body) {
+      const res = await fetch(path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const msg = payload.detail || payload.message || "Request failed";
+        throw new Error(msg);
+      }
+      return payload;
+    }
+
+    async function registerWithEmail() {
+      const email = document.getElementById("regEmail").value.trim();
+      const password = document.getElementById("regEmailPassword").value;
+      const nickname = document.getElementById("regEmailNickname").value.trim();
+      try {
+        const data = await apiPost("/api/auth/register-email", {
+          email,
+          password,
+          nickname: nickname || null
+        });
+        const memberBit = data.isMember ? "member match" : "not in member list";
+        setStatus("regEmailStatus", "Registered. Check email for verification link. " + memberBit, "ok");
+      } catch (err) {
+        setStatus("regEmailStatus", err.message, "error");
+      }
+    }
+
+    async function registerWithNickname() {
+      const nickname = document.getElementById("regNick").value.trim();
+      const password = document.getElementById("regNickPassword").value;
+      try {
+        await apiPost("/api/auth/register-nickname", { nickname, password });
+        setStatus("regNickStatus", "Nickname account created.", "ok");
+      } catch (err) {
+        setStatus("regNickStatus", err.message, "error");
+      }
+    }
+
+    async function login() {
+      const username = document.getElementById("loginUser").value.trim();
+      const password = document.getElementById("loginPassword").value;
+      try {
+        const data = await apiPost("/api/auth/login", { username, password });
+        localStorage.setItem("pondAuthToken", data.authToken);
+        document.getElementById("authToken").value = data.authToken;
+        document.getElementById("meToken").value = data.authToken;
+        const user = data.user || {};
+        setStatus(
+          "loginStatus",
+          "Logged in as " + (user.nickname || user.username) + ". Email verified: " + String(user.emailVerified) + ". Member: " + String(user.isMember),
+          "ok"
+        );
+      } catch (err) {
+        setStatus("loginStatus", err.message, "error");
+      }
+    }
+
+    async function addEmail() {
+      const authToken = document.getElementById("authToken").value.trim();
+      const email = document.getElementById("newEmail").value.trim();
+      try {
+        const data = await apiPost("/api/auth/add-email", { authToken, email });
+        setStatus("addEmailStatus", "Verification link sent. Member: " + String(data.isMember), "ok");
+      } catch (err) {
+        setStatus("addEmailStatus", err.message, "error");
+      }
+    }
+
+    async function loadProfile() {
+      const authToken = document.getElementById("meToken").value.trim();
+      if (!authToken) {
+        setStatus("meStatus", "Enter a token first", "warn");
+        return;
+      }
+      try {
+        const res = await fetch("/api/auth/me?authToken=" + encodeURIComponent(authToken));
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Request failed");
+        setStatus("meStatus", JSON.stringify(data.user, null, 2), "ok");
+      } catch (err) {
+        setStatus("meStatus", err.message, "error");
+      }
+    }
+
+    const saved = localStorage.getItem("pondAuthToken");
+    if (saved) {
+      document.getElementById("authToken").value = saved;
+      document.getElementById("meToken").value = saved;
+    }
+  </script>
+</body>
+</html>

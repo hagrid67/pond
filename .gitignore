@@ -39,6 +39,7 @@ output/
 user-updates/
 browser_session/
 data/submissions.sqlite
+data/auth.sqlite
 data/*.csv
 !data/.gitkeep
 keys/

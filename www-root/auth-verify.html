@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Email Verification</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+      background: #f4f7fb;
+      color: #1d2430;
+    }
+    main {
+      max-width: 720px;
+      margin: 32px auto;
+      background: #fff;
+      border: 1px solid #dbe3ef;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 2px 12px rgba(16, 30, 54, 0.06);
+    }
+    .ok { color: #0b6d2f; }
+    .error { color: #8f1d2c; }
+    a { color: #084e96; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Verify Email</h1>
+    <p id="status">Checking verification token...</p>
+    <p><a href="/auth.html">Return to account page</a></p>
+  </main>
+
+  <script>
+    async function verify() {
+      const statusEl = document.getElementById("status");
+      const token = new URLSearchParams(window.location.search).get("token");
+      if (!token) {
+        statusEl.className = "error";
+        statusEl.textContent = "Missing token in link.";
+        return;
+      }
+      try {
+        const res = await fetch("/api/auth/verify-email?token=" + encodeURIComponent(token));
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Verification failed");
+        statusEl.className = "ok";
+        statusEl.textContent = "Email verified. Member status: " + String(data.isMember);
+      } catch (err) {
+        statusEl.className = "error";
+        statusEl.textContent = err.message;
+      }
+    }
+
+    verify();
+  </script>
+</body>
+</html>
