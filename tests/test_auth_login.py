@@ -48,6 +48,7 @@ def test_register_nickname_and_login_issues_month_session(auth_env) -> None:
     assert isinstance(body["authToken"], str)
     assert len(body["authToken"]) >= 20
     assert body["user"]["showNicknameOnCharts"] is False
+    assert body["user"]["isTestUser"] is False
 
     expires_at = datetime.fromisoformat(str(body["expiresAt"]))
     now = datetime.now(timezone.utc)
@@ -137,6 +138,7 @@ def test_submit_endpoint_accepts_authenticated_and_anonymous(auth_env) -> None:
     assert auth_body["submittedBy"]["username"] == "submit-user"
     assert auth_body["submittedBy"]["nickname"] is None
     assert auth_body["submittedBy"]["showNicknameOnCharts"] is False
+    assert auth_body["submittedBy"]["isTestUser"] is False
 
     anon_submit = api.post_pond_update(
         {
@@ -158,6 +160,7 @@ def test_preference_update_is_persisted_and_reflected_in_me_and_submission(auth_
 
     me_before = _decode_json_response(api.auth_me(authToken=token))
     assert me_before["user"]["showNicknameOnCharts"] is False
+    assert me_before["user"]["isTestUser"] is False
 
     pref_response = api.auth_preferences(
         api.UpdatePreferencesRequest(authToken=token, showNicknameOnCharts=True)
@@ -169,6 +172,7 @@ def test_preference_update_is_persisted_and_reflected_in_me_and_submission(auth_
 
     me_after = _decode_json_response(api.auth_me(authToken=token))
     assert me_after["user"]["showNicknameOnCharts"] is True
+    assert me_after["user"]["isTestUser"] is False
 
     submit = api.post_pond_update(
         {
@@ -182,3 +186,28 @@ def test_preference_update_is_persisted_and_reflected_in_me_and_submission(auth_
     assert submit_body["authenticated"] is True
     assert submit_body["submittedBy"]["nickname"] == "chart-user"
     assert submit_body["submittedBy"]["showNicknameOnCharts"] is True
+    assert submit_body["submittedBy"]["isTestUser"] is False
+
+
+def test_register_test_user_sets_flag_and_submission_metadata(auth_env) -> None:
+    api.register_nickname(
+        api.RegisterNicknameRequest(
+            nickname="joe-test",
+            password="demo-pass-123",
+            isTestUser=True,
+        )
+    )
+
+    login_body = _decode_json_response(api.login(api.LoginRequest(username="joe-test", password="demo-pass-123")))
+    assert login_body["user"]["isTestUser"] is True
+
+    submit = api.post_pond_update(
+        {
+            "type": "pond-update",
+            "authToken": login_body["authToken"],
+            "queue": {"index": 2, "label": "5"},
+        }
+    )
+    submit_body = _decode_json_response(submit)
+    assert submit.status_code == 200
+    assert submit_body["submittedBy"]["isTestUser"] is True

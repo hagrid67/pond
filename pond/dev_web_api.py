@@ -44,6 +44,7 @@ class RegisterEmailRequest(BaseModel):
 class RegisterNicknameRequest(BaseModel):
     nickname: str
     password: str
+    isTestUser: bool = False
 
 
 class LoginRequest(BaseModel):
@@ -93,6 +94,7 @@ def init_auth_db() -> None:
                 email_verified INTEGER NOT NULL DEFAULT 0,
                 is_member INTEGER NOT NULL DEFAULT 0,
                 show_nickname_on_charts INTEGER NOT NULL DEFAULT 0,
+                is_test_user INTEGER NOT NULL DEFAULT 0,
                 member_checked_at TEXT,
                 password_salt TEXT NOT NULL,
                 password_hash TEXT NOT NULL,
@@ -136,6 +138,10 @@ def init_auth_db() -> None:
         if "show_nickname_on_charts" not in user_columns:
             conn.execute(
                 "ALTER TABLE users ADD COLUMN show_nickname_on_charts INTEGER NOT NULL DEFAULT 0"
+            )
+        if "is_test_user" not in user_columns:
+            conn.execute(
+                "ALTER TABLE users ADD COLUMN is_test_user INTEGER NOT NULL DEFAULT 0"
             )
 
 
@@ -325,12 +331,13 @@ def register_email(payload: RegisterEmailRequest) -> JSONResponse:
                 email_verified,
                 is_member,
                 show_nickname_on_charts,
+                is_test_user,
                 member_checked_at,
                 password_salt,
                 password_hash,
                 created_at,
                 updated_at
-            ) VALUES (?, ?, ?, 0, ?, 0, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, 0, ?, 0, 0, ?, ?, ?, ?, ?)
             """,
             (
                 username,
@@ -399,16 +406,18 @@ def register_nickname(payload: RegisterNicknameRequest) -> JSONResponse:
                 email_verified,
                 is_member,
                 show_nickname_on_charts,
+                is_test_user,
                 member_checked_at,
                 password_salt,
                 password_hash,
                 created_at,
                 updated_at
-            ) VALUES (?, ?, NULL, 0, 0, 0, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, NULL, 0, 0, 0, ?, ?, ?, ?, ?, ?)
             """,
             (
                 username,
                 nickname,
+                1 if payload.isTestUser else 0,
                 now_iso,
                 salt_hex,
                 digest_hex,
@@ -453,6 +462,7 @@ def login(payload: LoginRequest) -> JSONResponse:
                 "emailVerified": bool(user["email_verified"]),
                 "isMember": bool(user["is_member"]),
                 "showNicknameOnCharts": bool(user["show_nickname_on_charts"]),
+                "isTestUser": bool(user["is_test_user"]),
             },
         }
     )
@@ -580,6 +590,7 @@ def auth_me(authToken: str = Query(..., min_length=20)) -> JSONResponse:
                     "emailVerified": bool(user["email_verified"]),
                     "isMember": bool(user["is_member"]),
                     "showNicknameOnCharts": bool(user["show_nickname_on_charts"]),
+                    "isTestUser": bool(user["is_test_user"]),
                     "memberCheckedAt": user["member_checked_at"],
                 },
             }
@@ -619,6 +630,7 @@ def auth_preferences(payload: UpdatePreferencesRequest) -> JSONResponse:
                 "emailVerified": bool(refreshed["email_verified"]),
                 "isMember": bool(refreshed["is_member"]),
                 "showNicknameOnCharts": bool(refreshed["show_nickname_on_charts"]),
+                "isTestUser": bool(refreshed["is_test_user"]),
             },
         }
     )
@@ -643,6 +655,7 @@ def post_pond_update(payload: dict[str, Any]) -> JSONResponse:
                     "username": user["username"],
                     "nickname": user["nickname"] if show_nickname else None,
                     "showNicknameOnCharts": show_nickname,
+                    "isTestUser": bool(user["is_test_user"]),
                     "emailVerified": bool(user["email_verified"]),
                     "isMember": bool(user["is_member"]),
                 }

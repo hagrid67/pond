@@ -126,6 +126,48 @@ def chart_nickname(record: dict[str, object]) -> str | None:
     return nickname or None
 
 
+def is_test_payload(payload: dict[str, object]) -> bool:
+    source = payload.get("source")
+    if isinstance(source, str) and source in {"apitest.py", "api-test.py"}:
+        return True
+
+    test_meta = payload.get("testMeta")
+    if isinstance(test_meta, dict) and bool(test_meta.get("isTestSubmission")):
+        return True
+
+    note = payload.get("note")
+    if isinstance(note, str):
+        note_lower = note.lower()
+        if "apitest sample" in note_lower or "api-test sample" in note_lower:
+            return True
+
+    return False
+
+
+def is_test_anonymous_record(record: dict[str, object]) -> bool:
+    submitted_by = record.get("submittedBy")
+    if isinstance(submitted_by, dict):
+        return False
+    payload = record.get("payload")
+    return isinstance(payload, dict) and is_test_payload(payload)
+
+
+def point_label_for_record(record: dict[str, object]) -> str | None:
+    submitted_by = record.get("submittedBy")
+    if isinstance(submitted_by, dict):
+        if bool(submitted_by.get("isTestUser")):
+            nickname = submitted_by.get("nickname")
+            if isinstance(nickname, str) and nickname.strip():
+                return f"{nickname.strip()} (test)"
+            return "test-user"
+        return chart_nickname(record)
+
+    if is_test_anonymous_record(record):
+        return "anon-test"
+
+    return None
+
+
 def slots_value(payload: dict[str, object]) -> float | None:
     raw = payload.get("slotsEnforced")
     if raw == "yes":
@@ -240,17 +282,7 @@ def plot_metric(
 
 
 def is_apitest_payload(payload: dict[str, object]) -> bool:
-    source = payload.get("source")
-    if isinstance(source, str) and source in {"apitest.py", "api-test.py"}:
-        return True
-
-    note = payload.get("note")
-    if isinstance(note, str):
-        note_lower = note.lower()
-        if "apitest sample" in note_lower or "api-test sample" in note_lower:
-            return True
-
-    return False
+    return is_test_payload(payload)
 
 
 def build_chart(
@@ -275,26 +307,26 @@ def build_chart(
         payload = record["payload"]
         if not isinstance(ts, datetime) or not isinstance(payload, dict):
             continue
-        nickname = chart_nickname(record)
+        label = point_label_for_record(record)
 
         v_slots = slots_value(payload)
         if v_slots is not None:
             slots_points.append((ts, v_slots))
-            slots_point_labels.append(nickname)
+            slots_point_labels.append(label)
         else:
             slots_unknown_times.append(ts)
 
         v_queue = slider_count_value(payload, "queue")
         if v_queue is not None:
             queue_points.append((ts, v_queue))
-            queue_point_labels.append(nickname)
+            queue_point_labels.append(label)
         else:
             queue_unknown_times.append(ts)
 
         v_grass = slider_count_value(payload, "grass")
         if v_grass is not None:
             grass_points.append((ts, v_grass))
-            grass_point_labels.append(nickname)
+            grass_point_labels.append(label)
         else:
             grass_unknown_times.append(ts)
 
