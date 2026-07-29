@@ -8,6 +8,9 @@ UNIT_DST_DIR="${HOME}/.config/systemd/user"
 UNITS=(
   pond-dev-sync.service
   pond-dev-sync.timer
+  pond-dev-web-api.service
+  pond-user-chart.service
+  pond-user-chart.timer
 )
 
 echo "[jwpc19] Installing pond user units"
@@ -25,19 +28,25 @@ done
 echo "Reloading user systemd"
 systemctl --user daemon-reload
 
-echo "Enabling and starting timer"
-systemctl --user enable --now pond-dev-sync.timer
+echo "Enabling and starting timers"
+systemctl --user enable --now pond-dev-sync.timer pond-user-chart.timer
+
+echo "Enabling and restarting dev web API service"
+systemctl --user enable pond-dev-web-api.service
+systemctl --user restart pond-dev-web-api.service
 
 echo "Verifying timer"
-systemctl --user list-timers --all | grep -E 'pond-dev-sync\.timer' || {
-  echo "Error: expected pond-dev-sync timer not found" >&2
+systemctl --user list-timers --all | grep -E 'pond-dev-sync\.timer|pond-user-chart\.timer' || {
+  echo "Error: expected jwpc19 timers not found" >&2
   exit 1
 }
 
-systemctl --user status pond-dev-sync.timer pond-dev-sync.service --no-pager
+systemctl --user status pond-dev-sync.timer pond-dev-sync.service pond-user-chart.timer pond-user-chart.service pond-dev-web-api.service --no-pager
 
 echo "Recent service logs"
 journalctl --user -u pond-dev-sync.service -n 30 --no-pager || true
+journalctl --user -u pond-user-chart.service -n 20 --no-pager || true
+journalctl --user -u pond-dev-web-api.service -n 20 --no-pager || true
 
 echo
 echo "Migration note: if old pond-rsync-data user units are installed, remove them with:"

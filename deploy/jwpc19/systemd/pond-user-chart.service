@@ -1,0 +1,12 @@
+[Unit]
+Description=Regenerate pond user updates chart on jwpc19
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/projects/pond
+ExecStart=%h/projects/pond/ve312pond/bin/python %h/projects/pond/pond/user-chart.py
+
+[Install]
+WantedBy=default.target

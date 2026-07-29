@@ -117,6 +117,9 @@ What each script does:
 - deploy/gcweb1/systemd/pond-pondupdate-api.service
 - deploy/jwpc19/systemd/pond-dev-sync.service
 - deploy/jwpc19/systemd/pond-dev-sync.timer
+- deploy/jwpc19/systemd/pond-dev-web-api.service
+- deploy/jwpc19/systemd/pond-user-chart.service
+- deploy/jwpc19/systemd/pond-user-chart.timer
 
 Deprecated (kept in repo for migration reference):
 - deploy/jwpc19/systemd/pond-rsync-data.service
@@ -160,7 +163,9 @@ Deprecated (kept in repo for migration reference):
    - ~/projects/pond/deploy/jwpc19/install-user-units.sh
 3. Optional manual verification:
   - systemctl --user list-timers | grep pond-dev-sync
-  - systemctl --user status pond-dev-sync.timer pond-dev-sync.service
+  - systemctl --user status pond-dev-sync.timer pond-dev-sync.service pond-dev-web-api.service pond-user-chart.timer pond-user-chart.service
+4. Simple local management command (no ssh):
+  - ~/projects/pond/deploy/jwpc19/manage-pond-services.sh [start|stop|restart|status]
 
 ## Script Entrypoints
 - scrape + publish: scripts/run_scrape_xnl.sh --scrape --headless --filters --rsync
