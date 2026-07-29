@@ -4,7 +4,7 @@ set -euo pipefail
 ACTION="${1:-status}"
 
 SERVICES=(
-  pond-dev-web-api.service
+  pond-web-api.service
   pond-dev-sync.service
   pond-user-chart.service
 )
@@ -15,6 +15,12 @@ TIMERS=(
 )
 
 ALL_UNITS=("${SERVICES[@]}" "${TIMERS[@]}")
+
+print_status() {
+  for unit in "${ALL_UNITS[@]}"; do
+    systemctl --user status "$unit" --no-pager || true
+  done
+}
 
 usage() {
   cat <<'EOF'
@@ -28,7 +34,7 @@ case "${ACTION}" in
   start)
     systemctl --user daemon-reload
     systemctl --user enable --now "${TIMERS[@]}"
-    systemctl --user enable --now pond-dev-web-api.service
+    systemctl --user enable --now pond-web-api.service
     ;;
   stop)
     systemctl --user stop "${TIMERS[@]}" || true
@@ -36,7 +42,7 @@ case "${ACTION}" in
     ;;
   restart)
     systemctl --user daemon-reload
-    systemctl --user restart pond-dev-web-api.service
+    systemctl --user restart pond-web-api.service
     systemctl --user restart "${TIMERS[@]}"
     ;;
   status)
@@ -52,4 +58,5 @@ case "${ACTION}" in
     ;;
 esac
 
-systemctl --user status "${ALL_UNITS[@]}" --no-pager
+print_status
+exit 0

@@ -56,6 +56,11 @@ class AddEmailRequest(BaseModel):
     email: str
 
 
+class UpdatePreferencesRequest(BaseModel):
+    authToken: str
+    showNicknameOnCharts: bool
+
+
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -87,6 +92,7 @@ def init_auth_db() -> None:
                 email TEXT,
                 email_verified INTEGER NOT NULL DEFAULT 0,
                 is_member INTEGER NOT NULL DEFAULT 0,
+                show_nickname_on_charts INTEGER NOT NULL DEFAULT 0,
                 member_checked_at TEXT,
                 password_salt TEXT NOT NULL,
                 password_hash TEXT NOT NULL,
@@ -122,6 +128,15 @@ def init_auth_db() -> None:
             );
             """
         )
+
+        user_columns = {
+            str(row["name"])
+            for row in conn.execute("PRAGMA table_info(users)").fetchall()
+        }
+        if "show_nickname_on_charts" not in user_columns:
+            conn.execute(
+                "ALTER TABLE users ADD COLUMN show_nickname_on_charts INTEGER NOT NULL DEFAULT 0"
+            )
 
 
 def normalize_email(value: str) -> str:
@@ -309,12 +324,13 @@ def register_email(payload: RegisterEmailRequest) -> JSONResponse:
                 email,
                 email_verified,
                 is_member,
+                show_nickname_on_charts,
                 member_checked_at,
                 password_salt,
                 password_hash,
                 created_at,
                 updated_at
-            ) VALUES (?, ?, ?, 0, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, 0, ?, 0, ?, ?, ?, ?, ?)
             """,
             (
                 username,
@@ -382,12 +398,13 @@ def register_nickname(payload: RegisterNicknameRequest) -> JSONResponse:
                 email,
                 email_verified,
                 is_member,
+                show_nickname_on_charts,
                 member_checked_at,
                 password_salt,
                 password_hash,
                 created_at,
                 updated_at
-            ) VALUES (?, ?, NULL, 0, 0, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, NULL, 0, 0, 0, ?, ?, ?, ?, ?)
             """,
             (
                 username,
@@ -435,6 +452,7 @@ def login(payload: LoginRequest) -> JSONResponse:
                 "email": user["email"],
                 "emailVerified": bool(user["email_verified"]),
                 "isMember": bool(user["is_member"]),
+                "showNicknameOnCharts": bool(user["show_nickname_on_charts"]),
             },
         }
     )
@@ -561,10 +579,49 @@ def auth_me(authToken: str = Query(..., min_length=20)) -> JSONResponse:
                     "email": user["email"],
                     "emailVerified": bool(user["email_verified"]),
                     "isMember": bool(user["is_member"]),
+                    "showNicknameOnCharts": bool(user["show_nickname_on_charts"]),
                     "memberCheckedAt": user["member_checked_at"],
                 },
             }
         )
+
+
+@app.post("/api/auth/preferences")
+def auth_preferences(payload: UpdatePreferencesRequest) -> JSONResponse:
+    with get_db() as conn:
+        user = get_user_by_token(conn, payload.authToken)
+        now_iso = utc_now_iso()
+        conn.execute(
+            """
+            UPDATE users
+            SET show_nickname_on_charts = ?,
+                updated_at = ?
+            WHERE id = ?
+            """,
+            (1 if payload.showNicknameOnCharts else 0, now_iso, user["id"]),
+        )
+
+        refreshed = conn.execute(
+            "SELECT * FROM users WHERE id = ?",
+            (user["id"],),
+        ).fetchone()
+
+    if refreshed is None:
+        raise HTTPException(status_code=500, detail="Could not load updated user")
+
+    return JSONResponse(
+        {
+            "ok": True,
+            "user": {
+                "username": refreshed["username"],
+                "nickname": refreshed["nickname"],
+                "email": refreshed["email"],
+                "emailVerified": bool(refreshed["email_verified"]),
+                "isMember": bool(refreshed["is_member"]),
+                "showNicknameOnCharts": bool(refreshed["show_nickname_on_charts"]),
+            },
+        }
+    )
 
 
 @app.post("/api/pondupdate")
@@ -580,10 +637,12 @@ def post_pond_update(payload: dict[str, Any]) -> JSONResponse:
         with get_db() as conn:
             try:
                 user = get_user_by_token(conn, auth_token_value.strip())
+                show_nickname = bool(user["show_nickname_on_charts"])
                 authenticated_user = {
                     "userId": int(user["id"]),
                     "username": user["username"],
-                    "nickname": user["nickname"],
+                    "nickname": user["nickname"] if show_nickname else None,
+                    "showNicknameOnCharts": show_nickname,
                     "emailVerified": bool(user["email_verified"]),
                     "isMember": bool(user["is_member"]),
                 }

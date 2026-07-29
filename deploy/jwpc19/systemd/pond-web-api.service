@@ -1,5 +1,5 @@
 [Unit]
-Description=Pond dev web/API service on jwpc19
+Description=Pond web/API service on jwpc19
 After=network-online.target
 Wants=network-online.target
 

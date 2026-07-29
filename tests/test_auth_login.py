@@ -47,6 +47,7 @@ def test_register_nickname_and_login_issues_month_session(auth_env) -> None:
     assert body["ok"] is True
     assert isinstance(body["authToken"], str)
     assert len(body["authToken"]) >= 20
+    assert body["user"]["showNicknameOnCharts"] is False
 
     expires_at = datetime.fromisoformat(str(body["expiresAt"]))
     now = datetime.now(timezone.utc)
@@ -134,6 +135,8 @@ def test_submit_endpoint_accepts_authenticated_and_anonymous(auth_env) -> None:
     assert auth_submit.status_code == 200
     assert auth_body["authenticated"] is True
     assert auth_body["submittedBy"]["username"] == "submit-user"
+    assert auth_body["submittedBy"]["nickname"] is None
+    assert auth_body["submittedBy"]["showNicknameOnCharts"] is False
 
     anon_submit = api.post_pond_update(
         {
@@ -145,3 +148,37 @@ def test_submit_endpoint_accepts_authenticated_and_anonymous(auth_env) -> None:
     assert anon_submit.status_code == 200
     assert anon_body["authenticated"] is False
     assert anon_body["submittedBy"] is None
+
+
+def test_preference_update_is_persisted_and_reflected_in_me_and_submission(auth_env) -> None:
+    api.register_nickname(api.RegisterNicknameRequest(nickname="chart-user", password="demo-pass-123"))
+    login_body = _decode_json_response(api.login(api.LoginRequest(username="chart-user", password="demo-pass-123")))
+
+    token = str(login_body["authToken"])
+
+    me_before = _decode_json_response(api.auth_me(authToken=token))
+    assert me_before["user"]["showNicknameOnCharts"] is False
+
+    pref_response = api.auth_preferences(
+        api.UpdatePreferencesRequest(authToken=token, showNicknameOnCharts=True)
+    )
+    pref_body = _decode_json_response(pref_response)
+    assert pref_response.status_code == 200
+    assert pref_body["ok"] is True
+    assert pref_body["user"]["showNicknameOnCharts"] is True
+
+    me_after = _decode_json_response(api.auth_me(authToken=token))
+    assert me_after["user"]["showNicknameOnCharts"] is True
+
+    submit = api.post_pond_update(
+        {
+            "type": "pond-update",
+            "authToken": token,
+            "queue": {"index": 3, "label": "10"},
+        }
+    )
+    submit_body = _decode_json_response(submit)
+    assert submit.status_code == 200
+    assert submit_body["authenticated"] is True
+    assert submit_body["submittedBy"]["nickname"] == "chart-user"
+    assert submit_body["submittedBy"]["showNicknameOnCharts"] is True

@@ -5,7 +5,7 @@ Development host notes for Ubuntu 24.04 on WSL2 (Windows 11).
 This folder is intended for developer-side helpers and host-specific setup notes.
 
 ## User Unit Scripts
-- install-user-units.sh: installs and enables pond-dev-sync, pond-dev-web-api, and pond-user-chart user units
+- install-user-units.sh: installs and enables pond-dev-sync, pond-web-api, and pond-user-chart user units
 - remove-old-units.sh: disables/removes deprecated pond-rsync-data user units during migration
 - manage-pond-services.sh: start/stop/restart/status for all jwpc19 pond user units
 

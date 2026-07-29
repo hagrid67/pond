@@ -4,11 +4,13 @@ from __future__ import annotations
 import argparse
 import json
 import math
+from typing import Any, cast
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import matplotlib
+from matplotlib.axes import Axes
 
 matplotlib.use("Agg")
 import matplotlib.dates as mdates
@@ -103,9 +105,25 @@ def load_records(input_dir: Path, since_utc: datetime) -> list[dict[str, object]
             payload = row.get("payload")
             if not isinstance(payload, dict):
                 continue
-            records.append({"timestamp": ts, "payload": payload})
-    records.sort(key=lambda r: r["timestamp"])
+            submitted_by = row.get("submittedBy")
+            if not isinstance(submitted_by, dict):
+                submitted_by = None
+            records.append({"timestamp": ts, "payload": payload, "submittedBy": submitted_by})
+    records.sort(key=lambda r: cast(datetime, r["timestamp"]))
     return records
+
+
+def chart_nickname(record: dict[str, object]) -> str | None:
+    submitted_by = record.get("submittedBy")
+    if not isinstance(submitted_by, dict):
+        return None
+    if not bool(submitted_by.get("showNicknameOnCharts")):
+        return None
+    nickname = submitted_by.get("nickname")
+    if not isinstance(nickname, str):
+        return None
+    nickname = nickname.strip()
+    return nickname or None
 
 
 def slots_value(payload: dict[str, object]) -> float | None:
@@ -153,7 +171,7 @@ def ewma_time_series(
 
 
 def plot_metric(
-    ax: plt.Axes,
+    ax: Axes,
     points: list[tuple[datetime, float]],
     ewma_points: list[tuple[datetime, float]],
     unknown_times: list[datetime],
@@ -162,21 +180,42 @@ def plot_metric(
     y_label: str,
     color: str,
     point_colors: list[str] | None = None,
+    point_labels: list[str | None] | None = None,
 ) -> None:
     if points:
+        xs = [p[0] for p in points]
+        ys = [p[1] for p in points]
         ax.scatter(
-            [p[0] for p in points],
-            [p[1] for p in points],
+            cast(Any, xs),
+            cast(Any, ys),
             s=28,
             alpha=0.75,
             color=point_colors if point_colors else color,
             label="submissions",
             zorder=3,
         )
+        if point_labels:
+            for idx, label in enumerate(point_labels):
+                if not label:
+                    continue
+                if idx >= len(xs):
+                    break
+                ax.annotate(
+                    label,
+                    cast(Any, (xs[idx], ys[idx])),
+                    textcoords="offset points",
+                    xytext=(4, 4),
+                    ha="left",
+                    va="bottom",
+                    fontsize=7,
+                    color="#d9ecff",
+                    bbox=dict(boxstyle="round,pad=0.15", fc="#1f2b3f", ec="none", alpha=0.7),
+                    zorder=6,
+                )
     if unknown_times:
         ax.scatter(
-            unknown_times,
-            [unknown_y] * len(unknown_times),
+            cast(Any, unknown_times),
+            cast(Any, [unknown_y] * len(unknown_times)),
             s=52,
             alpha=0.5,
             marker="X",
@@ -188,8 +227,8 @@ def plot_metric(
         )
     if ewma_points:
         ax.plot(
-            [p[0] for p in ewma_points],
-            [p[1] for p in ewma_points],
+            cast(Any, [p[0] for p in ewma_points]),
+            cast(Any, [p[1] for p in ewma_points]),
             linewidth=2.0,
             color=color,
             alpha=0.5,
@@ -227,28 +266,35 @@ def build_chart(
     slots_unknown_times: list[datetime] = []
     queue_unknown_times: list[datetime] = []
     grass_unknown_times: list[datetime] = []
+    slots_point_labels: list[str | None] = []
+    queue_point_labels: list[str | None] = []
+    grass_point_labels: list[str | None] = []
 
     for record in records:
         ts = record["timestamp"]
         payload = record["payload"]
         if not isinstance(ts, datetime) or not isinstance(payload, dict):
             continue
+        nickname = chart_nickname(record)
 
         v_slots = slots_value(payload)
         if v_slots is not None:
             slots_points.append((ts, v_slots))
+            slots_point_labels.append(nickname)
         else:
             slots_unknown_times.append(ts)
 
         v_queue = slider_count_value(payload, "queue")
         if v_queue is not None:
             queue_points.append((ts, v_queue))
+            queue_point_labels.append(nickname)
         else:
             queue_unknown_times.append(ts)
 
         v_grass = slider_count_value(payload, "grass")
         if v_grass is not None:
             grass_points.append((ts, v_grass))
+            grass_point_labels.append(nickname)
         else:
             grass_unknown_times.append(ts)
 
@@ -275,6 +321,7 @@ def build_chart(
         y_label="No/Yes",
         color="#2b8a3e",
         point_colors=slots_point_colors,
+        point_labels=slots_point_labels,
     )
     axes[0].set_yticks([0.0, 1.0], labels=["No", "Yes"])
     axes[0].set_ylim(-0.2, 1.2)
@@ -288,6 +335,7 @@ def build_chart(
         title="Queue length",
         y_label="People",
         color="#1c7ed6",
+        point_labels=queue_point_labels,
     )
     axes[1].set_ylim(-2, 75)
 
@@ -300,6 +348,7 @@ def build_chart(
         title="People on grass",
         y_label="People",
         color="#e67700",
+        point_labels=grass_point_labels,
     )
     axes[2].set_ylim(-2, 75)
 
@@ -341,7 +390,8 @@ def main() -> int:
     filtered_records = [
         record
         for record in records
-        if isinstance(record.get("payload"), dict) and not is_apitest_payload(record["payload"])
+        if isinstance(record.get("payload"), dict)
+        and not is_apitest_payload(cast(dict[str, object], record["payload"]))
     ]
 
     live_slots, live_queue, live_grass = build_chart(
