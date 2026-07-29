@@ -21,8 +21,9 @@ echo "$(date) rsync external data from ${SOURCE_HOST} to $(hostname)"
 rsync -av "${SOURCE_HOST}:projects/pond/data/" "${REPO_ROOT}/data/"
 rsync -av "${SOURCE_HOST}:projects/pond/metoffice-data/" "${REPO_ROOT}/metoffice-data/"
 
-echo "$(date) rsync user updates from ${PROD_HOST} to $(hostname)"
-rsync -av "${PROD_HOST}:projects/pond/user-updates/" "${REPO_ROOT}/user-updates/"
+# Sync of user updates from production host disabled.
+# echo "$(date) rsync user updates from ${PROD_HOST} to $(hostname)"
+#rsync -av "${PROD_HOST}:projects/pond/user-updates/" "${REPO_ROOT}/user-updates/"
 
 if [[ ! -x "${RUNNER_SCRIPT}" ]]; then
   echo "Error: script not executable: ${RUNNER_SCRIPT}" >&2
