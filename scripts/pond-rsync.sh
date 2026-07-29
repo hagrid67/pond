@@ -23,11 +23,17 @@ GENERATED_PATTERNS=(
 
 GENERATED_FILES=()
 for pattern in "${GENERATED_PATTERNS[@]}"; do
-	for file in "${SRC_DIR}/${pattern}"; do
+	MATCH_COUNT=0
+	for file in ${SRC_DIR}/${pattern}; do
 		if [[ -f "${file}" ]]; then
 			GENERATED_FILES+=("${file}")
+			((MATCH_COUNT+=1))
 		fi
 	done
+	echo "Pattern ${pattern}: matched ${MATCH_COUNT} file(s)"
+	if [[ ${MATCH_COUNT} -eq 0 ]]; then
+		echo "Warning: no files matched ${SRC_DIR}/${pattern}" >&2
+	fi
 done
 
 if [[ ${#GENERATED_FILES[@]} -eq 0 ]]; then
