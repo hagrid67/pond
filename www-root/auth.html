@@ -164,6 +164,65 @@
   </main>
 
   <script>
+    const POND_AUTH_SESSION_STORAGE_KEY = "pondAuthSession";
+    const LEGACY_AUTH_TOKEN_STORAGE_KEY = "pondAuthToken";
+
+    function readStorage(key) {
+      try {
+        return window.localStorage.getItem(key);
+      } catch (_err) {
+        return null;
+      }
+    }
+
+    function writeStorage(key, value) {
+      try {
+        window.localStorage.setItem(key, value);
+      } catch (_err) {
+        // Ignore storage errors and keep UI functional.
+      }
+    }
+
+    function getAuthSession() {
+      const raw = readStorage(POND_AUTH_SESSION_STORAGE_KEY);
+      if (!raw) {
+        return null;
+      }
+
+      try {
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed.authToken !== "string" || typeof parsed.expiresAt !== "string") {
+          return null;
+        }
+
+        const expiresAtMs = Date.parse(parsed.expiresAt);
+        if (!Number.isFinite(expiresAtMs) || expiresAtMs <= Date.now()) {
+          return null;
+        }
+        return parsed;
+      } catch (_err) {
+        return null;
+      }
+    }
+
+    function setAuthSession(sessionPayload) {
+      if (!sessionPayload || !sessionPayload.authToken || !sessionPayload.expiresAt) {
+        return;
+      }
+      writeStorage(POND_AUTH_SESSION_STORAGE_KEY, JSON.stringify(sessionPayload));
+      // Keep legacy key for compatibility with any old page variants.
+      writeStorage(LEGACY_AUTH_TOKEN_STORAGE_KEY, sessionPayload.authToken);
+    }
+
+    function getAuthTokenForForms() {
+      const session = getAuthSession();
+      if (session && typeof session.authToken === "string" && session.authToken) {
+        return session.authToken;
+      }
+      const legacy = readStorage(LEGACY_AUTH_TOKEN_STORAGE_KEY);
+      return legacy || "";
+    }
+
     function setStatus(id, message, cls) {
       const el = document.getElementById(id);
       el.className = "status" + (cls ? " " + cls : "");
@@ -217,7 +276,11 @@
       const password = document.getElementById("loginPassword").value;
       try {
         const data = await apiPost("/api/auth/login", { username, password });
-        localStorage.setItem("pondAuthToken", data.authToken);
+        setAuthSession({
+          authToken: data.authToken,
+          expiresAt: data.expiresAt,
+          user: data.user || null
+        });
         document.getElementById("authToken").value = data.authToken;
         document.getElementById("meToken").value = data.authToken;
         const user = data.user || {};
@@ -258,7 +321,7 @@
       }
     }
 
-    const saved = localStorage.getItem("pondAuthToken");
+    const saved = getAuthTokenForForms();
     if (saved) {
       document.getElementById("authToken").value = saved;
       document.getElementById("meToken").value = saved;
