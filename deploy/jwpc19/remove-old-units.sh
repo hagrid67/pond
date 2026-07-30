@@ -12,9 +12,9 @@ echo "[jwpc19] Removing deprecated pond-rsync-data user units"
 
 for unit in "${OLD_UNITS[@]}"; do
   # Stop/reset in-memory units even when the unit file is already missing.
-  systemctl --user stop "${unit}" || true
-  systemctl --user disable "${unit}" || true
-  systemctl --user reset-failed "${unit}" || true
+  systemctl --user stop "${unit}" 2>/dev/null || true
+  systemctl --user disable "${unit}" 2>/dev/null || true
+  systemctl --user reset-failed "${unit}" 2>/dev/null || true
 
   if [[ -f "${UNIT_DST_DIR}/${unit}" ]]; then
     rm -f "${UNIT_DST_DIR}/${unit}"
