@@ -163,7 +163,7 @@ def point_label_for_record(record: dict[str, object]) -> str | None:
         return chart_nickname(record)
 
     if is_test_anonymous_record(record):
-        return "anon-test"
+        return None
 
     return None
 
