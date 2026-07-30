@@ -240,6 +240,7 @@
 		{
 			const summaryEl = document.getElementById("pondAuthSummary");
 			const addEmailRow = document.getElementById("pondAuthAddEmailRow");
+			const verifiedBadge = document.getElementById("pondAuthVerifiedBadge");
 			const chartPrefRow = document.getElementById("pondAuthChartPrefRow");
 			const chartPrefCheckbox = document.getElementById("pondAuthShowNickname");
 			const loginBtn = document.getElementById("pondAuthLoginBtn");
@@ -249,13 +250,14 @@
 			const passwordInput = document.getElementById("pondAuthPassword");
 			const session = get_auth_session();
 
-			if (!summaryEl || !addEmailRow || !chartPrefRow || !chartPrefCheckbox || !loginBtn || !registerBtn || !logoutBtn || !identityInput || !passwordInput) {
+			if (!summaryEl || !addEmailRow || !verifiedBadge || !chartPrefRow || !chartPrefCheckbox || !loginBtn || !registerBtn || !logoutBtn || !identityInput || !passwordInput) {
 				return;
 			}
 
 			if (!session) {
 				summaryEl.textContent = "Not logged in. Anonymous update submission still works.";
 				addEmailRow.style.display = "none";
+				verifiedBadge.style.display = "none";
 				chartPrefRow.style.display = "none";
 				chartPrefCheckbox.checked = false;
 				loginBtn.disabled = false;
@@ -272,8 +274,10 @@
 				: "member";
 			const memberState = session.user && session.user.isMember ? "member match" : "no member match";
 			const showOnChart = !!(session.user && session.user.showNicknameOnCharts);
+			const emailVerified = !!(session.user && session.user.emailVerified);
 			summaryEl.textContent = "Logged in as " + displayName + ". Session valid until " + session.expiresAt + ". " + memberState + ". Chart nickname: " + (showOnChart ? "on" : "off") + ".";
-			addEmailRow.style.display = "block";
+			addEmailRow.style.display = emailVerified ? "none" : "flex";
+			verifiedBadge.style.display = emailVerified ? "inline-block" : "none";
 			chartPrefRow.style.display = "block";
 			chartPrefCheckbox.checked = showOnChart;
 			loginBtn.disabled = true;
@@ -916,6 +920,7 @@
 			html += "<input id='pondAuthEmail' class='pond-auth-input' type='email' placeholder='add/verify email'>";
 			html += "<button type='button' class='pond-auth-btn' onclick='auth_add_email()'>Send verification link</button>";
 			html += "</div>";
+			html += "<div id='pondAuthVerifiedBadge' class='pond-auth-status pond-auth-status-ok' style='display:none'>&#10003; email verified</div>";
 			html += "<div id='pondAuthChartPrefRow' class='pond-auth-chart-pref' style='display:none'>";
 			html += "<label class='pond-auth-checkbox'><input type='checkbox' id='pondAuthShowNickname'> show my nickname on charts!</label>";
 			html += "</div>";
