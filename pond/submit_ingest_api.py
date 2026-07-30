@@ -15,7 +15,8 @@ from pydantic import BaseModel, Field
 
 LOGGER = logging.getLogger("pond.submit_ingest_api")
 
-DEFAULT_DB_PATH = Path(__file__).resolve().parents[1] / "data" / "submissions.sqlite"
+DEFAULT_DB_PATH = Path(__file__).resolve().parents[1] / "user-data" / "submissions.sqlite"
+LEGACY_DB_PATH = Path(__file__).resolve().parents[1] / "data" / "submissions.sqlite"
 DB_PATH = Path(os.environ.get("POND_SUBMISSION_DB", str(DEFAULT_DB_PATH))).expanduser()
 SHARED_SECRET = os.environ.get("POND_INGEST_SHARED_SECRET", "")
 
@@ -45,8 +46,13 @@ def payload_to_json(payload: IngestPayload) -> str:
 
 
 def get_connection() -> sqlite3.Connection:
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
+    db_path = DB_PATH
+    if db_path == DEFAULT_DB_PATH and not db_path.exists() and LEGACY_DB_PATH.exists():
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+        LEGACY_DB_PATH.replace(db_path)
+
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     return conn
 

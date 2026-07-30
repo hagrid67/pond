@@ -6,7 +6,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=/home/jeremy/projects/pond
-Environment=POND_SUBMISSION_DB=/home/jeremy/projects/pond/data/submissions.sqlite
+Environment=POND_SUBMISSION_DB=/home/jeremy/projects/pond/user-data/submissions.sqlite
 Environment=POND_INGEST_SHARED_SECRET=change-me
 ExecStart=%h/projects/pond/ve312pond/bin/python -m uvicorn pond.submit_ingest_api:app --host 127.0.0.1 --port 9100
 Restart=on-failure

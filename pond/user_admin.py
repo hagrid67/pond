@@ -7,7 +7,8 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_AUTH_DB_PATH = REPO_ROOT / "data" / "auth.sqlite"
+DEFAULT_AUTH_DB_PATH = REPO_ROOT / "user-data" / "auth.sqlite"
+LEGACY_AUTH_DB_PATH = REPO_ROOT / "data" / "auth.sqlite"
 
 
 def parse_args() -> argparse.Namespace:
@@ -35,6 +36,9 @@ def as_bool_text(value: object) -> str:
 
 
 def list_users(db_path: Path) -> int:
+    if db_path == DEFAULT_AUTH_DB_PATH and not db_path.exists() and LEGACY_AUTH_DB_PATH.exists():
+        db_path = LEGACY_AUTH_DB_PATH
+
     if not db_path.exists():
         raise SystemExit(f"Auth DB not found: {db_path}")
 
@@ -90,6 +94,9 @@ def list_users(db_path: Path) -> int:
 
 
 def delete_user(db_path: Path, user_key: str) -> int:
+    if db_path == DEFAULT_AUTH_DB_PATH and not db_path.exists() and LEGACY_AUTH_DB_PATH.exists():
+        db_path = LEGACY_AUTH_DB_PATH
+
     if not db_path.exists():
         raise SystemExit(f"Auth DB not found: {db_path}")
 

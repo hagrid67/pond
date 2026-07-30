@@ -28,7 +28,8 @@ STATIC_DIR = REPO_ROOT / "www-root"
 USER_UPDATES_DIR = REPO_ROOT / "user-updates"
 MEMBERMOJO_DIR = REPO_ROOT / "membermojo"
 LOG_DIR = REPO_ROOT / "logs"
-AUTH_DB_PATH = REPO_ROOT / "data" / "auth.sqlite"
+AUTH_DB_PATH = REPO_ROOT / "user-data" / "auth.sqlite"
+LEGACY_AUTH_DB_PATH = REPO_ROOT / "data" / "auth.sqlite"
 EMAIL_OUTBOX_PATH = LOG_DIR / "auth-email-outbox.log"
 PUBLIC_BASE_URL = os.getenv("POND_PUBLIC_BASE_URL", "https://ponds.nsupdate.info").rstrip("/")
 EMAIL_PASSWORD_FILE = Path(
@@ -80,10 +81,20 @@ def utc_now_iso() -> str:
     return utc_now().isoformat()
 
 
+def resolve_auth_db_path() -> Path:
+    if AUTH_DB_PATH.exists() or not LEGACY_AUTH_DB_PATH.exists():
+        return AUTH_DB_PATH
+
+    AUTH_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    LEGACY_AUTH_DB_PATH.replace(AUTH_DB_PATH)
+    return AUTH_DB_PATH
+
+
 @contextmanager
 def get_db() -> Any:
-    AUTH_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(AUTH_DB_PATH)
+    db_path = resolve_auth_db_path()
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     try:
         yield conn

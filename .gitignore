@@ -39,8 +39,8 @@ output/
 user-updates/
 browser_session/
 membermojo/
-data/submissions.sqlite
-data/auth.sqlite
+user-data/submissions.sqlite
+user-data/auth.sqlite
 data/*.csv
 !data/.gitkeep
 keys/
