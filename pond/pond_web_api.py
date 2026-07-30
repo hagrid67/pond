@@ -15,8 +15,9 @@ from datetime import datetime, timezone
 from email.message import EmailMessage
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from pydantic import BaseModel
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -352,8 +353,33 @@ def get_user_by_token(conn: sqlite3.Connection, auth_token: str) -> sqlite3.Row:
     return row
 
 
-def build_verification_link(token: str) -> str:
-    return f"{PUBLIC_BASE_URL}/auth-verify.html?token={token}"
+def request_public_base_url(request: Request | None) -> str:
+    if request is None:
+        return PUBLIC_BASE_URL
+
+    origin = request.headers.get("origin", "").strip()
+    if origin:
+        parsed = urlsplit(origin)
+        if parsed.scheme in {"http", "https"} and parsed.netloc:
+            return f"{parsed.scheme}://{parsed.netloc}"
+
+    forwarded_proto = request.headers.get("x-forwarded-proto", "").split(",")[0].strip().lower()
+    forwarded_host = request.headers.get("x-forwarded-host", "").split(",")[0].strip()
+    host = forwarded_host or request.headers.get("host", "").strip()
+
+    if host and forwarded_proto in {"http", "https"}:
+        return f"{forwarded_proto}://{host}"
+
+    if host:
+        scheme = request.url.scheme if request.url.scheme in {"http", "https"} else "https"
+        return f"{scheme}://{host}"
+
+    return PUBLIC_BASE_URL
+
+
+def build_verification_link(token: str, request: Request | None = None) -> str:
+    base_url = request_public_base_url(request)
+    return f"{base_url}/auth-verify.html?token={token}"
 
 app = FastAPI(title="Pond Dev Web API")
 
@@ -369,7 +395,7 @@ def api_health() -> dict[str, str]:
 
 
 @app.post("/api/auth/register-email")
-def register_email(payload: RegisterEmailRequest) -> JSONResponse:
+def register_email(payload: RegisterEmailRequest, request: Request = None) -> JSONResponse:
     email = validate_email_or_400(payload.email)
     validate_password_or_400(payload.password)
     nickname = validate_nickname_or_400(payload.nickname) if payload.nickname else None
@@ -423,7 +449,7 @@ def register_email(payload: RegisterEmailRequest) -> JSONResponse:
 
         user_id = int(cursor.lastrowid)
         token = create_verification_token(conn, user_id=user_id, email=email)
-        verification_link = build_verification_link(token)
+        verification_link = build_verification_link(token, request=request)
 
     deliver_email(
         email=email,
@@ -538,7 +564,7 @@ def login(payload: LoginRequest) -> JSONResponse:
 
 
 @app.post("/api/auth/add-email")
-def add_email(payload: AddEmailRequest) -> JSONResponse:
+def add_email(payload: AddEmailRequest, request: Request = None) -> JSONResponse:
     email = validate_email_or_400(payload.email)
 
     with get_db() as conn:
@@ -567,7 +593,7 @@ def add_email(payload: AddEmailRequest) -> JSONResponse:
         )
 
         token = create_verification_token(conn, user_id=int(user["id"]), email=email)
-        verification_link = build_verification_link(token)
+        verification_link = build_verification_link(token, request=request)
 
     deliver_email(
         email=email,

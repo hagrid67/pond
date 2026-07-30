@@ -43,8 +43,23 @@
       }
       try {
         const res = await fetch("/api/auth/verify-email?token=" + encodeURIComponent(token));
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || "Verification failed");
+        const raw = await res.text();
+        let data = null;
+        try {
+          data = JSON.parse(raw);
+        } catch (_err) {
+          data = null;
+        }
+
+        if (!res.ok) {
+          const detail = data && typeof data === "object" ? data.detail : null;
+          throw new Error(detail || ("Verification failed (HTTP " + res.status + ")"));
+        }
+
+        if (!data || typeof data !== "object") {
+          throw new Error("Verification endpoint did not return JSON. This usually means the link host does not match the server where the account was created.");
+        }
+
         statusEl.className = "ok";
         statusEl.textContent = "Email verified. Member status: " + String(data.isMember);
       } catch (err) {
