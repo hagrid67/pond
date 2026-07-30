@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Pond Account</title>
+  <title>Pond Updates Account Registration</title>
   <style>
     :root {
       --bg: #f5f7fb;
@@ -94,14 +94,24 @@
       gap: 12px;
       flex-wrap: wrap;
     }
+    .section-separator {
+      margin: 16px 0;
+      border-top: 2px dashed #d0dbe8;
+      padding-top: 12px;
+    }
     a { color: #084e96; }
   </style>
 </head>
 <body>
   <main>
     <section class="hero">
-      <h1>Pond Account Registration and Login</h1>
-      <div class="small">Anonymous pond updates still work as before. Account features are optional.</div>
+      <h1>Pond Updates Account Registration</h1>
+      <div class="small">
+        Pond Updates is a service run by HMPA to share realtime updates about the ponds. You can submit information anonymously or using an account. 
+        You don't have to register an email, or be an HMPA member, but if you do we will check it against recent HMPA membership. 
+        You can join HMPA here:
+        <a href="https://highgatemenspond.com/membership" target="_blank" rel="noopener noreferrer">https://highgatemenspond.com/membership</a>
+      </div>
       <div class="top-links">
         <a href="/">Back to pond updates</a>
         <a href="/gdpr-policy.html">GDPR and Privacy Policy</a>
@@ -109,30 +119,6 @@
     </section>
 
     <section class="grid">
-      <article class="card">
-        <h2>Register with Email</h2>
-        <label for="regEmail">Email</label>
-        <input id="regEmail" type="email" autocomplete="email">
-        <label for="regEmailPassword">Password</label>
-        <input id="regEmailPassword" type="password" autocomplete="new-password">
-        <label for="regEmailNickname">Nickname (optional)</label>
-        <input id="regEmailNickname" type="text" autocomplete="nickname">
-        <button onclick="registerWithEmail()">Create account</button>
-        <div class="small">You must verify by opening the emailed link.</div>
-        <div id="regEmailStatus" class="status"></div>
-      </article>
-
-      <article class="card">
-        <h2>Register with Nickname</h2>
-        <label for="regNick">Nickname</label>
-        <input id="regNick" type="text" autocomplete="nickname">
-        <label for="regNickPassword">Password</label>
-        <input id="regNickPassword" type="password" autocomplete="new-password">
-        <button onclick="registerWithNickname()">Create nickname account</button>
-        <div class="small">You can add an email later for verification and member lookup.</div>
-        <div id="regNickStatus" class="status"></div>
-      </article>
-
       <article class="card">
         <h2>Login</h2>
         <label for="loginUser">Username (email or nickname)</label>
@@ -159,6 +145,36 @@
         <input id="meToken" type="text" autocomplete="off">
         <button onclick="loadProfile()">Load profile</button>
         <div id="meStatus" class="status"></div>
+      </article>
+    </section>
+
+    <section class="section-separator">
+      <div class="small">Need an account? Register below.</div>
+    </section>
+
+    <section class="grid">
+      <article class="card">
+        <h2>Register with Email</h2>
+        <label for="regEmail">Email</label>
+        <input id="regEmail" type="email" autocomplete="email">
+        <label for="regEmailPassword">Password</label>
+        <input id="regEmailPassword" type="password" autocomplete="new-password">
+        <label for="regEmailNickname">Nickname (optional)</label>
+        <input id="regEmailNickname" type="text" autocomplete="nickname">
+        <button onclick="registerWithEmail()">Create account</button>
+        <div class="small">You must verify by opening the emailed link.</div>
+        <div id="regEmailStatus" class="status"></div>
+      </article>
+
+      <article class="card">
+        <h2>Register with Nickname</h2>
+        <label for="regNick">Nickname</label>
+        <input id="regNick" type="text" autocomplete="nickname">
+        <label for="regNickPassword">Password</label>
+        <input id="regNickPassword" type="password" autocomplete="new-password">
+        <button onclick="registerWithNickname()">Create nickname account</button>
+        <div class="small">You can add an email later for verification and member lookup.</div>
+        <div id="regNickStatus" class="status"></div>
       </article>
     </section>
   </main>
@@ -236,7 +252,7 @@
       const displayName = user.nickname || user.username || "member";
       const verified = String(!!user.emailVerified);
       const member = String(!!user.isMember);
-      return "Logged in as " + displayName + ". Email verified: " + verified + ". Member: " + member;
+      return "Logged in as " + displayName + ". Email verified: " + verified + ". HMPA Member: " + member;
     }
 
     async function apiPost(path, body) {
@@ -296,7 +312,7 @@
         const user = data.user || {};
         setStatus(
           "loginStatus",
-          "Logged in as " + (user.nickname || user.username) + ". Email verified: " + String(user.emailVerified) + ". Member: " + String(user.isMember),
+          "Logged in as " + (user.nickname || user.username) + ". Email verified: " + String(user.emailVerified) + ". HMPA Member: " + String(user.isMember),
           "ok"
         );
       } catch (err) {
@@ -309,7 +325,7 @@
       const email = document.getElementById("newEmail").value.trim();
       try {
         const data = await apiPost("/api/auth/add-email", { authToken, email });
-        setStatus("addEmailStatus", "Verification link sent. Member: " + String(data.isMember), "ok");
+        setStatus("addEmailStatus", "Verification link sent. HMPA Member: " + String(data.isMember), "ok");
       } catch (err) {
         setStatus("addEmailStatus", err.message, "error");
       }
