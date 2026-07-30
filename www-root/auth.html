@@ -229,6 +229,16 @@
       el.textContent = message;
     }
 
+    function describeUser(user) {
+      if (!user || typeof user !== "object") {
+        return "Logged in.";
+      }
+      const displayName = user.nickname || user.username || "member";
+      const verified = String(!!user.emailVerified);
+      const member = String(!!user.isMember);
+      return "Logged in as " + displayName + ". Email verified: " + verified + ". Member: " + member;
+    }
+
     async function apiPost(path, body) {
       const res = await fetch(path, {
         method: "POST",
@@ -321,11 +331,44 @@
       }
     }
 
+    async function refreshLoginStatusFromSession() {
+      const session = getAuthSession();
+      if (!session || !session.authToken) {
+        return;
+      }
+
+      if (session.user) {
+        setStatus("loginStatus", describeUser(session.user), "ok");
+      } else {
+        setStatus("loginStatus", "Session token found. Checking profile...", "warn");
+      }
+
+      try {
+        const res = await fetch("/api/auth/me?authToken=" + encodeURIComponent(session.authToken));
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.detail || "Session check failed");
+        }
+
+        const updatedSession = {
+          authToken: session.authToken,
+          expiresAt: session.expiresAt,
+          user: data.user || session.user || null
+        };
+        setAuthSession(updatedSession);
+        setStatus("loginStatus", describeUser(updatedSession.user), "ok");
+      } catch (err) {
+        setStatus("loginStatus", "Session token is present but could not be validated: " + (err.message || "unknown error"), "warn");
+      }
+    }
+
     const saved = getAuthTokenForForms();
     if (saved) {
       document.getElementById("authToken").value = saved;
       document.getElementById("meToken").value = saved;
     }
+
+    refreshLoginStatusFromSession();
   </script>
 </body>
 </html>
