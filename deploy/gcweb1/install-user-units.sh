@@ -6,7 +6,7 @@ UNIT_SRC_DIR="${SCRIPT_DIR}/systemd"
 UNIT_DST_DIR="${HOME}/.config/systemd/user"
 
 UNITS=(
-  pond-pondupdate-api.service
+  pond-web-api.service
   pond-apitest.service
   pond-apitest.timer
   pond-user-chart.service
@@ -28,22 +28,22 @@ done
 echo "Reloading user systemd"
 systemctl --user daemon-reload
 
-echo "Enabling and starting pond update API service"
-systemctl --user enable --now pond-pondupdate-api.service
+echo "Enabling and starting pond web API service"
+systemctl --user enable --now pond-web-api.service
 
 echo "Enabling and starting apitest/chart timers"
 systemctl --user enable --now pond-apitest.timer
 systemctl --user enable --now pond-user-chart.timer
 
 echo "Verifying service"
-systemctl --user status pond-pondupdate-api.service --no-pager || true
-systemctl --user list-unit-files | grep -E '^pond-pondupdate-api\.service' || {
-  echo "Error: expected pond-pondupdate-api service not found" >&2
+systemctl --user status pond-web-api.service --no-pager || true
+systemctl --user list-unit-files | grep -E '^pond-web-api\.service' || {
+  echo "Error: expected pond-web-api service not found" >&2
   exit 1
 }
 
 echo "Recent service logs"
-journalctl --user -u pond-pondupdate-api.service -n 30 --no-pager || true
+journalctl --user -u pond-web-api.service -n 30 --no-pager || true
 journalctl --user -u pond-apitest.service -n 10 --no-pager || true
 journalctl --user -u pond-user-chart.service -n 10 --no-pager || true
 

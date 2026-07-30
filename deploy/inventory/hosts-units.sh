@@ -41,7 +41,7 @@ host_expected_units() {
   case "${host_id}" in
     jwpc19) echo "pond-dev-sync.service pond-dev-sync.timer pond-web-api.service pond-user-chart.timer" ;;
     jwpc12) echo "pond-scrape.timer pond-weather.timer pond-submit-ingest.service" ;;
-    gcweb1) echo "pond-pondupdate-api.service pond-apitest.timer pond-user-chart.timer" ;;
+    gcweb1) echo "pond-web-api.service pond-apitest.timer pond-user-chart.timer" ;;
     *) return 1 ;;
   esac
 }
@@ -50,7 +50,7 @@ host_deprecated_units() {
   local host_id="$1"
   case "${host_id}" in
     jwpc19) echo "pond-rsync-data.service pond-rsync-data.timer" ;;
-    gcweb1) echo "pond-submit-edge.service pond-submit-forward.service pond-submit-forward.timer" ;;
+    gcweb1) echo "pond-pondupdate-api.service pond-submit-edge.service pond-submit-forward.service pond-submit-forward.timer" ;;
     *) echo "" ;;
   esac
 }

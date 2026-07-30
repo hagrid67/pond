@@ -1,6 +1,6 @@
 [Unit]
 Description=Submit random pond update sample from gcweb1
-After=network-online.target pond-pondupdate-api.service
+After=network-online.target pond-web-api.service
 Wants=network-online.target
 
 [Service]
