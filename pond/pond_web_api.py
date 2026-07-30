@@ -7,10 +7,12 @@ import json
 import os
 import re
 import secrets
+import smtplib
 import sqlite3
 import uuid
 from contextlib import contextmanager
 from datetime import datetime, timezone
+from email.message import EmailMessage
 from pathlib import Path
 from typing import Any
 
@@ -28,6 +30,13 @@ LOG_DIR = REPO_ROOT / "logs"
 AUTH_DB_PATH = REPO_ROOT / "data" / "auth.sqlite"
 EMAIL_OUTBOX_PATH = LOG_DIR / "auth-email-outbox.log"
 PUBLIC_BASE_URL = os.getenv("POND_PUBLIC_BASE_URL", "https://ponds.nsupdate.info").rstrip("/")
+EMAIL_PASSWORD_FILE = Path(
+    os.getenv("POND_EMAIL_PASSWORD_FILE", str(REPO_ROOT / "keys" / "gmail-hmpa-membership.txt"))
+)
+EMAIL_SMTP_HOST = os.getenv("POND_EMAIL_SMTP_HOST", "smtp.gmail.com")
+EMAIL_SMTP_PORT = int(os.getenv("POND_EMAIL_SMTP_PORT", "587"))
+EMAIL_SMTP_USERNAME = os.getenv("POND_EMAIL_SMTP_USERNAME", "hmpa.membership@gmail.com")
+EMAIL_FROM_ADDRESS = os.getenv("POND_EMAIL_FROM", EMAIL_SMTP_USERNAME)
 
 PASSWORD_ITERATIONS = 200_000
 SESSION_TTL_SECONDS = 30 * 24 * 60 * 60
@@ -229,6 +238,66 @@ def write_email_outbox(email: str, subject: str, body: str) -> None:
         fp.write(body.strip() + "\n\n")
 
 
+def email_delivery_enabled() -> bool:
+    raw_enabled = os.getenv("POND_EMAIL_ENABLED")
+    if raw_enabled is None:
+        return EMAIL_PASSWORD_FILE.exists()
+    return raw_enabled.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def load_email_password() -> str | None:
+    try:
+        password = EMAIL_PASSWORD_FILE.read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    return password or None
+
+
+def send_email_via_smtp(email: str, subject: str, body: str, password: str) -> None:
+    msg = EmailMessage()
+    msg["From"] = EMAIL_FROM_ADDRESS
+    msg["To"] = email
+    msg["Subject"] = subject
+    msg.set_content(body)
+
+    with smtplib.SMTP(EMAIL_SMTP_HOST, EMAIL_SMTP_PORT, timeout=20) as smtp:
+        smtp.ehlo()
+        smtp.starttls()
+        smtp.ehlo()
+        smtp.login(EMAIL_SMTP_USERNAME, password)
+        smtp.send_message(msg)
+
+
+def deliver_email(email: str, subject: str, body: str) -> None:
+    # Always keep an outbox copy for audit and troubleshooting.
+    write_email_outbox(email=email, subject=subject, body=body)
+
+    if not email_delivery_enabled():
+        return
+
+    password = load_email_password()
+    if password is None:
+        write_email_outbox(
+            email=email,
+            subject="SMTP delivery skipped",
+            body=(
+                "Email delivery is enabled but no app password was found.\n"
+                f"Expected file: {EMAIL_PASSWORD_FILE}"
+            ),
+        )
+        return
+
+    try:
+        send_email_via_smtp(email=email, subject=subject, body=body, password=password)
+    except Exception as exc:
+        # Keep user flows resilient; outbox retains the message for replay.
+        write_email_outbox(
+            email=email,
+            subject="SMTP delivery failed",
+            body=f"Error: {exc}",
+        )
+
+
 def create_verification_token(conn: sqlite3.Connection, user_id: int, email: str) -> str:
     token = secrets.token_urlsafe(32)
     created_at = utc_now()
@@ -356,7 +425,7 @@ def register_email(payload: RegisterEmailRequest) -> JSONResponse:
         token = create_verification_token(conn, user_id=user_id, email=email)
         verification_link = build_verification_link(token)
 
-    write_email_outbox(
+    deliver_email(
         email=email,
         subject="Confirm your pond account",
         body=(
@@ -500,7 +569,7 @@ def add_email(payload: AddEmailRequest) -> JSONResponse:
         token = create_verification_token(conn, user_id=int(user["id"]), email=email)
         verification_link = build_verification_link(token)
 
-    write_email_outbox(
+    deliver_email(
         email=email,
         subject="Confirm your pond account email",
         body=(

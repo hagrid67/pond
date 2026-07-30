@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 import pytest
 from fastapi import HTTPException
 
-from pond import dev_web_api as api
+from pond import pond_web_api as api
 
 
 def _decode_json_response(response) -> dict[str, object]:

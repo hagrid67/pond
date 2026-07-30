@@ -39,7 +39,7 @@ To serve static files from `www-root/` and the pond update API from the same por
 
 ```bash
 pip install fastapi uvicorn
-python -m uvicorn pond.dev_web_api:app --host 0.0.0.0 --port 8000
+python -m uvicorn pond.pond_web_api:app --host 0.0.0.0 --port 8000
 ```
 
 Endpoints:

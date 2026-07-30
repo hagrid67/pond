@@ -19,7 +19,7 @@ This folder is intended for developer-side helpers and host-specific setup notes
 - Service ExecStart uses:
 
 ```bash
-~/projects/pond/ve312pond/bin/python -m uvicorn pond.dev_web_api:app --host 0.0.0.0 --port 8000
+~/projects/pond/ve312pond/bin/python -m uvicorn pond.pond_web_api:app --host 0.0.0.0 --port 8000
 ```
 
 - Pond update submissions from `/api/pondupdate` are logged to `user-updates/user-updates-yymmdd.jsonl` (daily rolling).
