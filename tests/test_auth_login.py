@@ -121,6 +121,45 @@ def test_email_verification_flow_sets_verified_flag(auth_env) -> None:
     assert login_body["user"]["emailVerified"] is True
 
 
+def test_verified_nickname_account_can_login_with_email(auth_env) -> None:
+    api.register_nickname(api.RegisterNicknameRequest(nickname="email-login-user", password="demo-pass-123"))
+
+    nickname_login = _decode_json_response(
+        api.login(api.LoginRequest(username="email-login-user", password="demo-pass-123"))
+    )
+    token = str(nickname_login["authToken"])
+
+    add_email_response = api.add_email(
+        api.AddEmailRequest(authToken=token, email="email-login-user@example.org")
+    )
+    add_email_body = _decode_json_response(add_email_response)
+    assert add_email_response.status_code == 200
+    assert add_email_body["ok"] is True
+
+    with api.get_db() as conn:
+        row = conn.execute(
+            "SELECT token FROM email_verification_tokens ORDER BY created_at DESC LIMIT 1"
+        ).fetchone()
+        assert row is not None
+
+    verify_response = api.verify_email(token=row["token"])
+    verify_body = _decode_json_response(verify_response)
+    assert verify_response.status_code == 200
+    assert verify_body["ok"] is True
+
+    email_login_response = api.login(
+        api.LoginRequest(username="email-login-user@example.org", password="demo-pass-123")
+    )
+    email_login_body = _decode_json_response(email_login_response)
+
+    assert email_login_response.status_code == 200
+    assert email_login_body["ok"] is True
+    assert email_login_body["user"]["username"] == "email-login-user"
+    assert email_login_body["user"]["nickname"] == "email-login-user"
+    assert email_login_body["user"]["email"] == "email-login-user@example.org"
+    assert email_login_body["user"]["emailVerified"] is True
+
+
 def test_submit_endpoint_accepts_authenticated_and_anonymous(auth_env) -> None:
     api.register_nickname(api.RegisterNicknameRequest(nickname="submit-user", password="demo-pass-123"))
     login_body = _decode_json_response(api.login(api.LoginRequest(username="submit-user", password="demo-pass-123")))

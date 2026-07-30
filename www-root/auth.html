@@ -88,6 +88,20 @@
     .status.warn { color: var(--warn); }
     .status.error { color: var(--error); }
     .small { font-size: 0.85rem; color: var(--muted); }
+    .verified-pill {
+      margin-top: 8px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid #bfe6cc;
+      background: #eefaf2;
+      color: var(--ok);
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 0.88rem;
+      font-weight: 600;
+    }
+    .hidden { display: none; }
     .top-links {
       margin-top: 12px;
       display: flex;
@@ -127,9 +141,10 @@
         <input id="loginPassword" type="password" autocomplete="current-password">
         <button onclick="login()">Login</button>
         <div id="loginStatus" class="status"></div>
+        <div id="emailVerifiedBadge" class="verified-pill hidden">&#10003; email verified</div>
       </article>
 
-      <article class="card">
+      <article id="addEmailCard" class="card">
         <h2>Add or Update Email</h2>
         <label for="authToken">Auth token</label>
         <input id="authToken" type="text" autocomplete="off">
@@ -255,6 +270,20 @@
       return "Logged in as " + displayName + ". Email verified: " + verified + ". HMPA Member: " + member;
     }
 
+    function updateEmailVerificationUi(user) {
+      const badge = document.getElementById("emailVerifiedBadge");
+      const addEmailCard = document.getElementById("addEmailCard");
+      const isVerified = !!(user && typeof user === "object" && user.emailVerified === true);
+
+      if (isVerified) {
+        badge.classList.remove("hidden");
+        addEmailCard.classList.add("hidden");
+      } else {
+        badge.classList.add("hidden");
+        addEmailCard.classList.remove("hidden");
+      }
+    }
+
     async function apiPost(path, body) {
       const res = await fetch(path, {
         method: "POST",
@@ -315,6 +344,7 @@
           "Logged in as " + (user.nickname || user.username) + ". Email verified: " + String(user.emailVerified) + ". HMPA Member: " + String(user.isMember),
           "ok"
         );
+        updateEmailVerificationUi(user);
       } catch (err) {
         setStatus("loginStatus", err.message, "error");
       }
@@ -355,6 +385,7 @@
 
       if (session.user) {
         setStatus("loginStatus", describeUser(session.user), "ok");
+        updateEmailVerificationUi(session.user);
       } else {
         setStatus("loginStatus", "Session token found. Checking profile...", "warn");
       }
@@ -373,6 +404,7 @@
         };
         setAuthSession(updatedSession);
         setStatus("loginStatus", describeUser(updatedSession.user), "ok");
+        updateEmailVerificationUi(updatedSession.user);
       } catch (err) {
         setStatus("loginStatus", "Session token is present but could not be validated: " + (err.message || "unknown error"), "warn");
       }
@@ -384,6 +416,7 @@
       document.getElementById("meToken").value = saved;
     }
 
+    updateEmailVerificationUi(null);
     refreshLoginStatusFromSession();
   </script>
 </body>
