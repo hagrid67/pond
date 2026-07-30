@@ -41,7 +41,7 @@ systemctl --user list-timers --all | grep -E 'pond-dev-sync\.timer|pond-user-cha
   exit 1
 }
 
-systemctl --user status pond-dev-sync.timer pond-dev-sync.service pond-user-chart.timer pond-user-chart.service pond-web-api.service --no-pager
+systemctl --user status pond-dev-sync.timer pond-dev-sync.service pond-user-chart.timer pond-user-chart.service pond-web-api.service --no-pager || true
 
 echo "Recent service logs"
 journalctl --user -u pond-dev-sync.service -n 30 --no-pager || true
@@ -63,3 +63,4 @@ else
 fi
 
 echo "[jwpc19] User-unit deployment complete"
+exit 0
