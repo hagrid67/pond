@@ -305,8 +305,8 @@ if __name__ == "__main__":
         "--longitude",
         action="store",
         dest="longitude",
-        default="-0.178",
-        help="Provide the longitude of the location you wish to retrieve the forecast for. Default: -0.178 (Highgate Men's Bathing Pond)."
+        default="-0.156",
+        help="Provide the longitude of the location you wish to retrieve the forecast for. Default: -0.156 (Highgate Men's Bathing Pond)."
     )
     parser.add_argument(
         "-k",
