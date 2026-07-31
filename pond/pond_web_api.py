@@ -281,6 +281,10 @@ def send_email_via_smtp(email: str, subject: str, body: str, password: str) -> N
 
 
 def deliver_email(email: str, subject: str, body: str) -> None:
+    email = (email or "").strip()
+    if not email:
+        return
+
     # Always keep an outbox copy for audit and troubleshooting.
     write_email_outbox(email=email, subject=subject, body=body)
 

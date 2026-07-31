@@ -10,6 +10,14 @@ from fastapi import HTTPException
 from pond import pond_web_api as api
 
 
+TEST_EMAIL = "farm.camera.tcl@gmail.com"
+
+
+def _email_with_tag(base_email: str, tag: str) -> str:
+    local_part, domain = base_email.split("@", 1)
+    return f"{local_part}+{tag}@{domain}"
+
+
 def _decode_json_response(response) -> dict[str, object]:
     return json.loads(response.body.decode("utf-8"))
 
@@ -26,7 +34,7 @@ def auth_env(tmp_path, monkeypatch):
     monkeypatch.setattr(api, "EMAIL_OUTBOX_PATH", logs_dir / "auth-email-outbox.log")
     monkeypatch.setattr(api, "USER_UPDATES_DIR", updates_dir)
     monkeypatch.setattr(api, "MEMBERMOJO_DIR", membermojo_dir)
-    monkeypatch.setattr(api, "PUBLIC_BASE_URL", "https://ponds.nsupdate.info")
+    monkeypatch.setattr(api, "PUBLIC_BASE_URL", "http://localhost:8000")
 
     api.init_auth_db()
     return {
@@ -70,10 +78,10 @@ def test_register_email_marks_member_from_latest_membermojo_file(auth_env) -> No
     membermojo_dir.mkdir(parents=True, exist_ok=True)
 
     older = membermojo_dir / "membermojo-260101.csv"
-    older.write_text("Email\nold@example.org\n", encoding="utf-8")
+    older.write_text(f"Email\n{_email_with_tag(TEST_EMAIL, 'old')}\n", encoding="utf-8")
 
     latest = membermojo_dir / "membermojo-260729.csv"
-    latest.write_text("Email\nmember@example.org\n", encoding="utf-8")
+    latest.write_text(f"Email\n{TEST_EMAIL}\n", encoding="utf-8")
 
     older_stat = older.stat()
     latest_stat = latest.stat()
@@ -82,7 +90,7 @@ def test_register_email_marks_member_from_latest_membermojo_file(auth_env) -> No
 
     response = api.register_email(
         api.RegisterEmailRequest(
-            email="member@example.org",
+            email=TEST_EMAIL,
             password="demo-pass-123",
             nickname="member-user",
         )
@@ -96,9 +104,10 @@ def test_register_email_marks_member_from_latest_membermojo_file(auth_env) -> No
 
 
 def test_email_verification_flow_sets_verified_flag(auth_env) -> None:
+    verify_email = _email_with_tag(TEST_EMAIL, "verify")
     api.register_email(
         api.RegisterEmailRequest(
-            email="verifyme@example.org",
+            email=verify_email,
             password="demo-pass-123",
             nickname="verify-user",
         )
@@ -116,7 +125,7 @@ def test_email_verification_flow_sets_verified_flag(auth_env) -> None:
     assert verify_response.status_code == 200
     assert verify_body["ok"] is True
 
-    login_response = api.login(api.LoginRequest(username="verifyme@example.org", password="demo-pass-123"))
+    login_response = api.login(api.LoginRequest(username=verify_email, password="demo-pass-123"))
     login_body = _decode_json_response(login_response)
     assert login_body["user"]["emailVerified"] is True
 
@@ -129,8 +138,9 @@ def test_verified_nickname_account_can_login_with_email(auth_env) -> None:
     )
     token = str(nickname_login["authToken"])
 
+    login_email = _email_with_tag(TEST_EMAIL, "login")
     add_email_response = api.add_email(
-        api.AddEmailRequest(authToken=token, email="email-login-user@example.org")
+        api.AddEmailRequest(authToken=token, email=login_email)
     )
     add_email_body = _decode_json_response(add_email_response)
     assert add_email_response.status_code == 200
@@ -148,7 +158,7 @@ def test_verified_nickname_account_can_login_with_email(auth_env) -> None:
     assert verify_body["ok"] is True
 
     email_login_response = api.login(
-        api.LoginRequest(username="email-login-user@example.org", password="demo-pass-123")
+        api.LoginRequest(username=login_email, password="demo-pass-123")
     )
     email_login_body = _decode_json_response(email_login_response)
 
@@ -156,7 +166,7 @@ def test_verified_nickname_account_can_login_with_email(auth_env) -> None:
     assert email_login_body["ok"] is True
     assert email_login_body["user"]["username"] == "email-login-user"
     assert email_login_body["user"]["nickname"] == "email-login-user"
-    assert email_login_body["user"]["email"] == "email-login-user@example.org"
+    assert email_login_body["user"]["email"] == login_email
     assert email_login_body["user"]["emailVerified"] is True
 
 
