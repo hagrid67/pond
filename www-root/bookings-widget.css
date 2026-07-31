@@ -20,8 +20,14 @@
   background: #2f3f3f;
 }
 
-.bookings-widget tr:nth-child(even) {
+.bookings-widget td.time-cell.slot-current,
+.bookings-widget td.weather-cell.slot-current {
   background: #507070;
+}
+
+.bookings-widget td.time-cell.slot-historical,
+.bookings-widget td.weather-cell.slot-historical {
+  background: #555;
 }
 
 .bookings-widget th:nth-child(even) {

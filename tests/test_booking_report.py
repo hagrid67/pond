@@ -19,6 +19,10 @@ def _load_booking_report_module():
 booking_report = _load_booking_report_module()
 
 
+def test_full_sun_weather_icon_uses_emoji_presentation() -> None:
+	assert booking_report.significant_weather_icon(1) == "☀️"
+
+
 def test_report_loads_csv_and_writes_html(tmp_path) -> None:
 	csv_path = tmp_path / "bookings.csv"
 	html_path = tmp_path / "bookings.html"
@@ -72,6 +76,34 @@ def test_report_headings_include_relative_day_labels(tmp_path) -> None:
 	assert "Thursday 2026-07-09 (yesterday)" in html
 	assert "Friday 2026-07-10 (today)" in html
 	assert "Saturday 2026-07-11 (tomorrow)" in html
+
+
+def test_time_and_weather_cells_use_slot_status_background_classes(tmp_path) -> None:
+	csv_path = tmp_path / "bookings.csv"
+	html_path = tmp_path / "bookings.html"
+	csv_path.write_text(
+		"date,time,location,duration,availability\n"
+		"2026-07-09,13:00-14:00,Men's,60,4\n"
+		"2026-07-10,13:30-14:30,Men's,60,4\n"
+		"2026-07-10,15:00-16:00,Men's,60,4\n",
+		encoding="utf-8",
+	)
+
+	all_slots, date_sequence = booking_report.load_slots_from_csv(csv_path)
+	booking_report.write_html_report(
+		all_slots,
+		date_sequence,
+		html_path,
+		"https://example.test/source",
+		reference_time=datetime(2026, 7, 10, 14, 0),
+	)
+	html = html_path.read_text(encoding="utf-8")
+
+	assert "<td class='time-cell slot-historical'><b>13:00-14:00</b></td>" in html
+	assert "<td class='time-cell slot-current'><b>13:30-14:30</b></td>" in html
+	assert "<td class='time-cell slot-current'><b>15:00-16:00</b></td>" in html
+	assert html.count("weather-hidden slot-historical") == 1
+	assert html.count("weather-hidden slot-current") == 2
 
 
 def test_report_includes_filter_controls_when_enabled(tmp_path) -> None:

@@ -1,12 +1,21 @@
 from __future__ import annotations
 
 import importlib
+import sys
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 
 user_chart = importlib.import_module("pond.user-chart")
 LONDON_TZ = ZoneInfo("Europe/London")
+
+
+def test_adjust_text_cli_is_opt_in(monkeypatch) -> None:
+    monkeypatch.setattr(sys, "argv", ["user-chart.py"])
+    assert user_chart.parse_args().adjustText is False
+
+    monkeypatch.setattr(sys, "argv", ["user-chart.py", "--adjustText"])
+    assert user_chart.parse_args().adjustText is True
 
 
 def test_visible_window_spans_twelve_hours_excluding_overnight() -> None:

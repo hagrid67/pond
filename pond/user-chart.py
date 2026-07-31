@@ -11,10 +11,12 @@ from zoneinfo import ZoneInfo
 
 import matplotlib
 from matplotlib.axes import Axes
+from matplotlib.text import Text
 
 matplotlib.use("Agg")
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
+from adjustText import adjust_text
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -130,6 +132,11 @@ def parse_args() -> argparse.Namespace:
         "--output-test",
         default=str(OUTPUT_TEST_PNG),
         help="Output PNG path for full-data test chart.",
+    )
+    parser.add_argument(
+        "--adjustText",
+        action="store_true",
+        help="Displace username labels to reduce overlap and draw leader lines.",
     )
     return parser.parse_args()
 
@@ -288,7 +295,11 @@ def plot_metric(
     color: str,
     point_colors: list[str] | None = None,
     point_labels: list[str | None] | None = None,
-) -> None:
+    adjust_labels: bool = False,
+) -> tuple[list[Text], list[float], list[float]]:
+    label_texts: list[Text] = []
+    label_xs: list[float] = []
+    label_ys: list[float] = []
     if points:
         xs = [p[0] for p in points]
         ys = [p[1] for p in points]
@@ -307,18 +318,27 @@ def plot_metric(
                     continue
                 if idx >= len(xs):
                     break
-                ax.annotate(
-                    label,
-                    cast(Any, (xs[idx], ys[idx])),
-                    textcoords="offset points",
-                    xytext=(4, 4),
-                    ha="left",
-                    va="bottom",
-                    fontsize=7,
-                    color="#d9ecff",
-                    bbox=dict(boxstyle="round,pad=0.15", fc="#1f2b3f", ec="none", alpha=0.7),
-                    zorder=6,
-                )
+                text_options = {
+                    "ha": "left",
+                    "va": "bottom",
+                    "fontsize": 7,
+                    "color": "#d9ecff",
+                    "bbox": dict(boxstyle="round,pad=0.15", fc="#1f2b3f", ec="none", alpha=0.4),
+                    "zorder": 6,
+                }
+                if adjust_labels:
+                    label_x = mdates.date2num(xs[idx])
+                    label_texts.append(ax.text(label_x, ys[idx], label, **text_options))
+                    label_xs.append(label_x)
+                    label_ys.append(ys[idx])
+                else:
+                    ax.annotate(
+                        label,
+                        cast(Any, (xs[idx], ys[idx])),
+                        textcoords="offset points",
+                        xytext=(4, 4),
+                        **text_options,
+                    )
     if unknown_times:
         ax.scatter(
             cast(Any, unknown_times),
@@ -344,6 +364,7 @@ def plot_metric(
     ax.set_title(title)
     ax.set_ylabel(y_label)
     ax.grid(True, linestyle="--", linewidth=0.6, alpha=0.35)
+    return label_texts, label_xs, label_ys
 
 
 def is_apitest_payload(payload: dict[str, object]) -> bool:
@@ -357,6 +378,7 @@ def build_chart(
     halflife_hours: float,
     title_prefix: str,
     axis_end: datetime,
+    adjust_labels: bool = False,
 ) -> tuple[int, int, int]:
     slots_points: list[tuple[datetime, float]] = []
     queue_points: list[tuple[datetime, float]] = []
@@ -422,7 +444,7 @@ def build_chart(
         fontsize=13,
     )
 
-    plot_metric(
+    slots_label_layout = plot_metric(
         axes[0],
         slots_plot_points,
         compress_points(slots_ewma),
@@ -433,11 +455,12 @@ def build_chart(
         color="#2b8a3e",
         point_colors=slots_point_colors,
         point_labels=slots_point_labels,
+        adjust_labels=adjust_labels,
     )
     axes[0].set_yticks([0.0, 1.0], labels=["No", "Yes"])
     axes[0].set_ylim(-0.2, 1.2)
 
-    plot_metric(
+    queue_label_layout = plot_metric(
         axes[1],
         queue_plot_points,
         compress_points(queue_ewma),
@@ -447,10 +470,11 @@ def build_chart(
         y_label="People",
         color="#1c7ed6",
         point_labels=queue_point_labels,
+        adjust_labels=adjust_labels,
     )
     axes[1].set_ylim(-2, 75)
 
-    plot_metric(
+    grass_label_layout = plot_metric(
         axes[2],
         grass_plot_points,
         compress_points(grass_ewma),
@@ -460,6 +484,7 @@ def build_chart(
         y_label="People",
         color="#e67700",
         point_labels=grass_point_labels,
+        adjust_labels=adjust_labels,
     )
     axes[2].set_ylim(-2, 75)
 
@@ -503,6 +528,26 @@ def build_chart(
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     fig.tight_layout(rect=(0, 0, 1, 0.97))
+    if adjust_labels:
+        for axis, (texts, target_x, target_y) in zip(
+            axes,
+            (slots_label_layout, queue_label_layout, grass_label_layout),
+        ):
+            if texts:
+                adjust_text(
+                    texts,
+                    target_x=target_x,
+                    target_y=target_y,
+                    ax=axis,
+                    ensure_inside_axes=True,
+                    min_arrow_len=0,
+                    arrowprops={
+                        "arrowstyle": "-",
+                        "color": "#9fb2c8",
+                        "linewidth": 0.6,
+                        "alpha": 1.0,
+                    },
+                )
     fig.savefig(output_path, dpi=160)
     plt.close(fig)
 
@@ -531,6 +576,7 @@ def main() -> int:
         halflife_hours=args.halflife_hours,
         title_prefix="Pond user updates (all submissions)",
         axis_end=now_utc,
+        adjust_labels=args.adjustText,
     )
 
     filtered_records = [
@@ -547,6 +593,7 @@ def main() -> int:
         halflife_hours=args.halflife_hours,
         title_prefix="Pond user updates",
         axis_end=now_utc,
+        adjust_labels=args.adjustText,
     )
 
     print(f"Wrote chart: {output_test_path}")

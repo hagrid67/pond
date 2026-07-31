@@ -61,7 +61,7 @@ SIGNIFICANT_WEATHER_LABELS: dict[int, str] = {
 
 SIGNIFICANT_WEATHER_ICONS: dict[int, str] = {
 	0: "🌙",
-	1: "☀",
+	1: "☀️",
 	2: "⛅",
 	3: "⛅",
 	5: "🌫",
@@ -294,6 +294,19 @@ def infer_snapshot_time(path: Path) -> datetime:
 
 def parse_slot_start(date_text: str, time_text: str) -> datetime:
 	return datetime.strptime(f"{date_text} {time_text.split('-', 1)[0]}", "%Y-%m%d %H:%M")
+
+
+def is_fully_historical_slot(date_text: str, time_text: str, reference_time: datetime | None) -> bool:
+	if reference_time is None:
+		return False
+	parsed_date = parse_booking_date(date_text)
+	if parsed_date is None or "-" not in time_text:
+		return False
+	try:
+		slot_end = datetime.combine(parsed_date, datetime.strptime(time_text.split("-", 1)[1], "%H:%M").time())
+	except ValueError:
+		return False
+	return slot_end <= reference_time
 
 
 def make_debug_logger(enabled: bool, file_path: str | None = None) -> Callable[[str], None]:
@@ -1067,10 +1080,11 @@ def write_html_report(
 				if t not in table[date]:
 					continue
 				slot_group = slot_group_for_time(t)
+				slot_status_class = "slot-historical" if is_fully_historical_slot(date, t, reference_time) else "slot-current"
 				time_value = html_lib.escape(t, quote=True)
 				f.write(
 					f"<tr data-time='{time_value}' data-slot-group='{slot_group}'>"
-					f"<td><b>{html_lib.escape(t)}</b></td>"
+					f"<td class='time-cell {slot_status_class}'><b>{html_lib.escape(t)}</b></td>"
 				)
 				for idx, v in enumerate(venues):
 					avail_raw = table[date][t].get(v)
@@ -1119,7 +1133,9 @@ def write_html_report(
 						f.write("</td>")
 				weather_text = weather_by_slot.get((date, t), "")
 				weather_display = html_lib.escape(weather_text) if weather_text else "—"
-				f.write(f"<td class='weather-cell weather-col weather-hidden'>{weather_display}</td>")
+				f.write(
+					f"<td class='weather-cell weather-col weather-hidden {slot_status_class}'>{weather_display}</td>"
+				)
 				f.write("</tr>\n")
 			f.write("</table>\n")
 			f.write("</div>\n")
