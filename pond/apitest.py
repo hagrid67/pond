@@ -208,12 +208,12 @@ def login_test_user(api_base_url: str, nickname: str, password: str, timeout: fl
     )
 
 
-def choose_test_user_session(
+def load_test_user_sessions(
     api_base_url: str,
     timeout: float,
     password: str,
     ensure_users: bool,
-) -> AuthSession:
+) -> list[AuthSession]:
     sessions: list[AuthSession] = []
     for nickname, _ in TEST_USERS:
         session = login_test_user(api_base_url, nickname, password, timeout)
@@ -230,7 +230,7 @@ def choose_test_user_session(
     if not sessions:
         raise RuntimeError("No test users could be logged in. Run with --create-users first.")
 
-    return random.choice(sessions)
+    return sessions
 
 
 def parse_args() -> argparse.Namespace:
@@ -321,14 +321,14 @@ def main() -> int:
     if not do_submit:
         return 0
 
-    selected_user: AuthSession | None = None
+    test_user_sessions: list[AuthSession] = []
     if args.anonymous:
         if args.backfill is not None:
             print("--backfill requires authenticated test users; remove --anonymous", file=sys.stderr)
             return 2
     else:
         try:
-            selected_user = choose_test_user_session(
+            test_user_sessions = load_test_user_sessions(
                 api_base_url=api_base_url,
                 timeout=args.timeout,
                 password=args.test_password,
@@ -350,6 +350,7 @@ def main() -> int:
     failures = 0
     for timestamp in timestamps:
         payload = build_random_payload(timestamp)
+        selected_user = random.choice(test_user_sessions) if test_user_sessions else None
         if selected_user is not None:
             payload["authToken"] = selected_user.auth_token
             payload["testMeta"] = {

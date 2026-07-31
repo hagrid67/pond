@@ -79,6 +79,27 @@ def expand_time_value(value: datetime, origin: datetime) -> datetime:
     return high
 
 
+def visible_window_start(end: datetime, visible_hours: float) -> datetime:
+    """Find the real start time containing the requested non-compressed duration."""
+    target_seconds = visible_hours * 3600.0
+    if target_seconds <= 0:
+        raise ValueError("visible_hours must be greater than zero")
+
+    low = end - timedelta(hours=max(48.0, visible_hours * 3.0))
+    high = end
+    while (end - low).total_seconds() - night_seconds_between(low, end) < target_seconds:
+        low -= timedelta(hours=48)
+
+    for _ in range(50):
+        mid = low + (high - low) / 2
+        visible_seconds = (end - mid).total_seconds() - night_seconds_between(mid, end)
+        if visible_seconds > target_seconds:
+            low = mid
+        else:
+            high = mid
+    return high
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Create a chart of recent user updates with EWMA trend lines."
@@ -86,8 +107,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--hours",
         type=float,
-        default=24.0,
-        help="How many recent hours to include (default: 24).",
+        default=12.0,
+        help="Visible chart hours, excluding 22:00-08:00 (default: 12).",
     )
     parser.add_argument(
         "--halflife-hours",
@@ -335,6 +356,7 @@ def build_chart(
     hours: float,
     halflife_hours: float,
     title_prefix: str,
+    axis_end: datetime,
 ) -> tuple[int, int, int]:
     slots_points: list[tuple[datetime, float]] = []
     queue_points: list[tuple[datetime, float]] = []
@@ -378,12 +400,8 @@ def build_chart(
     queue_ewma = ewma_time_series(queue_points, halflife_hours)
     grass_ewma = ewma_time_series(grass_points, halflife_hours)
 
-    all_times = [
-        cast(datetime, record["timestamp"])
-        for record in records
-        if isinstance(record.get("timestamp"), datetime)
-    ]
-    time_origin = min(all_times) if all_times else datetime.now(timezone.utc)
+    time_origin = visible_window_start(axis_end, hours)
+    axis_end_plot = compress_time_value(axis_end, time_origin)
 
     def compress_points(points: list[tuple[datetime, float]]) -> list[tuple[datetime, float]]:
         return [(compress_time_value(timestamp, time_origin), value) for timestamp, value in points]
@@ -400,7 +418,7 @@ def build_chart(
 
     fig, axes = plt.subplots(3, 1, figsize=(6, 4), sharex=True)
     fig.suptitle(
-        f"{title_prefix}: last {hours:g}h",
+        f"{title_prefix}: last {hours:g} visible hours",
         fontsize=13,
     )
 
@@ -445,35 +463,33 @@ def build_chart(
     )
     axes[2].set_ylim(-2, 75)
 
-    if all_times:
-        real_max = max(all_times)
-        day = time_origin.astimezone(LONDON_TZ).date() - timedelta(days=1)
-        last_day = real_max.astimezone(LONDON_TZ).date()
-        while day <= last_day:
-            window_start = datetime.combine(day, time(22, 0), tzinfo=LONDON_TZ).astimezone(timezone.utc)
-            window_end = datetime.combine(day + timedelta(days=1), time(8, 0), tzinfo=LONDON_TZ).astimezone(timezone.utc)
-            if window_end > time_origin and window_start < real_max:
-                break_x = compress_time_value(max(window_start, time_origin), time_origin)
-                for axis in axes:
-                    axis.axvline(break_x, color="0.6", linestyle="--", linewidth=0.8, alpha=0.6)
-                    dx = timedelta(minutes=18)
-                    axis.plot(
-                        [break_x - dx, break_x - dx / 3],
-                        [-0.02, 0.02],
-                        transform=axis.get_xaxis_transform(),
-                        color="black",
-                        linewidth=1.1,
-                        clip_on=False,
-                    )
-                    axis.plot(
-                        [break_x + dx / 3, break_x + dx],
-                        [-0.02, 0.02],
-                        transform=axis.get_xaxis_transform(),
-                        color="black",
-                        linewidth=1.1,
-                        clip_on=False,
-                    )
-            day += timedelta(days=1)
+    day = time_origin.astimezone(LONDON_TZ).date() - timedelta(days=1)
+    last_day = axis_end.astimezone(LONDON_TZ).date()
+    while day <= last_day:
+        window_start = datetime.combine(day, time(22, 0), tzinfo=LONDON_TZ).astimezone(timezone.utc)
+        window_end = datetime.combine(day + timedelta(days=1), time(8, 0), tzinfo=LONDON_TZ).astimezone(timezone.utc)
+        if window_end > time_origin and window_start < axis_end:
+            break_x = compress_time_value(max(window_start, time_origin), time_origin)
+            for axis in axes:
+                axis.axvline(break_x, color="0.6", linestyle="--", linewidth=0.8, alpha=0.6)
+                dx = timedelta(minutes=18)
+                axis.plot(
+                    [break_x - dx, break_x - dx / 3],
+                    [-0.02, 0.02],
+                    transform=axis.get_xaxis_transform(),
+                    color="black",
+                    linewidth=1.1,
+                    clip_on=False,
+                )
+                axis.plot(
+                    [break_x + dx / 3, break_x + dx],
+                    [-0.02, 0.02],
+                    transform=axis.get_xaxis_transform(),
+                    color="black",
+                    linewidth=1.1,
+                    clip_on=False,
+                )
+        day += timedelta(days=1)
 
     def compressed_label(value: float, _pos: int) -> str:
         axis_dt = mdates.num2date(value, tz=timezone.utc)
@@ -482,6 +498,7 @@ def build_chart(
 
     axes[2].set_xlabel("Time (Europe/London; 22:00-08:00 compressed)")
     axes[2].xaxis.set_major_formatter(compressed_label)
+    axes[2].set_xlim(time_origin, axis_end_plot)
     fig.autofmt_xdate()
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -500,7 +517,7 @@ def main() -> int:
     output_test_path = Path(args.output_test)
 
     now_utc = datetime.now(timezone.utc)
-    since_utc = now_utc - timedelta(hours=args.hours)
+    since_utc = visible_window_start(now_utc, args.hours)
 
     if not input_dir.exists():
         raise SystemExit(f"Input directory not found: {input_dir}")
@@ -513,6 +530,7 @@ def main() -> int:
         hours=args.hours,
         halflife_hours=args.halflife_hours,
         title_prefix="Pond user updates (all submissions)",
+        axis_end=now_utc,
     )
 
     filtered_records = [
@@ -528,6 +546,7 @@ def main() -> int:
         hours=args.hours,
         halflife_hours=args.halflife_hours,
         title_prefix="Pond user updates",
+        axis_end=now_utc,
     )
 
     print(f"Wrote chart: {output_test_path}")
