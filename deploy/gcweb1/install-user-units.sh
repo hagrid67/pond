@@ -11,6 +11,8 @@ UNITS=(
   pond-apitest.timer
   pond-user-chart.service
   pond-user-chart.timer
+  pond-temperature-chart.service
+  pond-temperature-chart.timer
 )
 
 echo "[gcweb1] Installing pond user units"
@@ -34,6 +36,7 @@ systemctl --user enable --now pond-web-api.service
 echo "Enabling and starting apitest/chart timers"
 systemctl --user enable --now pond-apitest.timer
 systemctl --user enable --now pond-user-chart.timer
+systemctl --user enable --now pond-temperature-chart.timer
 
 echo "Verifying service"
 systemctl --user status pond-web-api.service --no-pager || true
@@ -46,6 +49,7 @@ echo "Recent service logs"
 journalctl --user -u pond-web-api.service -n 30 --no-pager || true
 journalctl --user -u pond-apitest.service -n 10 --no-pager || true
 journalctl --user -u pond-user-chart.service -n 10 --no-pager || true
+journalctl --user -u pond-temperature-chart.service -n 10 --no-pager || true
 
 LINGER_VALUE="$(loginctl show-user "${USER}" -p Linger --value 2>/dev/null || echo unknown)"
 if [[ "${LINGER_VALUE}" != "yes" ]]; then

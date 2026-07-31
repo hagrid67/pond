@@ -1,0 +1,10 @@
+[Unit]
+Description=Regenerate pond temperature chart every 30 minutes
+
+[Timer]
+OnCalendar=*-*-* *:00,30:00
+Persistent=true
+Unit=pond-temperature-chart.service
+
+[Install]
+WantedBy=timers.target

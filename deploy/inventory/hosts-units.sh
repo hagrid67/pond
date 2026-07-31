@@ -41,7 +41,7 @@ host_expected_units() {
   case "${host_id}" in
     jwpc19) echo "pond-dev-sync.service pond-dev-sync.timer pond-web-api.service pond-apitest.timer pond-user-chart.timer" ;;
     jwpc12) echo "pond-scrape.timer pond-weather.timer pond-submit-ingest.service" ;;
-    gcweb1) echo "pond-web-api.service pond-apitest.timer pond-user-chart.timer" ;;
+    gcweb1) echo "pond-web-api.service pond-apitest.timer pond-user-chart.timer pond-temperature-chart.timer" ;;
     *) return 1 ;;
   esac
 }
