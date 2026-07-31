@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from urllib.parse import urlsplit
 import urllib.error
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 
 QUEUE_LABELS = ["don't know", "no queue", "5", "10", "20", "30", "50", "long!"]
@@ -35,9 +35,9 @@ def slider_label(labels: list[str], index: int) -> str:
     return labels[0]
 
 
-def build_random_payload() -> dict[str, object]:
+def build_random_payload(timestamp: datetime | None = None) -> dict[str, object]:
     slots_options = ["yes", "no", "dont-know"]
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_iso = (timestamp or datetime.now(timezone.utc)).astimezone(timezone.utc).isoformat()
     queue_index = random.choices(
         population=[0, 1, 2, 3, 4, 5, 6, 7],
         weights=[50, 25, 15, 5, 2, 1, 1, 1],
@@ -71,6 +71,24 @@ def build_random_payload() -> dict[str, object]:
         },
     }
     return payload
+
+
+def backfill_timestamps(hours: float, frequency: float, now: datetime | None = None) -> list[datetime]:
+    if hours <= 0:
+        raise ValueError("--backfill must be greater than zero")
+    if frequency <= 0:
+        raise ValueError("--freq must be greater than zero")
+
+    end = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+    count = max(1, round(hours * frequency))
+    interval_seconds = hours * 3600.0 / count
+    start = end - timedelta(hours=hours)
+    timestamps: list[datetime] = []
+    for index in range(count):
+        midpoint_seconds = (index + 0.5) * interval_seconds
+        jitter_seconds = random.uniform(-0.4, 0.4) * interval_seconds
+        timestamps.append(start + timedelta(seconds=midpoint_seconds + jitter_seconds))
+    return sorted(timestamps)
 
 
 def auth_base_from_submit_url(submit_url: str) -> str:
@@ -239,6 +257,19 @@ def parse_args() -> argparse.Namespace:
         help="Submit a test pond update payload (current behavior).",
     )
     parser.add_argument(
+        "--backfill",
+        type=float,
+        metavar="HOURS",
+        help="Submit historical test entries covering the previous HOURS.",
+    )
+    parser.add_argument(
+        "--freq",
+        type=float,
+        default=4.0,
+        metavar="PER_HOUR",
+        help="Average backfill entries per hour, with jitter (default: 4).",
+    )
+    parser.add_argument(
         "--anonymous",
         action="store_true",
         help="For --submit, send the payload as an anonymous test submission.",
@@ -268,7 +299,7 @@ def main() -> int:
         random.seed(args.seed)
 
     do_create_users = bool(args.create_users)
-    do_submit = bool(args.submit)
+    do_submit = bool(args.submit or args.backfill is not None)
     if not do_create_users and not do_submit:
         # Backward compatible default: submit one sample.
         do_submit = True
@@ -290,15 +321,11 @@ def main() -> int:
     if not do_submit:
         return 0
 
-    payload = build_random_payload()
-
     selected_user: AuthSession | None = None
     if args.anonymous:
-        payload["testMeta"] = {
-            "isTestSubmission": True,
-            "isAnonymousTest": True,
-            "submissionAuthMode": "anonymous",
-        }
+        if args.backfill is not None:
+            print("--backfill requires authenticated test users; remove --anonymous", file=sys.stderr)
+            return 2
     else:
         try:
             selected_user = choose_test_user_session(
@@ -310,36 +337,69 @@ def main() -> int:
         except (RuntimeError, urllib.error.URLError) as exc:
             print(f"Failed to select test user for submission: {exc}", file=sys.stderr)
             return 2
-        payload["authToken"] = selected_user.auth_token
-        payload["testMeta"] = {
-            "isTestSubmission": True,
-            "isAnonymousTest": False,
-            "submissionAuthMode": "authenticated",
-            "testUserNickname": selected_user.nickname,
-        }
-
-    print(f"POST {args.url}")
-    print("Payload:")
-    print(json.dumps(payload, indent=2, ensure_ascii=False))
-    if selected_user is not None:
-        print(
-            f"Submitting as test user: {selected_user.nickname} "
-            f"(showNicknameOnCharts={selected_user.show_nickname_on_charts})"
-        )
-    elif args.anonymous:
-        print("Submitting as anonymous test submission")
-
     try:
-        status, response_body = submit_update(args.url, payload, args.timeout)
-    except urllib.error.URLError as exc:
-        print(f"Request failed: {exc}", file=sys.stderr)
+        timestamps = (
+            backfill_timestamps(args.backfill, args.freq)
+            if args.backfill is not None
+            else [datetime.now(timezone.utc)]
+        )
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
         return 2
 
-    print(f"\nResponse status: {status}")
-    print("Response body:")
-    print(response_body)
+    failures = 0
+    for timestamp in timestamps:
+        payload = build_random_payload(timestamp)
+        if selected_user is not None:
+            payload["authToken"] = selected_user.auth_token
+            payload["testMeta"] = {
+                "isTestSubmission": True,
+                "isAnonymousTest": False,
+                "submissionAuthMode": "authenticated",
+                "testUserNickname": selected_user.nickname,
+            }
+            if args.backfill is not None:
+                cast_meta = payload["testMeta"]
+                if isinstance(cast_meta, dict):
+                    cast_meta["historicalTimestamp"] = timestamp.isoformat()
+        else:
+            payload["testMeta"] = {
+                "isTestSubmission": True,
+                "isAnonymousTest": True,
+                "submissionAuthMode": "anonymous",
+            }
 
-    return 0 if 200 <= status < 300 else 1
+        if len(timestamps) == 1:
+            print(f"POST {args.url}")
+            print("Payload:")
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
+            if selected_user is not None:
+                print(
+                    f"Submitting as test user: {selected_user.nickname} "
+                    f"(showNicknameOnCharts={selected_user.show_nickname_on_charts})"
+                )
+            elif args.anonymous:
+                print("Submitting as anonymous test submission")
+
+        try:
+            status, response_body = submit_update(args.url, payload, args.timeout)
+        except urllib.error.URLError as exc:
+            print(f"Request failed for {timestamp.isoformat()}: {exc}", file=sys.stderr)
+            failures += 1
+            continue
+
+        if len(timestamps) == 1:
+            print(f"\nResponse status: {status}")
+            print("Response body:")
+            print(response_body)
+        elif not 200 <= status < 300:
+            print(f"Backfill failed for {timestamp.isoformat()}: {status} {response_body}", file=sys.stderr)
+        if not 200 <= status < 300:
+            failures += 1
+
+    if args.backfill is not None:
+        print(f"Backfill submitted: {len(timestamps) - failures}/{len(timestamps)} entries over {args.backfill:g}h")
+    return 0 if failures == 0 else 1
 
 
 if __name__ == "__main__":

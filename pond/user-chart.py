@@ -5,7 +5,7 @@ import argparse
 import json
 import math
 from typing import Any, cast
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, time, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -33,6 +33,50 @@ QUEUE_GRASS_COUNT_MAP = {
     6: 50.0,
     7: 70.0,
 }
+
+
+def night_seconds_between(start: datetime, end: datetime) -> float:
+    """Return seconds within [start, end) that fall in London time from 22:00 to 08:00."""
+    if end <= start:
+        return 0.0
+
+    total = 0.0
+    first_day = start.astimezone(LONDON_TZ).date() - timedelta(days=1)
+    last_day = end.astimezone(LONDON_TZ).date()
+    day = first_day
+    while day <= last_day:
+        window_start = datetime.combine(day, time(22, 0), tzinfo=LONDON_TZ).astimezone(timezone.utc)
+        window_end = datetime.combine(day + timedelta(days=1), time(8, 0), tzinfo=LONDON_TZ).astimezone(timezone.utc)
+        overlap_start = max(start, window_start)
+        overlap_end = min(end, window_end)
+        if overlap_end > overlap_start:
+            total += (overlap_end - overlap_start).total_seconds()
+        day += timedelta(days=1)
+    return total
+
+
+def compress_time_value(value: datetime, origin: datetime) -> datetime:
+    real_seconds = (value - origin).total_seconds()
+    hidden_seconds = night_seconds_between(origin, value)
+    return origin + timedelta(seconds=real_seconds - hidden_seconds)
+
+
+def expand_time_value(value: datetime, origin: datetime) -> datetime:
+    target_seconds = (value - origin).total_seconds()
+    if target_seconds <= 0:
+        return origin
+
+    low = origin
+    day_guess = int(target_seconds // (14 * 3600)) + 3
+    high = origin + timedelta(seconds=target_seconds + day_guess * 10 * 3600)
+    for _ in range(40):
+        mid = low + (high - low) / 2
+        mid_seconds = (mid - origin).total_seconds() - night_seconds_between(origin, mid)
+        if mid_seconds < target_seconds:
+            low = mid
+        else:
+            high = mid
+    return high
 
 
 def parse_args() -> argparse.Namespace:
@@ -158,8 +202,8 @@ def point_label_for_record(record: dict[str, object]) -> str | None:
         if bool(submitted_by.get("isTestUser")):
             nickname = submitted_by.get("nickname")
             if isinstance(nickname, str) and nickname.strip():
-                return f"{nickname.strip()} (test)"
-            return "test-user"
+                return f"{nickname.strip()}*"
+            return "test-user*"
         return chart_nickname(record)
 
     if is_test_anonymous_record(record):
@@ -334,6 +378,23 @@ def build_chart(
     queue_ewma = ewma_time_series(queue_points, halflife_hours)
     grass_ewma = ewma_time_series(grass_points, halflife_hours)
 
+    all_times = [
+        cast(datetime, record["timestamp"])
+        for record in records
+        if isinstance(record.get("timestamp"), datetime)
+    ]
+    time_origin = min(all_times) if all_times else datetime.now(timezone.utc)
+
+    def compress_points(points: list[tuple[datetime, float]]) -> list[tuple[datetime, float]]:
+        return [(compress_time_value(timestamp, time_origin), value) for timestamp, value in points]
+
+    def compress_times(times: list[datetime]) -> list[datetime]:
+        return [compress_time_value(timestamp, time_origin) for timestamp in times]
+
+    slots_plot_points = compress_points(slots_points)
+    queue_plot_points = compress_points(queue_points)
+    grass_plot_points = compress_points(grass_points)
+
     # In the slots panel, highlight "yes" in red and keep "no" green.
     slots_point_colors = ["#e03131" if value >= 0.5 else "#2b8a3e" for _, value in slots_points]
 
@@ -345,9 +406,9 @@ def build_chart(
 
     plot_metric(
         axes[0],
-        slots_points,
-        slots_ewma,
-        slots_unknown_times,
+        slots_plot_points,
+        compress_points(slots_ewma),
+        compress_times(slots_unknown_times),
         0.5,
         title="Slots enforced",
         y_label="No/Yes",
@@ -360,9 +421,9 @@ def build_chart(
 
     plot_metric(
         axes[1],
-        queue_points,
-        queue_ewma,
-        queue_unknown_times,
+        queue_plot_points,
+        compress_points(queue_ewma),
+        compress_times(queue_unknown_times),
         36.5,
         title="Queue length",
         y_label="People",
@@ -373,9 +434,9 @@ def build_chart(
 
     plot_metric(
         axes[2],
-        grass_points,
-        grass_ewma,
-        grass_unknown_times,
+        grass_plot_points,
+        compress_points(grass_ewma),
+        compress_times(grass_unknown_times),
         36.5,
         title="People on grass",
         y_label="People",
@@ -384,8 +445,43 @@ def build_chart(
     )
     axes[2].set_ylim(-2, 75)
 
-    axes[2].set_xlabel("Time (Europe/London)")
-    axes[2].xaxis.set_major_formatter(mdates.DateFormatter("%a %H:%M", tz=LONDON_TZ))
+    if all_times:
+        real_max = max(all_times)
+        day = time_origin.astimezone(LONDON_TZ).date() - timedelta(days=1)
+        last_day = real_max.astimezone(LONDON_TZ).date()
+        while day <= last_day:
+            window_start = datetime.combine(day, time(22, 0), tzinfo=LONDON_TZ).astimezone(timezone.utc)
+            window_end = datetime.combine(day + timedelta(days=1), time(8, 0), tzinfo=LONDON_TZ).astimezone(timezone.utc)
+            if window_end > time_origin and window_start < real_max:
+                break_x = compress_time_value(max(window_start, time_origin), time_origin)
+                for axis in axes:
+                    axis.axvline(break_x, color="0.6", linestyle="--", linewidth=0.8, alpha=0.6)
+                    dx = timedelta(minutes=18)
+                    axis.plot(
+                        [break_x - dx, break_x - dx / 3],
+                        [-0.02, 0.02],
+                        transform=axis.get_xaxis_transform(),
+                        color="black",
+                        linewidth=1.1,
+                        clip_on=False,
+                    )
+                    axis.plot(
+                        [break_x + dx / 3, break_x + dx],
+                        [-0.02, 0.02],
+                        transform=axis.get_xaxis_transform(),
+                        color="black",
+                        linewidth=1.1,
+                        clip_on=False,
+                    )
+            day += timedelta(days=1)
+
+    def compressed_label(value: float, _pos: int) -> str:
+        axis_dt = mdates.num2date(value, tz=timezone.utc)
+        real_dt = expand_time_value(axis_dt, time_origin).astimezone(LONDON_TZ)
+        return real_dt.strftime("%a %H:%M")
+
+    axes[2].set_xlabel("Time (Europe/London; 22:00-08:00 compressed)")
+    axes[2].xaxis.set_major_formatter(compressed_label)
     fig.autofmt_xdate()
 
     output_path.parent.mkdir(parents=True, exist_ok=True)

@@ -9,6 +9,8 @@ UNITS=(
   pond-dev-sync.service
   pond-dev-sync.timer
   pond-web-api.service
+  pond-apitest.service
+  pond-apitest.timer
   pond-user-chart.service
   pond-user-chart.timer
 )
@@ -29,22 +31,23 @@ echo "Reloading user systemd"
 systemctl --user daemon-reload
 
 echo "Enabling and starting timers"
-systemctl --user enable --now pond-dev-sync.timer pond-user-chart.timer
+systemctl --user enable --now pond-dev-sync.timer pond-apitest.timer pond-user-chart.timer
 
 echo "Enabling and restarting dev web API service"
 systemctl --user enable pond-web-api.service
 systemctl --user restart pond-web-api.service
 
 echo "Verifying timer"
-systemctl --user list-timers --all | grep -E 'pond-dev-sync\.timer|pond-user-chart\.timer' || {
+systemctl --user list-timers --all | grep -E 'pond-dev-sync\.timer|pond-apitest\.timer|pond-user-chart\.timer' || {
   echo "Error: expected jwpc19 timers not found" >&2
   exit 1
 }
 
-systemctl --user status pond-dev-sync.timer pond-dev-sync.service pond-user-chart.timer pond-user-chart.service pond-web-api.service --no-pager || true
+systemctl --user status pond-dev-sync.timer pond-dev-sync.service pond-apitest.timer pond-apitest.service pond-user-chart.timer pond-user-chart.service pond-web-api.service --no-pager || true
 
 echo "Recent service logs"
 journalctl --user -u pond-dev-sync.service -n 30 --no-pager || true
+journalctl --user -u pond-apitest.service -n 20 --no-pager || true
 journalctl --user -u pond-user-chart.service -n 20 --no-pager || true
 journalctl --user -u pond-web-api.service -n 20 --no-pager || true
 

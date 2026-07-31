@@ -39,7 +39,7 @@ host_remove_script() {
 host_expected_units() {
   local host_id="$1"
   case "${host_id}" in
-    jwpc19) echo "pond-dev-sync.service pond-dev-sync.timer pond-web-api.service pond-user-chart.timer" ;;
+    jwpc19) echo "pond-dev-sync.service pond-dev-sync.timer pond-web-api.service pond-apitest.timer pond-user-chart.timer" ;;
     jwpc12) echo "pond-scrape.timer pond-weather.timer pond-submit-ingest.service" ;;
     gcweb1) echo "pond-web-api.service pond-apitest.timer pond-user-chart.timer" ;;
     *) return 1 ;;

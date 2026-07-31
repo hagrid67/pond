@@ -1,0 +1,11 @@
+[Unit]
+Description=Run pond apitest submissions (10:00 to 20:30, 10-30 minute jitter)
+
+[Timer]
+OnCalendar=*-*-* 10..19:*:00
+OnCalendar=*-*-* 20:00..30:00
+Persistent=true
+Unit=pond-apitest.service
+
+[Install]
+WantedBy=timers.target

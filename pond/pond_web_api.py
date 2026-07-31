@@ -81,6 +81,16 @@ def utc_now_iso() -> str:
     return utc_now().isoformat()
 
 
+def parse_iso_timestamp(value: str) -> datetime | None:
+    try:
+        timestamp = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    if timestamp.tzinfo is None:
+        timestamp = timestamp.replace(tzinfo=timezone.utc)
+    return timestamp.astimezone(timezone.utc)
+
+
 def resolve_auth_db_path() -> Path:
     if AUTH_DB_PATH.exists() or not LEGACY_AUTH_DB_PATH.exists():
         return AUTH_DB_PATH
@@ -774,6 +784,18 @@ def post_pond_update(payload: dict[str, Any]) -> JSONResponse:
                 authenticated_user = None
 
     now_utc = datetime.now(timezone.utc)
+    test_meta = payload_to_store.get("testMeta")
+    if (
+        authenticated_user is not None
+        and authenticated_user["isTestUser"]
+        and isinstance(test_meta, dict)
+        and test_meta.get("isTestSubmission") is True
+    ):
+        historical_timestamp = test_meta.get("historicalTimestamp")
+        if isinstance(historical_timestamp, str):
+            parsed_timestamp = parse_iso_timestamp(historical_timestamp)
+            if parsed_timestamp is not None and parsed_timestamp <= now_utc:
+                now_utc = parsed_timestamp
     now_iso = now_utc.isoformat()
     record_id = str(uuid.uuid4())
     record = {

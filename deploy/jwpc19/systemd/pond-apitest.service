@@ -1,0 +1,13 @@
+[Unit]
+Description=Submit random pond update sample from jwpc19
+After=network-online.target pond-web-api.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/projects/pond
+ExecStartPre=/usr/bin/env bash -lc 'sleep "$((RANDOM % 1201 + 600))"'
+ExecStart=%h/projects/pond/ve312pond/bin/python %h/projects/pond/pond/apitest.py --url http://127.0.0.1:8000/api/pondupdate
+
+[Install]
+WantedBy=default.target

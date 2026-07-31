@@ -260,3 +260,58 @@ def test_register_test_user_sets_flag_and_submission_metadata(auth_env) -> None:
     submit_body = _decode_json_response(submit)
     assert submit.status_code == 200
     assert submit_body["submittedBy"]["isTestUser"] is True
+
+
+def test_test_user_can_submit_historical_update(auth_env) -> None:
+    api.register_nickname(
+        api.RegisterNicknameRequest(
+            nickname="backfill-test",
+            password="demo-pass-123",
+            isTestUser=True,
+        )
+    )
+    login_body = _decode_json_response(
+        api.login(api.LoginRequest(username="backfill-test", password="demo-pass-123"))
+    )
+    historical_timestamp = "2026-07-29T12:34:56+00:00"
+
+    response = api.post_pond_update(
+        {
+            "type": "pond-update",
+            "authToken": login_body["authToken"],
+            "testMeta": {
+                "isTestSubmission": True,
+                "historicalTimestamp": historical_timestamp,
+            },
+        }
+    )
+    body = _decode_json_response(response)
+
+    assert body["receivedAt"] == historical_timestamp
+    output_path = auth_env["updates_dir"] / "user-updates-260729.jsonl"
+    stored = json.loads(output_path.read_text(encoding="utf-8"))
+    assert stored["receivedAt"] == historical_timestamp
+
+
+def test_normal_user_cannot_submit_historical_update(auth_env) -> None:
+    api.register_nickname(
+        api.RegisterNicknameRequest(nickname="normal-user", password="demo-pass-123")
+    )
+    login_body = _decode_json_response(
+        api.login(api.LoginRequest(username="normal-user", password="demo-pass-123"))
+    )
+    historical_timestamp = "2020-01-01T00:00:00+00:00"
+
+    response = api.post_pond_update(
+        {
+            "type": "pond-update",
+            "authToken": login_body["authToken"],
+            "testMeta": {
+                "isTestSubmission": True,
+                "historicalTimestamp": historical_timestamp,
+            },
+        }
+    )
+    body = _decode_json_response(response)
+
+    assert body["receivedAt"] != historical_timestamp
