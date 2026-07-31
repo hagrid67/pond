@@ -287,10 +287,23 @@ def test_test_user_can_submit_historical_update(auth_env) -> None:
     )
     body = _decode_json_response(response)
 
+    second_response = api.post_pond_update(
+        {
+            "type": "pond-update",
+            "authToken": login_body["authToken"],
+            "testMeta": {
+                "isTestSubmission": True,
+                "historicalTimestamp": historical_timestamp,
+            },
+        }
+    )
+
     assert body["receivedAt"] == historical_timestamp
+    assert second_response.status_code == 200
     output_path = auth_env["updates_dir"] / "user-updates-260729.jsonl"
-    stored = json.loads(output_path.read_text(encoding="utf-8"))
-    assert stored["receivedAt"] == historical_timestamp
+    stored = [json.loads(line) for line in output_path.read_text(encoding="utf-8").splitlines()]
+    assert len(stored) == 2
+    assert all(record["receivedAt"] == historical_timestamp for record in stored)
 
 
 def test_normal_user_cannot_submit_historical_update(auth_env) -> None:

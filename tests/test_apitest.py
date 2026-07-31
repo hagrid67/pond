@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 from pond import apitest
-from pond.apitest import AuthSession, backfill_timestamps
+from pond.apitest import AuthSession, backfill_end_timestamp, backfill_timestamps
 
 
 def test_backfill_timestamps_match_frequency_with_bounded_jitter() -> None:
@@ -23,6 +23,14 @@ def test_backfill_timestamps_match_frequency_with_bounded_jitter() -> None:
         assert abs(timestamp - midpoint) <= 0.4 * interval
 
 
+def test_backfill_end_timestamp_uses_london_date_and_time() -> None:
+    now = datetime(2026, 7, 31, 13, 30, tzinfo=timezone.utc)
+
+    end = backfill_end_timestamp("26-07-30", "20:00", now=now)
+
+    assert end == datetime(2026, 7, 30, 19, 0, tzinfo=timezone.utc)
+
+
 def test_backfill_selects_a_test_user_for_each_entry(monkeypatch) -> None:
     sessions = [
         AuthSession(nickname="joe-test", auth_token="joe-token", show_nickname_on_charts=True),
@@ -30,10 +38,11 @@ def test_backfill_selects_a_test_user_for_each_entry(monkeypatch) -> None:
         AuthSession(nickname="fred-test", auth_token="fred-token", show_nickname_on_charts=False),
     ]
     timestamps = [
-        datetime(2026, 7, 31, 10, 0, tzinfo=timezone.utc) + timedelta(minutes=index)
+        datetime(2026, 7, 30, 10, 0, tzinfo=timezone.utc) + timedelta(minutes=index)
         for index in range(30)
     ]
     submitted_payloads: list[dict[str, object]] = []
+    scheduler_end: list[datetime] = []
 
     monkeypatch.setattr(
         apitest,
@@ -44,6 +53,8 @@ def test_backfill_selects_a_test_user_for_each_entry(monkeypatch) -> None:
             submit=False,
             backfill=1.0,
             freq=30.0,
+            date="26-07-30",
+            endtime="20:00",
             url="http://127.0.0.1:8000/api/pondupdate",
             timeout=10.0,
             anonymous=False,
@@ -52,7 +63,12 @@ def test_backfill_selects_a_test_user_for_each_entry(monkeypatch) -> None:
         ),
     )
     monkeypatch.setattr(apitest, "load_test_user_sessions", lambda **_kwargs: sessions)
-    monkeypatch.setattr(apitest, "backfill_timestamps", lambda *_args, **_kwargs: timestamps)
+
+    def capture_timestamps(_hours: float, _frequency: float, now: datetime) -> list[datetime]:
+        scheduler_end.append(now)
+        return timestamps
+
+    monkeypatch.setattr(apitest, "backfill_timestamps", capture_timestamps)
 
     def capture_submit(_url: str, payload: dict[str, object], _timeout: float) -> tuple[int, str]:
         submitted_payloads.append(payload)
@@ -68,3 +84,4 @@ def test_backfill_selects_a_test_user_for_each_entry(monkeypatch) -> None:
     }
     assert len(submitted_payloads) == len(timestamps)
     assert selected_names == {"joe-test", "bob-test", "fred-test"}
+    assert scheduler_end == [datetime(2026, 7, 30, 19, 0, tzinfo=timezone.utc)]

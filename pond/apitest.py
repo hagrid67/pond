@@ -10,6 +10,7 @@ from urllib.parse import urlsplit
 import urllib.error
 import urllib.request
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 
 QUEUE_LABELS = ["don't know", "no queue", "5", "10", "20", "30", "50", "long!"]
@@ -20,6 +21,7 @@ TEST_USERS = [
     ("bob-test", True),
     ("fred-test", False),
 ]
+LONDON_TZ = ZoneInfo("Europe/London")
 
 
 @dataclass
@@ -89,6 +91,29 @@ def backfill_timestamps(hours: float, frequency: float, now: datetime | None = N
         jitter_seconds = random.uniform(-0.4, 0.4) * interval_seconds
         timestamps.append(start + timedelta(seconds=midpoint_seconds + jitter_seconds))
     return sorted(timestamps)
+
+
+def backfill_end_timestamp(
+    date_value: str | None,
+    endtime_value: str | None,
+    now: datetime | None = None,
+) -> datetime:
+    current_local = (now or datetime.now(timezone.utc)).astimezone(LONDON_TZ)
+    target_date = current_local.date()
+    target_time = current_local.time().replace(tzinfo=None)
+
+    if date_value is not None:
+        try:
+            target_date = datetime.strptime(date_value, "%y-%m-%d").date()
+        except ValueError as exc:
+            raise ValueError("--date must use yy-mm-dd format") from exc
+    if endtime_value is not None:
+        try:
+            target_time = datetime.strptime(endtime_value, "%H:%M").time()
+        except ValueError as exc:
+            raise ValueError("--endtime must use hh:mm format") from exc
+
+    return datetime.combine(target_date, target_time, tzinfo=LONDON_TZ).astimezone(timezone.utc)
 
 
 def auth_base_from_submit_url(submit_url: str) -> str:
@@ -270,6 +295,16 @@ def parse_args() -> argparse.Namespace:
         help="Average backfill entries per hour, with jitter (default: 4).",
     )
     parser.add_argument(
+        "--date",
+        metavar="YY-MM-DD",
+        help="London date containing the end of the backfill period (default: today).",
+    )
+    parser.add_argument(
+        "--endtime",
+        metavar="HH:MM",
+        help="London time at the end of the backfill period (default: current time).",
+    )
+    parser.add_argument(
         "--anonymous",
         action="store_true",
         help="For --submit, send the payload as an anonymous test submission.",
@@ -300,6 +335,9 @@ def main() -> int:
 
     do_create_users = bool(args.create_users)
     do_submit = bool(args.submit or args.backfill is not None)
+    if args.backfill is None and (args.date is not None or args.endtime is not None):
+        print("--date and --endtime require --backfill", file=sys.stderr)
+        return 2
     if not do_create_users and not do_submit:
         # Backward compatible default: submit one sample.
         do_submit = True
@@ -338,8 +376,11 @@ def main() -> int:
             print(f"Failed to select test user for submission: {exc}", file=sys.stderr)
             return 2
     try:
+        backfill_end = backfill_end_timestamp(args.date, args.endtime)
+        if args.backfill is not None and backfill_end > datetime.now(timezone.utc):
+            raise ValueError("backfill end must not be in the future")
         timestamps = (
-            backfill_timestamps(args.backfill, args.freq)
+            backfill_timestamps(args.backfill, args.freq, now=backfill_end)
             if args.backfill is not None
             else [datetime.now(timezone.utc)]
         )
