@@ -182,7 +182,11 @@ if [[ ${RUN_PLOT} -eq 1 ]]; then
   run_python "${PLOT_SCRIPT_MODULE}" --venue "Mixed" --prevday --separate-axes --prevday --nextday --per-slot-from -3
   run_python "${PLOT_SCRIPT_MODULE}" --venue "Ladies" --prevday --separate-axes --prevday --nextday --per-slot-from -3
   run_python "${PLOT_SCRIPT_MODULE}" --venue "Lido" --prevday --separate-axes --prevday --nextday --per-slot-from -3
-  run_python -m pond.user-chart
+  if [[ -d "${REPO_ROOT}/user-updates" ]]; then
+    run_python -m pond.user-chart
+  else
+    echo "Skipping user chart: input directory not found at ${REPO_ROOT}/user-updates"
+  fi
 fi
 
 if [[ ${RUN_RSYNC} -eq 1 ]]; then
