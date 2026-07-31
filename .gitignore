@@ -53,6 +53,8 @@ logs/*
 www-root/booking-plot*.png
 www-root/bookings.html
 www-root/bookings-meta.json
+www-root/pond-temps.html
+www-root/pond-temps.png
 www-root/user-updates.png
 www-root/user-updates-test.png
 
