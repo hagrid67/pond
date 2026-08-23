@@ -279,6 +279,28 @@ def format_as_of_time(value: datetime) -> str:
 	return f"{value.strftime('%a %b')} {ordinal_day(value.day)}, {value.strftime('%H:%M')}"
 
 
+def plot_no_slots(venues: list[str] | None, latest_snapshot_time: datetime) -> None:
+	fig, axis = plt.subplots(figsize=(8, 4), constrained_layout=True)
+	venue_label = "All venues" if not venues else ", ".join(venues)
+	axis.text(
+		0.5,
+		0.5,
+		f"No slots available for {venue_label}",
+		transform=axis.transAxes,
+		ha="center",
+		va="center",
+		fontsize=16,
+	)
+	axis.set_axis_off()
+	fig.suptitle(f"Booking availability (as of {format_as_of_time(latest_snapshot_time)})")
+
+	venue = "all" if not venues else "-".join(venues).lower().replace("'", "").replace(" ", "-")
+	output_path = OUTPUT_DIR / f"booking-plot-{venue}.png"
+	OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+	fig.savefig(output_path, dpi=150, bbox_inches="tight")
+	print(f"No slots available; saved empty plot: {output_path}")
+
+
 def plot_slots(
 	by_slot: dict[SlotKey, list[tuple[datetime, int]]],
 	venues: list[str] | None,
@@ -848,6 +870,9 @@ def main() -> None:
 			f"{min(plotted_snapshot_times)} to {max(plotted_snapshot_times)}"
 		)
 	print(f"Plotting {len(filtered_series)} slot series")
+	if not filtered_series:
+		plot_no_slots(venues, latest_snapshot_time)
+		return
 	if args.separate_axes:
 		plot_slots_separate_axes(
 			filtered_series,

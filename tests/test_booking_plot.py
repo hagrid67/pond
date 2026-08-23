@@ -93,8 +93,10 @@ class _FakeXAxis:
 class _FakeAxis:
 	def __init__(self) -> None:
 		self.xaxis = _FakeXAxis()
+		self.transAxes = object()
 		self.plots = []
 		self.annotations = []
+		self.texts = []
 		self.titles = []
 		self.xlabel = None
 		self.ylabel = None
@@ -102,6 +104,7 @@ class _FakeAxis:
 		self.xlim = None
 		self.xticks = None
 		self.xticklabels = None
+		self.axis_off = False
 
 	def plot(self, *args, **kwargs):
 		self.plots.append((args, kwargs))
@@ -109,6 +112,12 @@ class _FakeAxis:
 
 	def annotate(self, *args, **kwargs) -> None:
 		self.annotations.append((args, kwargs))
+
+	def text(self, *args, **kwargs) -> None:
+		self.texts.append((args, kwargs))
+
+	def set_axis_off(self) -> None:
+		self.axis_off = True
 
 	def set_title(self, value) -> None:
 		self.titles.append(value)
@@ -164,6 +173,19 @@ def _slot(date_text: str, time_text: str = "10:00-11:00", location: str = "Men's
 		location=location,
 		duration="60",
 	)
+
+
+def test_plot_no_slots_saves_current_empty_state(monkeypatch, tmp_path) -> None:
+	axis = _FakeAxis()
+	figure = _FakeFigure()
+	monkeypatch.setattr(booking_plot.plt, "subplots", lambda **_kwargs: (figure, axis))
+	monkeypatch.setattr(booking_plot, "OUTPUT_DIR", tmp_path)
+
+	booking_plot.plot_no_slots(["Ladies"], datetime(2026, 8, 23, 18, 6))
+
+	assert axis.texts[0][0][2] == "No slots available for Ladies"
+	assert axis.axis_off
+	assert figure.saved_paths[0][0] == tmp_path / "booking-plot-ladies.png"
 
 
 def test_filter_slots_keeps_today_and_previous_four_days() -> None:
