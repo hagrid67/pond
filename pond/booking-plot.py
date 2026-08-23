@@ -17,6 +17,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = REPO_ROOT / "data"
 OUTPUT_DIR = REPO_ROOT / "www-root"
 GLOB_PATTERN = "bookings-*.csv"
+SNAPSHOT_HISTORY_DAYS = 8
 
 
 @dataclass(frozen=True)
@@ -81,10 +82,16 @@ def parse_availability(value: str) -> int:
 	raise ValueError(f"Unsupported availability format: {value!r}")
 
 
-def load_snapshots(data_dir: Path) -> tuple[list[datetime], dict[SlotKey, list[tuple[datetime, int]]]]:
+def load_snapshots(
+	data_dir: Path,
+	history_days: int = SNAPSHOT_HISTORY_DAYS,
+) -> tuple[list[datetime], dict[SlotKey, list[tuple[datetime, int]]]]:
 	snapshots = sorted(data_dir.glob(GLOB_PATTERN))
 	if not snapshots:
 		raise FileNotFoundError(f"No snapshot files matched {data_dir / GLOB_PATTERN}")
+	latest_snapshot_time = max(parse_snapshot_time(path) for path in snapshots)
+	cutoff = latest_snapshot_time - timedelta(days=history_days)
+	snapshots = [path for path in snapshots if parse_snapshot_time(path) >= cutoff]
 
 	snapshot_times: list[datetime] = []
 	by_slot: dict[SlotKey, list[tuple[datetime, int]]] = defaultdict(list)

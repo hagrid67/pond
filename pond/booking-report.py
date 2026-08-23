@@ -955,11 +955,19 @@ def build_report_slots(
 		historical_days=historical_days,
 		booking_lead_days=booking_lead_days,
 	)
+	selected_slots, _selected_dates = load_slots_from_csv(selected_csv)
+	selected_keys = {
+		(slot["date"], slot["time"], slot["location"], slot["duration"])
+		for slot in selected_slots
+	}
 	report_slots: list[dict[str, str | int]] = []
-	for (slot_date, slot_time, location, duration), points in sorted(history_by_slot.items()):
+	for key, points in sorted(history_by_slot.items()):
+		slot_date, slot_time, location, duration = key
 		sorted_points = sorted(points)
 		final_count = sorted_points[-1][1]
 		start_dt = parse_slot_start(slot_date, slot_time)
+		if key not in selected_keys and sorted_points[-1][0] < start_dt:
+			continue
 		start_count = find_effective_count(sorted_points, start_dt)
 		if start_count is None:
 			start_count = final_count

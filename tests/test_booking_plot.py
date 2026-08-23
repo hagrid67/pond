@@ -188,6 +188,19 @@ def test_plot_no_slots_saves_current_empty_state(monkeypatch, tmp_path) -> None:
 	assert figure.saved_paths[0][0] == tmp_path / "booking-plot-ladies.png"
 
 
+def test_load_snapshots_reads_only_latest_eight_days(tmp_path) -> None:
+	header = "date,time,location,duration,availability\n"
+	row = "2026-0823,10:00-11:00,Men's,60,5\n"
+	(tmp_path / "bookings-2026-0815-1159.csv").write_text(header + row, encoding="utf-8")
+	(tmp_path / "bookings-2026-0815-1200.csv").write_text(header + row, encoding="utf-8")
+	(tmp_path / "bookings-2026-0823-1200.csv").write_text(header + row, encoding="utf-8")
+
+	snapshot_times, slot_series = booking_plot.load_snapshots(tmp_path)
+
+	assert snapshot_times == [datetime(2026, 8, 15, 12), datetime(2026, 8, 23, 12)]
+	assert len(next(iter(slot_series.values()))) == 2
+
+
 def test_filter_slots_keeps_today_and_previous_four_days() -> None:
 	by_slot = {
 		_slot(_date("2026-07-06")): [(datetime(2026, 7, 10, 8, 0), 1)],

@@ -193,3 +193,24 @@ def test_build_report_slots_uses_history_for_disappeared_slots(tmp_path, monkeyp
 	assert historical_slot["availability_style"] == 4
 	assert historical_slot["availability_final"] == 1
 	assert historical_slot["booked_out_age"] == "2d8h"
+
+
+def test_build_report_slots_excludes_slot_removed_before_it_started(tmp_path, monkeypatch) -> None:
+	def write_archive(name: str, rows: str) -> Path:
+		path = tmp_path / name
+		path.write_text("date,time,location,duration,availability\n" + rows, encoding="utf-8")
+		return path
+
+	write_archive(
+		"bookings-2026-0708-1200.csv",
+		"2026-0711,14:00-15:00,Ladies,60,20\n",
+	)
+	selected = write_archive(
+		"bookings-2026-0710-1300.csv",
+		"2026-0711,14:00-15:00,Men's,60,6\n",
+	)
+
+	monkeypatch.setattr(booking_report, "DATA_DIR", tmp_path)
+	report_slots, _date_sequence, _reference_time = booking_report.build_report_slots(selected)
+
+	assert not any(slot["location"] == "Ladies" for slot in report_slots)
