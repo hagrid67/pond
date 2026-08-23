@@ -409,6 +409,7 @@ run_crontab_check() {
     while IFS= read -r line; do
       [[ -z "${line//[[:space:]]/}" ]] && continue
       [[ "${line}" =~ ^[[:space:]]*# ]] && continue
+      [[ "${line}" =~ [Hh][Ee][Aa][Tt][Ii][Nn][Gg] ]] && continue
       shown_count=$((shown_count + 1))
       if [[ "${line}" =~ [Pp][Oo][Nn][Dd] ]]; then
         pond_count=$((pond_count + 1))
