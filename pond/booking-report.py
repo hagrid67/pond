@@ -15,13 +15,14 @@ from typing import Callable, cast
 import numpy as np
 import pandas as pd
 
+from pond.booking_slots import logical_slot, slot_group, slot_identity
+
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = REPO_ROOT / "data"
 ARCHIVE_GLOB = "bookings-*.csv"
 HISTORICAL_DAYS = 6
 BOOKING_LEAD_DAYS = 7
-LIDO_SLOT_TIMES = {"10:30-13:30", "14:30-17:30", "18:00-20:00"}
 POND_ELEVATION_M = 70.0
 LAPSE_RATE_C_PER_KM = 6.5
 
@@ -217,9 +218,7 @@ def build_report_metadata(
 ) -> dict[str, object]:
 	"""Build a compact metadata manifest for the browser controls."""
 	bookings_snapshot_at = infer_snapshot_time(selected_csv)
-	all_times: list[str] = []
-	all_times_seen: set[str] = set()
-	time_slot_groups: dict[str, str] = {}
+	logical_slots_seen: dict[str, dict[str, str]] = {}
 	days: list[dict[str, object]] = []
 	reference_date = bookings_snapshot_at.date()
 
@@ -228,19 +227,23 @@ def build_report_metadata(
 		day_group = day_group_for_date(parsed_day, reference_date)
 
 		day_slots: list[dict[str, str]] = []
-		seen_day_times: set[str] = set()
+		seen_day_slots: set[tuple[str, str]] = set()
 		for slot in sorted((slot for slot in report_slots if slot["date"] == day), key=lambda slot: str(slot["time"])):
 			time_text = str(slot["time"])
-			if time_text in seen_day_times:
+			location = str(slot["location"])
+			identity = slot_identity(location, time_text)
+			day_key = (identity, time_text)
+			if day_key in seen_day_slots:
 				continue
-			seen_day_times.add(time_text)
-			slot_group = slot_group_for_time(time_text)
-			day_slots.append({"time": time_text, "slotGroup": slot_group})
-			if time_text not in time_slot_groups:
-				time_slot_groups[time_text] = slot_group
-			if time_text not in all_times_seen:
-				all_times_seen.add(time_text)
-				all_times.append(time_text)
+			seen_day_slots.add(day_key)
+			group = slot_group(location)
+			day_slots.append({"id": identity, "time": time_text, "slotGroup": group})
+			mapped = logical_slot(location, time_text)
+			logical_slots_seen[identity] = {
+				"id": identity,
+				"group": group,
+				"label": f"{identity} {time_text}" if mapped else f"Unmatched {time_text}",
+			}
 
 		days.append(
 			{
@@ -254,7 +257,7 @@ def build_report_metadata(
 	weather_forecast_at = weather_sources[-1]["modelRunAt"] if weather_sources else None
 
 	return {
-		"schemaVersion": 1,
+		"schemaVersion": 2,
 		"reportGeneratedAt": report_generated_at.astimezone(ZoneInfo("UTC")).isoformat(),
 		"bookingsSnapshotAt": bookings_snapshot_at.astimezone(ZoneInfo("UTC")).isoformat(),
 		"weatherForecastAt": weather_forecast_at,
@@ -268,8 +271,7 @@ def build_report_metadata(
 			{"id": "pond", "label": "Pond slots"},
 			{"id": "lido", "label": "Lido slots"},
 		],
-		"allTimes": all_times,
-		"timeSlotGroups": time_slot_groups,
+		"logicalSlots": list(logical_slots_seen.values()),
 		"days": days,
 	}
 
@@ -847,10 +849,6 @@ def build_weather_by_slot(
 	return weather_by_slot
 
 
-def slot_group_for_time(slot_time: str) -> str:
-	return "lido" if slot_time in LIDO_SLOT_TIMES else "pond"
-
-
 def parse_booking_date(date_text: str) -> date | None:
 	clean = (date_text or "").strip()
 	for fmt in ("%Y-%m%d", "%Y-%m-%d"):
@@ -1035,9 +1033,12 @@ def write_html_report(
 
 	venues = ["Men's", "Ladies", "Mixed", "Lido"]
 	table = defaultdict(lambda: defaultdict(dict))
+	unmatched_slots: set[tuple[str, str, str]] = set()
 	for s in all_slots:
 		date_label = s.get("date_display") or s.get("date", "")
 		table[date_label][s["time"]][s["location"]] = s["availability"]
+		if logical_slot(str(s["location"]), str(s["time"])) is None:
+			unmatched_slots.add((str(date_label), str(s["location"]), str(s["time"])))
 		if s.get("availability_display") is not None:
 			table[date_label][s["time"]][f"{s['location']}__display"] = s["availability_display"]
 		if s.get("availability_style") is not None:
@@ -1072,6 +1073,20 @@ def write_html_report(
 			f"<a href='{html_lib.escape(source_url)}' target='_blank' rel='noopener noreferrer'>"
 			"Open City of London bookings page</a></p>\n"
 		)
+		if unmatched_slots:
+			f.write(
+				"<div class='unmatched-slots-warning'>"
+				"<button type='button' class='unmatched-slots-toggle' aria-expanded='false'>"
+				f"Show {len(unmatched_slots)} unmatched slot(s)</button>"
+				"<div class='unmatched-slots-panel' hidden>"
+				"<table class='unmatched-slots-table'><thead><tr><th>Date</th><th>Venue</th><th>Time</th></tr></thead><tbody>"
+			)
+			for slot_date, location, slot_time in sorted(unmatched_slots):
+				f.write(
+					f"<tr><td>{html_lib.escape(slot_date)}</td><td>{html_lib.escape(location)}</td>"
+					f"<td>{html_lib.escape(slot_time)}</td></tr>"
+				)
+			f.write("</tbody></table></div></div>\n")
 
 		for date in dates:
 			date_value = html_lib.escape(date, quote=True)
@@ -1087,11 +1102,15 @@ def write_html_report(
 			for t in all_times:
 				if t not in table[date]:
 					continue
-				slot_group = slot_group_for_time(t)
+				row_locations = [location for location in venues if table[date][t].get(location) is not None]
+				row_location = row_locations[0] if row_locations else ""
+				row_slot_group = slot_group(row_location)
+				row_slot_id = slot_identity(row_location, t)
 				slot_status_class = "slot-historical" if is_fully_historical_slot(date, t, reference_time) else "slot-current"
 				time_value = html_lib.escape(t, quote=True)
 				f.write(
-					f"<tr data-time='{time_value}' data-slot-group='{slot_group}'>"
+					f"<tr data-time='{time_value}' data-slot-id='{html_lib.escape(row_slot_id, quote=True)}' "
+					f"data-slot-group='{row_slot_group}'>"
 					f"<td class='time-cell {slot_status_class}'><b>{html_lib.escape(t)}</b></td>"
 				)
 				for idx, v in enumerate(venues):

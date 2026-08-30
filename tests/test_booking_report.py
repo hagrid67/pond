@@ -140,6 +140,47 @@ def test_report_includes_filter_controls_when_enabled(tmp_path) -> None:
 	assert "data-slot-group='lido'" in html
 
 
+def test_report_lists_unmatched_slots_without_hiding_their_rows(tmp_path) -> None:
+	csv_path = tmp_path / "bookings.csv"
+	html_path = tmp_path / "bookings.html"
+	csv_path.write_text(
+		"date,time,location,duration,availability\n"
+		"2026-08-30,12:00-13:00,Men's,60,8\n"
+		"2026-08-30,16:05-17:05,Men's,60,7\n",
+		encoding="utf-8",
+	)
+
+	all_slots, date_sequence = booking_report.load_slots_from_csv(csv_path)
+	booking_report.write_html_report(all_slots, date_sequence, html_path, "https://example.test/source")
+	html = html_path.read_text(encoding="utf-8")
+
+	assert "Show 1 unmatched slot(s)" in html
+	assert "class='unmatched-slots-table'" in html
+	assert "<td>16:05-17:05</td>" in html
+	assert "data-slot-id='unmatched:pond:16:05-17:05'" in html
+	assert "data-time='12:00-13:00' data-slot-id='P1'" in html
+
+
+def test_report_metadata_groups_changed_times_under_one_logical_slot(tmp_path) -> None:
+	selected_csv = tmp_path / "bookings-2026-0830-1200.csv"
+	selected_csv.write_text("date,time,location,duration,availability\n", encoding="utf-8")
+	report_slots = [
+		{"date": "2026-0829", "time": "15:45-16:45", "location": "Men's", "duration": "60", "availability": 8},
+		{"date": "2026-0830", "time": "15:40-16:40", "location": "Mixed", "duration": "60", "availability": 7},
+	]
+
+	metadata = booking_report.build_report_metadata(
+		selected_csv,
+		report_slots,
+		["2026-0829", "2026-0830"],
+		datetime(2026, 8, 30, 12),
+	)
+
+	assert metadata["logicalSlots"] == [{"id": "P4", "group": "pond", "label": "P4 15:40-16:40"}]
+	assert metadata["days"][0]["slots"] == [{"id": "P4", "time": "15:45-16:45", "slotGroup": "pond"}]
+	assert metadata["days"][1]["slots"] == [{"id": "P4", "time": "15:40-16:40", "slotGroup": "pond"}]
+
+
 def test_find_latest_bookings_csv_uses_filename_timestamp(tmp_path) -> None:
 	older = tmp_path / "bookings-2026-0709-1200.csv"
 	newer = tmp_path / "bookings-2026-0710-1200.csv"

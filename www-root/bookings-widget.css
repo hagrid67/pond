@@ -43,6 +43,27 @@
   color: #8ab4f8;
 }
 
+.bookings-widget .unmatched-slots-warning {
+  margin: 0.75rem auto 1rem auto;
+  padding: 0.75rem;
+  max-width: 62rem;
+  border-left: 4px solid #f59e0b;
+  background: #3a2d16;
+}
+
+.bookings-widget .unmatched-slots-toggle {
+  padding: 0.35rem 0.65rem;
+  border: 1px solid #f59e0b;
+  background: #1d2b2b;
+  color: #fff;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.bookings-widget .unmatched-slots-table {
+  margin-top: 0.75rem;
+}
+
 .bookings-widget td.available {
   background: #d4edda;
   color: #111;

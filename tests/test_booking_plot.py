@@ -263,3 +263,28 @@ def test_separate_axes_creates_one_column_per_filtered_date(monkeypatch) -> None
 	assert captured["ncols"] == 5
 	assert len(axes) == 5
 	assert all(axis.plots for axis in axes)
+
+
+def test_separate_axes_merges_changed_times_for_same_logical_slot(monkeypatch) -> None:
+	date_text = _date("2026-08-30")
+	by_slot = {
+		_slot(date_text, "15:45-16:45"): [(_snapshot(date_text), 8)],
+		_slot(date_text, "15:40-16:40"): [(_snapshot(date_text, 11), 7)],
+	}
+	axis = _FakeAxis()
+	figure = _FakeFigure()
+	monkeypatch.setattr(booking_plot.plt, "subplots", lambda **_kwargs: (figure, axis))
+
+	booking_plot.plot_slots_separate_axes(
+		by_slot,
+		venues=["Men's"],
+		focus_date=date_text,
+		latest_snapshot_time=datetime(2026, 8, 30, 12),
+		show_prevday=False,
+		show_nextday=False,
+		per_slot_from_days=1,
+		include_night=True,
+	)
+
+	assert len(axis.plots) == 1
+	assert figure.legend_calls[0][0][1] == ["P4 15:40"]

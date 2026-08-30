@@ -7,10 +7,12 @@ from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, time, timedelta
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable
 
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
+
+from pond.booking_slots import slot_identity
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -224,8 +226,12 @@ def filter_snapshots_per_slot_start(
 	return filtered
 
 
-def slot_signature(slot: SlotKey) -> tuple[str, str]:
-	return (slot.time, slot.duration)
+def slot_signature(slot: SlotKey) -> str:
+	return slot_identity(slot.location, slot.time)
+
+
+def slot_plot_label(slot: SlotKey) -> str:
+	return f"{slot_signature(slot)} {slot.label}"
 
 
 def night_seconds_between(start: datetime, end: datetime) -> float:
@@ -383,7 +389,7 @@ def plot_slots(
 			and (not show_nextday or slot.date != next_date)
 		]
 		location_max = 0
-		color_by_signature: dict[tuple[str, str], str] = {}
+		color_by_signature: dict[str, str] = {}
 
 		for slot in location_today_slots:
 			points = by_slot[slot]
@@ -391,10 +397,10 @@ def plot_slots(
 			y_values = [availability for _, availability in points]
 			location_max = max(location_max, max(y_values, default=0))
 			line_color = color_by_date.get(slot.date) if colour_day else None
-			line, = axis.plot(x_values, y_values, linewidth=1.5, label=slot.label, color=line_color)
+			line, = axis.plot(x_values, y_values, linewidth=1.5, label=slot_plot_label(slot), color=line_color)
 			color_by_signature[slot_signature(slot)] = line.get_color()
 			axis.annotate(
-				slot.label,
+				slot_plot_label(slot),
 				xy=(x_values[-1], y_values[-1]),
 				xytext=(4, 0),
 				textcoords="offset points",
@@ -421,10 +427,10 @@ def plot_slots(
 				linewidth=1.5,
 				linestyle=":",
 				color=line_color,
-				label=slot.label,
+				label=slot_plot_label(slot),
 			)
 			axis.annotate(
-				slot.label,
+				slot_plot_label(slot),
 				xy=(x_values[-1], y_values[-1]),
 				xytext=(4, 0),
 				textcoords="offset points",
@@ -451,10 +457,10 @@ def plot_slots(
 				linewidth=1.5,
 				linestyle="--",
 				color=line_color,
-				label=slot.label,
+				label=slot_plot_label(slot),
 			)
 			axis.annotate(
-				slot.label,
+				slot_plot_label(slot),
 				xy=(x_values[-1], y_values[-1]),
 				xytext=(4, 0),
 				textcoords="offset points",
@@ -469,9 +475,9 @@ def plot_slots(
 			y_values = [availability for _, availability in points]
 			location_max = max(location_max, max(y_values, default=0))
 			line_color = color_by_date.get(slot.date) if colour_day else None
-			line, = axis.plot(x_values, y_values, linewidth=1.5, label=slot.label, color=line_color)
+			line, = axis.plot(x_values, y_values, linewidth=1.5, label=slot_plot_label(slot), color=line_color)
 			axis.annotate(
-				slot.label,
+				slot_plot_label(slot),
 				xy=(x_values[-1], y_values[-1]),
 				xytext=(4, 0),
 				textcoords="offset points",
@@ -563,7 +569,7 @@ def plot_slots_separate_axes(
 		raise ValueError("No slot days available for separate-axes mode")
 
 	locations = sorted({slot.location for slot in by_slot})
-	all_signatures = sorted({slot_signature(slot) for slot in by_slot}, key=lambda item: item[0])
+	all_signatures = sorted({slot_signature(slot) for slot in by_slot})
 	palette = plt.get_cmap("tab10")
 	color_by_signature = {
 		signature: palette(index % 10)
@@ -587,7 +593,8 @@ def plot_slots_separate_axes(
 	else:
 		axes_grid = axes
 
-	legend_handles: dict[tuple[str, str], any] = {}
+	legend_handles: dict[str, Any] = {}
+	legend_start_times: dict[str, str] = {}
 	global_max = 0
 	for row_index, location in enumerate(locations):
 		for col_index, slot_date_text in enumerate(plot_dates):
@@ -624,8 +631,11 @@ def plot_slots_separate_axes(
 				),
 				key=parse_slot_start,
 			)
+			slots_by_identity: dict[str, list[SlotKey]] = defaultdict(list)
 			for slot in location_day_slots:
-				points = by_slot[slot]
+				slots_by_identity[slot_signature(slot)].append(slot)
+			for signature, matching_slots in sorted(slots_by_identity.items()):
+				points = sorted(point for slot in matching_slots for point in by_slot[slot])
 				x_values = [
 					to_axis_time(snapshot_time)
 					for snapshot_time, _ in points
@@ -635,7 +645,6 @@ def plot_slots_separate_axes(
 				if not x_values:
 					continue
 				global_max = max(global_max, max(y_values, default=0))
-				signature = slot_signature(slot)
 				line, = axis.plot(
 					x_values,
 					y_values,
@@ -643,8 +652,9 @@ def plot_slots_separate_axes(
 					linestyle="-",
 					color=color_by_signature.get(signature),
 				)
+				first_slot = min(matching_slots, key=parse_slot_start)
 				axis.annotate(
-					slot.label,
+					slot_plot_label(first_slot),
 					xy=(x_values[-1], y_values[-1]),
 					xytext=(4, 0),
 					textcoords="offset points",
@@ -654,6 +664,7 @@ def plot_slots_separate_axes(
 				)
 				if signature not in legend_handles:
 					legend_handles[signature] = line
+					legend_start_times[signature] = first_slot.time.split("-", 1)[0]
 
 			axis.set_xlim(axis_start_plot, axis_end_plot)
 			axis.grid(True, alpha=0.3)
@@ -719,10 +730,10 @@ def plot_slots_separate_axes(
 			axis.set_ylim(0, max(10, int(math.ceil(global_max / 10.0) * 10)))
 
 	if legend_handles:
-		ordered_signatures = sorted(legend_handles, key=lambda item: item[0])
+		ordered_signatures = sorted(legend_handles)
 		fig.legend(
 			[legend_handles[signature] for signature in ordered_signatures],
-			[f"{signature[0]}" for signature in ordered_signatures],
+			[f"{signature} {legend_start_times[signature]}" for signature in ordered_signatures],
 			loc="center left",
 			bbox_to_anchor=(1.01, 0.5),
 			ncol=1,
