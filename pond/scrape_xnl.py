@@ -8,6 +8,30 @@ import shutil
 from bs4 import BeautifulSoup
 from playwright.sync_api import sync_playwright
 
+
+def acknowledge_notices(page):
+    """Permanently dismiss all currently visible Leisure Hub notices."""
+    acknowledged = []
+    while True:
+        notice = page.locator(".xn-alerts xn-notice-component:visible").first
+        if notice.count() == 0:
+            return acknowledged
+
+        heading = notice.locator(".xn-heading").inner_text().strip()
+        checkbox = notice.locator('input[type="checkbox"]')
+        if checkbox.count() > 0 and not checkbox.is_checked():
+            notice.locator(".xn-do-not-show").dispatch_event("click")
+        notice.locator(".xn-close").click()
+        acknowledged.append(heading)
+        print(f"Acknowledged notice: {heading}")
+
+
+def advance_to_next_day(page):
+    acknowledge_notices(page)
+    page.locator(".next-week").click()
+    page.wait_for_load_state("networkidle")
+
+
 def format_date_nice(day_name, date_text):
     """Format date as 'Tue, 24th Jun'"""
     # day_name: "Thursday", "Today", "Tomorrow" etc.
@@ -167,6 +191,7 @@ def scrape_bookings(
         html_strings = []
 
         for _ in range(days):
+            acknowledge_notices(page)
             day_name = page.locator(".day.selected .name").inner_text().strip()
             selected_date = page.locator(".day.selected .date").inner_html()
             soup_date = BeautifulSoup(selected_date, "html.parser")
@@ -181,8 +206,7 @@ def scrape_bookings(
                 page.wait_for_selector(".xn-bookings-grid li", timeout=10000)
             except Exception:
                 print("  No booking cards available, skipping")
-                page.locator(".next-week").click()
-                page.wait_for_load_state("networkidle")
+                advance_to_next_day(page)
                 continue
 
             grid = page.locator(".xn-bookings-grid")
@@ -191,8 +215,7 @@ def scrape_bookings(
 
             if count == 0:
                 print("  No booking cards found, skipping")
-                page.locator(".next-week").click()
-                page.wait_for_load_state("networkidle")
+                advance_to_next_day(page)
                 continue
 
             print(f"  Found {count} booking cards")
@@ -223,8 +246,7 @@ def scrape_bookings(
                     }
                 )
 
-            page.locator(".next-week").click()
-            page.wait_for_load_state("networkidle")
+            advance_to_next_day(page)
 
         with open(slots_output, "w", encoding="utf-8") as f:
             f.write("\n".join(html_strings))
