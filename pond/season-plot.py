@@ -9,6 +9,7 @@ from pathlib import Path
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 from matplotlib.colors import BoundaryNorm, Colormap, ListedColormap
+from matplotlib.patches import Patch
 import numpy as np
 
 from pond.booking_slots import logical_slot
@@ -23,6 +24,7 @@ SOLD_OUT_THRESHOLD = 5
 SOLD_OUT_POINTS_PER_DAY = 10
 MAX_SOLD_OUT_DAYS = 7
 VENUES = ("Men's", "Ladies", "Mixed")
+VENUE_CAPACITIES = {**dict.fromkeys(VENUES, POND_CAPACITY), "Lido": 650}
 POND_SLOT_IDS = tuple(f"P{index}" for index in range(1, 8))
 
 SlotHistory = dict[tuple[str, str, str], list[tuple[datetime, int, str]]]
@@ -75,7 +77,7 @@ def load_slot_history(data_dir: Path) -> tuple[datetime, SlotHistory]:
 				location = (row.get("location") or "").strip()
 				time_text = (row.get("time") or "").strip()
 				mapped = logical_slot(location, time_text)
-				if location not in VENUES or mapped is None or mapped.group != "pond":
+				if location not in VENUE_CAPACITIES or mapped is None:
 					continue
 				availability_text = (row.get("availability") or "").strip()
 				if not availability_text.isdigit():
@@ -90,7 +92,10 @@ def build_heatmap(
 	history: SlotHistory,
 	as_of: datetime,
 ) -> tuple[list[datetime], list[str], np.ndarray]:
-	started_keys = [key for key, points in history.items() if parse_slot_start(key[0], _latest_time(points)) <= as_of]
+	started_keys = [
+		key for key, points in history.items()
+		if key[1] in VENUES and parse_slot_start(key[0], _latest_time(points)) <= as_of
+	]
 	if not started_keys:
 		raise ValueError("No completed or started pond slots are available")
 
@@ -109,6 +114,8 @@ def build_heatmap(
 	matrix = np.full((len(row_labels), len(dates)), np.nan)
 
 	for (date_text, venue, slot_id), points in history.items():
+		if venue not in VENUES:
+			continue
 		time_text = _latest_time(points)
 		slot_start = parse_slot_start(date_text, time_text)
 		if slot_start > as_of:
@@ -121,6 +128,119 @@ def build_heatmap(
 			matrix[row_indexes[(venue, slot_id)], date_indexes[date_text]] = score
 
 	return dates, row_labels, matrix
+
+
+def build_occupancy(
+	history: SlotHistory,
+	as_of: datetime,
+) -> tuple[list[datetime], list[datetime], dict[str, tuple[list[float], list[float]]]]:
+	daily_totals: dict[tuple[datetime, str], list[int]] = defaultdict(lambda: [0, 0])
+	incomplete_days: set[tuple[datetime, str]] = set()
+	for (date_text, venue, _slot_id), points in history.items():
+		day = datetime.strptime(date_text, "%Y-%m%d")
+		if venue not in VENUE_CAPACITIES or day + timedelta(days=1) > as_of:
+			continue
+		slot_start = parse_slot_start(date_text, _latest_time(points))
+		observed = [(snapshot, available) for snapshot, available, _time in points if snapshot <= slot_start]
+		if not observed:
+			incomplete_days.add((day, venue))
+			continue
+		availability = max(observed, key=lambda point: point[0])[1]
+		capacity = VENUE_CAPACITIES[venue]
+		totals = daily_totals[(day, venue)]
+		totals[0] += max(0, min(capacity, capacity - availability))
+		totals[1] += capacity
+	for key in incomplete_days:
+		daily_totals.pop(key, None)
+	if not daily_totals:
+		raise ValueError("No completed days with pre-start booking observations are available")
+
+	first_day = min(day for day, _venue in daily_totals)
+	last_day = max(day for day, _venue in daily_totals)
+	dates = [first_day + timedelta(days=offset) for offset in range((last_day - first_day).days + 1)]
+	first_week = first_day - timedelta(days=first_day.weekday())
+	last_week = last_day - timedelta(days=last_day.weekday())
+	weeks = [first_week + timedelta(weeks=offset) for offset in range((last_week - first_week).days // 7 + 1)]
+	weekly_totals: dict[tuple[datetime, str], list[int]] = defaultdict(lambda: [0, 0])
+	for (day, venue), (sold, capacity) in daily_totals.items():
+		week = day - timedelta(days=day.weekday())
+		totals = weekly_totals[(week, venue)]
+		totals[0] += sold
+		totals[1] += capacity
+
+	percentages = {}
+	for venue in VENUE_CAPACITIES:
+		daily = [
+			100 * daily_totals[(day, venue)][0] / daily_totals[(day, venue)][1]
+			if (day, venue) in daily_totals else float("nan")
+			for day in dates
+		]
+		weekly = [
+			100 * weekly_totals[(week, venue)][0] / weekly_totals[(week, venue)][1]
+			if (week, venue) in weekly_totals else float("nan")
+			for week in weeks
+		]
+		percentages[venue] = (daily, weekly)
+	return dates, weeks, percentages
+
+
+def infer_closure_periods(
+	dates: list[datetime],
+	history: SlotHistory,
+	percentages: dict[str, tuple[list[float], list[float]]],
+) -> dict[str, list[tuple[datetime, datetime]]]:
+	observed_days = {(date_text, venue) for date_text, venue, _slot_id in history}
+	closures: dict[str, list[tuple[datetime, datetime]]] = {}
+	for venue, (daily, _weekly) in percentages.items():
+		periods = []
+		start = None
+		for index, day in enumerate(dates):
+			missing = (
+				not np.isfinite(daily[index])
+				and (day.strftime("%Y-%m%d"), venue) not in observed_days
+				and any(np.isfinite(values[0][index]) for other, values in percentages.items() if other != venue)
+			)
+			if missing:
+				if start is None:
+					start = index
+			elif start is not None:
+				if index - start >= 2 and start > 0 and np.isfinite(daily[start - 1]) and np.isfinite(daily[index]):
+					periods.append((dates[start], day))
+				start = None
+		closures[venue] = periods
+	return closures
+
+
+def plot_occupancy(history: SlotHistory, as_of: datetime, output_path: Path) -> None:
+	dates, weeks, percentages = build_occupancy(history, as_of)
+	week_boundaries = [*weeks, weeks[-1] + timedelta(weeks=1)]
+	closures = infer_closure_periods(dates, history, percentages)
+	fig, axes = plt.subplots(len(VENUE_CAPACITIES), 1, figsize=(15, 10), sharex=True, sharey=True, constrained_layout=True)
+	for axis, (venue, (daily, weekly)) in zip(axes, percentages.items()):
+		for week in week_boundaries:
+			axis.axvline(week, color="0.8", linewidth=0.5, zorder=0)
+		for start, end in closures[venue]:
+			axis.axvspan(start, end, facecolor="0.92", edgecolor="none", zorder=-1)
+		axis.plot(dates, daily, color="black", linewidth=0.7, linestyle=":", label="Daily")
+		axis.step(week_boundaries, [*weekly, weekly[-1]], where="post", color="black", linewidth=1.8, label="Weekly (Mon-Sun)")
+		axis.set_title(venue, loc="left")
+		axis.set_ylabel("Occupancy (%)")
+		axis.set_ylim(0, 100)
+		axis.set_yticks([0, 25, 50, 75, 100])
+		axis.grid(axis="y", color="0.85", linewidth=0.5)
+		axis.set_xlim(week_boundaries[0], week_boundaries[-1])
+	handles, _labels = axes[0].get_legend_handles_labels()
+	if any(closures.values()):
+		handles.append(Patch(facecolor="0.92", label="Inferred closure"))
+	axes[0].legend(handles=handles, loc="upper right")
+	axes[-1].xaxis.set_major_locator(mdates.WeekdayLocator(byweekday=0))
+	axes[-1].xaxis.set_major_formatter(mdates.DateFormatter("%a\n%d %b"))
+	axes[-1].set_xlabel("Slot date")
+	fig.suptitle(f"Daily and weekly booking occupancy (as of {as_of:%d %b %Y %H:%M})")
+	output_path.parent.mkdir(parents=True, exist_ok=True)
+	fig.savefig(output_path, dpi=150, bbox_inches="tight")
+	plt.close(fig)
+	print(f"Saved occupancy plot: {output_path}")
 
 
 def _latest_time(points: list[tuple[datetime, int, str]]) -> str:
@@ -137,7 +257,7 @@ def demand_colormap() -> tuple[Colormap, BoundaryNorm]:
 	return cmap, BoundaryNorm(boundaries, cmap.N, clip=True)
 
 
-def plot_season(data_dir: Path, output_path: Path) -> None:
+def plot_season(data_dir: Path, output_path: Path, occupancy_output: Path | None = None) -> None:
 	as_of, history = load_slot_history(data_dir)
 	dates, row_labels, matrix = build_heatmap(history, as_of)
 
@@ -167,20 +287,23 @@ def plot_season(data_dir: Path, output_path: Path) -> None:
 
 	output_path.parent.mkdir(parents=True, exist_ok=True)
 	fig.savefig(output_path, dpi=150, bbox_inches="tight")
-	print(f"Loaded {len(history)} pond slot histories through {as_of}")
+	plt.close(fig)
+	print(f"Loaded {len(history)} slot histories through {as_of}")
 	print(f"Saved plot: {output_path}")
+	plot_occupancy(history, as_of, occupancy_output or output_path.with_name("season-occupancy.png"))
 
 
 def parse_args() -> argparse.Namespace:
-	parser = argparse.ArgumentParser(description="Plot seasonal pond booking demand as a heatmap.")
+	parser = argparse.ArgumentParser(description="Plot seasonal booking demand and daily/weekly venue occupancy.")
 	parser.add_argument("--data-dir", type=Path, default=DATA_DIR)
 	parser.add_argument("--output", type=Path, default=OUTPUT_PATH)
+	parser.add_argument("--occupancy-output", type=Path, help="Occupancy figure path (default: season-occupancy.png beside --output).")
 	return parser.parse_args()
 
 
 def main() -> None:
 	args = parse_args()
-	plot_season(args.data_dir, args.output)
+	plot_season(args.data_dir, args.output, args.occupancy_output)
 
 
 if __name__ == "__main__":
