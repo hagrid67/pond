@@ -157,8 +157,42 @@ def test_season_outputs_separate_occupancy_figure_and_keeps_lido_out_of_heatmap(
 	season_plot.plot_season(data_dir, tmp_path / "season-plot.png")
 	assert (tmp_path / "season-plot.png").stat().st_size > 0
 	assert (tmp_path / "season-occupancy.png").stat().st_size > 0
+	assert (tmp_path / "season-occupancy-colour.png").stat().st_size > 0
 	assert (tmp_path / "season-percentage.png").stat().st_size > 0
 	assert (tmp_path / "lido-availability.csv").stat().st_size > 0
+
+
+def test_colour_occupancy_bars_use_80_percent_alpha_and_keep_daily_line_in_front(tmp_path, monkeypatch) -> None:
+	first_day = datetime(2026, 8, 24)
+	history = {
+		(day.strftime("%Y-%m%d"), "Men's", "P1"): [
+			(day - timedelta(days=2), 60 if offset < 7 else 0, "12:00-13:00"),
+		]
+		for offset in range(14)
+		for day in [first_day + timedelta(days=offset)]
+	}
+	figures = []
+	monkeypatch.setattr(season_plot.plt.Figure, "savefig", lambda figure, *args, **kwargs: figures.append(figure))
+	season_plot.plot_occupancy(history, datetime(2026, 9, 7), tmp_path / "colour.png", colour=True)
+	figure = figures[0]
+	bars = figure.axes[0].patches
+	assert len(bars) == 2
+	assert [bar.get_height() for bar in bars] == [50, 100]
+	assert [bar.get_x() for bar in bars] == list(season_plot.mdates.date2num([first_day, first_day + timedelta(days=7)]))
+	assert all(bar.get_width() == 7 and bar.get_alpha() == 0.8 and bar.get_y() == 0 for bar in bars)
+	daily_line = next(line for line in figure.axes[0].lines if line.get_label() == "Daily")
+	assert all(daily_line.get_zorder() > bar.get_zorder() for bar in bars)
+	assert daily_line.get_zorder() > max(line.get_zorder() for line in figure.axes[0].lines if line.get_drawstyle() == "steps-post")
+	for bar, value in zip(bars, [50, 100]):
+		np.testing.assert_allclose(bar.get_facecolor(), (*season_plot.plt.get_cmap("YlOrRd")(value / 100)[:3], 0.8))
+	red, green, blue, _alpha = bars[-1].get_facecolor()
+	assert red > green and red > blue
+	assert all(not axis.patches for axis in figure.axes[1:4])
+	assert figure.axes[-1].get_ylabel() == "Weekly occupancy (%)"
+	np.testing.assert_allclose(figure.axes[-1].get_ylim(), [0, 100])
+	season_plot.plot_occupancy(history, datetime(2026, 9, 7), tmp_path / "mono.png")
+	assert len(figures[1].axes) == 4
+	assert not figures[1].axes[0].patches
 
 
 def test_percentage_heatmap_normalizes_each_session_and_keeps_original_unchanged() -> None:

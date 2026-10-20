@@ -8,7 +8,8 @@ from pathlib import Path
 
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
-from matplotlib.colors import BoundaryNorm, Colormap, ListedColormap
+from matplotlib.cm import ScalarMappable
+from matplotlib.colors import BoundaryNorm, Colormap, ListedColormap, Normalize
 from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
 import numpy as np
@@ -214,10 +215,12 @@ def infer_closure_periods(
 	return closures
 
 
-def plot_occupancy(history: SlotHistory, as_of: datetime, output_path: Path) -> None:
+def plot_occupancy(history: SlotHistory, as_of: datetime, output_path: Path, *, colour: bool = False) -> None:
 	dates, weeks, percentages = build_occupancy(history, as_of)
 	week_boundaries = [*weeks, weeks[-1] + timedelta(weeks=1)]
 	closures = infer_closure_periods(dates, history, percentages)
+	cmap = plt.get_cmap("YlOrRd")
+	norm = Normalize(vmin=0, vmax=100)
 	has_incomplete_weeks = False
 	fig, axes = plt.subplots(len(VENUE_CAPACITIES), 1, figsize=(15, 10), sharex=True, sharey=True, constrained_layout=True)
 	for axis, (venue, (daily, weekly)) in zip(axes, percentages.items()):
@@ -225,11 +228,16 @@ def plot_occupancy(history: SlotHistory, as_of: datetime, output_path: Path) -> 
 			axis.axvline(week, color="0.8", linewidth=0.5, zorder=0)
 		for start, end in closures[venue]:
 			axis.axvspan(start, end, facecolor="0.92", edgecolor="none", zorder=-1)
-		axis.plot(dates, daily, color="black", linewidth=0.7, linestyle=":", label="Daily")
+		axis.plot(dates, daily, color="black", linewidth=0.7, linestyle=":", label="Daily", zorder=3 if colour else 2)
 		observed_days = {day for day, value in zip(dates, daily) if np.isfinite(value)}
 		for index, (week, value) in enumerate(zip(weeks, weekly)):
 			if not np.isfinite(value):
 				continue
+			if colour:
+				axis.bar(
+					week, value, width=7, align="edge", color=cmap(norm(value)),
+					alpha=0.8, edgecolor="none", zorder=1,
+				)
 			complete = all(week + timedelta(days=offset) in observed_days for offset in range(7))
 			has_incomplete_weeks = has_incomplete_weeks or not complete
 			next_value = weekly[index + 1] if index + 1 < len(weekly) else value
@@ -254,6 +262,10 @@ def plot_occupancy(history: SlotHistory, as_of: datetime, output_path: Path) -> 
 	axes[-1].xaxis.set_major_formatter(mdates.DateFormatter("%a\n%d %b"))
 	axes[-1].set_xlabel("Slot date")
 	fig.suptitle(f"Daily and weekly booking occupancy (as of {as_of:%d %b %Y %H:%M})")
+	if colour:
+		colorbar = fig.colorbar(ScalarMappable(norm=norm, cmap=cmap), ax=list(axes), pad=0.02, alpha=0.8)
+		colorbar.set_label("Weekly occupancy (%)")
+		colorbar.set_ticks([0, 25, 50, 75, 100])
 	output_path.parent.mkdir(parents=True, exist_ok=True)
 	fig.savefig(output_path, dpi=150, bbox_inches="tight")
 	plt.close(fig)
@@ -396,6 +408,7 @@ def plot_season(
 	occupancy_output: Path | None = None,
 	percentage_output: Path | None = None,
 	lido_capacities: dict[str, int] | None = None,
+	colour_occupancy_output: Path | None = None,
 ) -> None:
 	as_of, history = load_slot_history(data_dir)
 	dates, row_labels, matrix = build_heatmap(history, as_of)
@@ -430,6 +443,7 @@ def plot_season(
 	print(f"Loaded {len(history)} slot histories through {as_of}")
 	print(f"Saved plot: {output_path}")
 	plot_occupancy(history, as_of, occupancy_output or output_path.with_name("season-occupancy.png"))
+	plot_occupancy(history, as_of, colour_occupancy_output or output_path.with_name("season-occupancy-colour.png"), colour=True)
 	plot_percentage_season(history, as_of, percentage_output or output_path.with_name("season-percentage.png"), lido_capacities)
 
 
@@ -438,6 +452,7 @@ def parse_args() -> argparse.Namespace:
 	parser.add_argument("--data-dir", type=Path, default=DATA_DIR)
 	parser.add_argument("--output", type=Path, default=OUTPUT_PATH)
 	parser.add_argument("--occupancy-output", type=Path, help="Occupancy figure path (default: season-occupancy.png beside --output).")
+	parser.add_argument("--colour-occupancy-output", type=Path, help="Colour occupancy figure path (default: season-occupancy-colour.png beside --output).")
 	parser.add_argument("--percentage-output", type=Path, help="Percentage heatmap path (default: season-percentage.png beside --output).")
 	parser.add_argument(
 		"--lido-capacities", type=int, nargs=3, metavar=("MORNING", "AFTERNOON", "EVENING"),
@@ -451,6 +466,7 @@ def main() -> None:
 	plot_season(
 		args.data_dir, args.output, args.occupancy_output, args.percentage_output,
 		dict(zip(LIDO_SLOT_IDS, args.lido_capacities)),
+		args.colour_occupancy_output,
 	)
 
 

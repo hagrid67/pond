@@ -63,6 +63,12 @@ The additional outputs are `www-root/season-percentage.png` and
 with weekday, Monday week start, first/maximum/final pre-start availability, and
 the lead time of the first observation. Missing sessions are not treated as zero.
 
+`www-root/season-occupancy-colour.png` is an additional colour version of the
+daily/weekly occupancy chart. Monday-Sunday bars use 80% alpha and a shared
+0-100% yellow-orange-red scale (red at 100%) for weekly occupancy, without booking-ahead scores. The
+daily curves are drawn in front of the bars; dashed incomplete weeks and closure shading are retained.
+Use `--colour-occupancy-output PATH` to change its output path.
+
 The percentage heatmap uses estimated lido capacities of 800 morning, 800
 afternoon, and 300 evening tickets. These are assumptions, not measured total
 capacities: snapshots record remaining tickets, which already reflect sales.
