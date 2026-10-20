@@ -27,6 +27,8 @@ MAX_SOLD_OUT_DAYS = 7
 VENUES = ("Men's", "Ladies", "Mixed")
 VENUE_CAPACITIES = {**dict.fromkeys(VENUES, POND_CAPACITY), "Lido": 650}
 POND_SLOT_IDS = tuple(f"P{index}" for index in range(1, 8))
+LIDO_SLOT_IDS = ("L1", "L2", "L3")
+LIDO_CAPACITY_ESTIMATES = {"L1": 800, "L2": 800, "L3": 300}
 
 SlotHistory = dict[tuple[str, str, str], list[tuple[datetime, int, str]]]
 
@@ -262,17 +264,139 @@ def _latest_time(points: list[tuple[datetime, int, str]]) -> str:
 	return max(points, key=lambda point: point[0])[2]
 
 
-def demand_colormap() -> tuple[Colormap, BoundaryNorm]:
-	booked_colors = plt.get_cmap("viridis")(np.linspace(0, 1, POND_CAPACITY))
+def demand_colormap(capacity: int = POND_CAPACITY) -> tuple[Colormap, BoundaryNorm]:
+	booked_colors = plt.get_cmap("viridis")(np.linspace(0, 1, capacity))
 	sold_out_colors = plt.get_cmap("Reds")(np.linspace(0.45, 1, MAX_SOLD_OUT_DAYS * SOLD_OUT_POINTS_PER_DAY))
 	cmap = ListedColormap(np.vstack((booked_colors, sold_out_colors)), name="pond_demand").with_extremes(
 		bad="#d8d8d8"
 	)
-	boundaries = np.arange(POND_CAPACITY + MAX_SOLD_OUT_DAYS * SOLD_OUT_POINTS_PER_DAY + 1)
+	boundaries = np.arange(capacity + MAX_SOLD_OUT_DAYS * SOLD_OUT_POINTS_PER_DAY + 1)
 	return cmap, BoundaryNorm(boundaries, cmap.N, clip=True)
 
 
-def plot_season(data_dir: Path, output_path: Path, occupancy_output: Path | None = None) -> None:
+def build_percentage_heatmap(
+	history: SlotHistory,
+	as_of: datetime,
+	lido_capacities: dict[str, int] | None = None,
+) -> tuple[list[datetime], list[str], np.ndarray]:
+	lido_capacities = LIDO_CAPACITY_ESTIMATES if lido_capacities is None else lido_capacities
+	if any(lido_capacities[slot] <= 0 for slot in LIDO_SLOT_IDS):
+		raise ValueError("Lido capacity estimates must be positive")
+	rows = [(venue, slot) for venue in VENUES for slot in POND_SLOT_IDS] + [("Lido", slot) for slot in LIDO_SLOT_IDS]
+	row_indexes = {key: index for index, key in enumerate(rows)}
+	started = {
+		key: points for key, points in history.items()
+		if key[1:] in row_indexes and parse_slot_start(key[0], _latest_time(points)) <= as_of
+	}
+	if not started:
+		raise ValueError("No completed or started venue slots are available")
+	days = [datetime.strptime(key[0], "%Y-%m%d") for key in started]
+	first_day, last_day = min(days), max(days)
+	dates = [first_day + timedelta(days=offset) for offset in range((last_day - first_day).days + 1)]
+	matrix = np.full((len(rows), len(dates)), np.nan)
+	for (date_text, venue, slot), points in started.items():
+		slot_start = parse_slot_start(date_text, _latest_time(points))
+		observed = [(snapshot, available) for snapshot, available, _time in points if snapshot <= slot_start]
+		if not observed:
+			continue
+		capacity = lido_capacities[slot] if venue == "Lido" else POND_CAPACITY
+		availability = max(observed, key=lambda point: point[0])[1]
+		percentage = 100 * max(0, min(capacity, capacity - availability)) / capacity
+		if availability == 0:
+			first_sold_out = min(snapshot for snapshot, available in observed if available == 0)
+			lead_days = (slot_start - first_sold_out).total_seconds() / 86400
+			percentage += min(lead_days, MAX_SOLD_OUT_DAYS) * SOLD_OUT_POINTS_PER_DAY
+		column = (datetime.strptime(date_text, "%Y-%m%d") - first_day).days
+		matrix[row_indexes[(venue, slot)], column] = percentage
+	return dates, [f"{venue} {slot}" for venue, slot in rows], matrix
+
+
+def write_lido_availability_report(
+	history: SlotHistory,
+	as_of: datetime,
+	output_path: Path,
+	lido_capacities: dict[str, int],
+) -> None:
+	output_path.parent.mkdir(parents=True, exist_ok=True)
+	with output_path.open("w", newline="", encoding="utf-8") as handle:
+		writer = csv.writer(handle)
+		writer.writerow([
+			"date", "weekday", "week_start", "slot", "time", "observations",
+			"first_snapshot", "first_availability", "max_availability", "last_snapshot",
+			"last_availability", "first_lead_hours", "estimated_capacity",
+		])
+		for (date_text, venue, slot), points in sorted(history.items()):
+			if venue != "Lido" or slot not in lido_capacities:
+				continue
+			time_text = _latest_time(points)
+			start = parse_slot_start(date_text, time_text)
+			observed = sorted((snapshot, available) for snapshot, available, _time in points if snapshot <= start)
+			if start > as_of or not observed:
+				continue
+			first, last = observed[0], observed[-1]
+			writer.writerow([
+				start.strftime("%Y-%m-%d"), start.strftime("%a"),
+				(start - timedelta(days=start.weekday())).strftime("%Y-%m-%d"), slot, time_text,
+				len(observed), first[0].isoformat(), first[1], max(available for _snapshot, available in observed),
+				last[0].isoformat(), last[1], round((start - first[0]).total_seconds() / 3600, 2),
+				lido_capacities[slot],
+			])
+	print(f"Saved lido availability report: {output_path}")
+
+
+def plot_percentage_season(
+	history: SlotHistory,
+	as_of: datetime,
+	output_path: Path,
+	lido_capacities: dict[str, int] | None = None,
+) -> None:
+	lido_capacities = LIDO_CAPACITY_ESTIMATES if lido_capacities is None else lido_capacities
+	dates, _labels, matrix = build_percentage_heatmap(history, as_of, lido_capacities)
+	fig, axes = plt.subplots(
+		4, 1, figsize=(15, 11), sharex=True, constrained_layout=True,
+		gridspec_kw={"height_ratios": [7, 7, 7, 3.5]},
+	)
+	cmap, norm = demand_colormap(capacity=100)
+	first_date, last_date = mdates.date2num([dates[0], dates[-1]])
+	offset = 0
+	for axis, venue in zip(axes, VENUE_CAPACITIES):
+		slot_ids = LIDO_SLOT_IDS if venue == "Lido" else POND_SLOT_IDS
+		row_count = len(slot_ids)
+		image = axis.imshow(
+			matrix[offset:offset + row_count], aspect="auto", interpolation="nearest", cmap=cmap, norm=norm,
+			extent=(float(first_date) - 0.5, float(last_date) + 0.5, row_count - 0.5, -0.5),
+		)
+		axis.set_yticks(range(row_count), labels=slot_ids)
+		axis.set_title(venue, loc="left", fontsize=11)
+		axis.xaxis_date()
+		offset += row_count
+	axes[-1].xaxis.set_major_locator(mdates.WeekdayLocator(byweekday=0))
+	axes[-1].xaxis.set_major_formatter(mdates.DateFormatter("%a\n%d %b"))
+	axes[-1].set_xlabel("Slot date")
+	colorbar = fig.colorbar(image, ax=list(axes), pad=0.02)
+	colorbar.set_label("Occupancy (%); red: days sold out before the session")
+	colorbar.set_ticks([0, 25, 50, 75, 100, 120, 140, 160, 170])
+	colorbar.set_ticklabels(["0%", "25%", "50%", "75%", "100%", "2 d", "4 d", "6 d", "7 d"])
+	colorbar.ax.axhline(100, color="white", linewidth=2)
+	fig.suptitle(f"Seasonal booking occupancy and early sell-outs (as of {as_of:%d %b %Y %H:%M})")
+	fig.supxlabel(
+		f"Lido estimated capacities: morning {lido_capacities['L1']}, afternoon {lido_capacities['L2']}, "
+		f"evening {lido_capacities['L3']} tickets. Grey: no session or no observation.", fontsize=9,
+	)
+	output_path.parent.mkdir(parents=True, exist_ok=True)
+	fig.savefig(output_path, dpi=150, bbox_inches="tight")
+	plt.close(fig)
+	print(f"Saved percentage season plot: {output_path}")
+	write_lido_availability_report(history, as_of, output_path.with_name("lido-availability.csv"), lido_capacities)
+
+
+def plot_season(
+	data_dir: Path,
+	output_path: Path,
+	occupancy_output: Path | None = None,
+	percentage_output: Path | None = None,
+	lido_capacities: dict[str, int] | None = None,
+) -> None:
 	as_of, history = load_slot_history(data_dir)
 	dates, row_labels, matrix = build_heatmap(history, as_of)
 
@@ -306,6 +430,7 @@ def plot_season(data_dir: Path, output_path: Path, occupancy_output: Path | None
 	print(f"Loaded {len(history)} slot histories through {as_of}")
 	print(f"Saved plot: {output_path}")
 	plot_occupancy(history, as_of, occupancy_output or output_path.with_name("season-occupancy.png"))
+	plot_percentage_season(history, as_of, percentage_output or output_path.with_name("season-percentage.png"), lido_capacities)
 
 
 def parse_args() -> argparse.Namespace:
@@ -313,12 +438,20 @@ def parse_args() -> argparse.Namespace:
 	parser.add_argument("--data-dir", type=Path, default=DATA_DIR)
 	parser.add_argument("--output", type=Path, default=OUTPUT_PATH)
 	parser.add_argument("--occupancy-output", type=Path, help="Occupancy figure path (default: season-occupancy.png beside --output).")
+	parser.add_argument("--percentage-output", type=Path, help="Percentage heatmap path (default: season-percentage.png beside --output).")
+	parser.add_argument(
+		"--lido-capacities", type=int, nargs=3, metavar=("MORNING", "AFTERNOON", "EVENING"),
+		default=tuple(LIDO_CAPACITY_ESTIMATES.values()), help="Estimated lido capacities (default: 800 800 300).",
+	)
 	return parser.parse_args()
 
 
 def main() -> None:
 	args = parse_args()
-	plot_season(args.data_dir, args.output, args.occupancy_output)
+	plot_season(
+		args.data_dir, args.output, args.occupancy_output, args.percentage_output,
+		dict(zip(LIDO_SLOT_IDS, args.lido_capacities)),
+	)
 
 
 if __name__ == "__main__":

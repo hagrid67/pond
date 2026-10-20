@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import csv
 import math
 import sys
 from datetime import datetime, timedelta
@@ -156,6 +157,76 @@ def test_season_outputs_separate_occupancy_figure_and_keeps_lido_out_of_heatmap(
 	season_plot.plot_season(data_dir, tmp_path / "season-plot.png")
 	assert (tmp_path / "season-plot.png").stat().st_size > 0
 	assert (tmp_path / "season-occupancy.png").stat().st_size > 0
+	assert (tmp_path / "season-percentage.png").stat().st_size > 0
+	assert (tmp_path / "lido-availability.csv").stat().st_size > 0
+
+
+def test_percentage_heatmap_normalizes_each_session_and_keeps_original_unchanged() -> None:
+	day = datetime(2026, 8, 24)
+	history = {
+		("2026-0824", "Men's", "P1"): [(day, 60, "12:00-13:00")],
+		("2026-0824", "Lido", "L1"): [(day, 400, "10:30-13:30")],
+		("2026-0824", "Lido", "L2"): [(day, 200, "14:30-17:30")],
+		("2026-0824", "Lido", "L3"): [(day, 150, "18:00-20:00")],
+		("2026-0825", "Lido", "L1"): [(day, 800, "10:30-13:30")],
+		("2026-0826", "Lido", "L1"): [(day, 0, "10:30-13:30")],
+	}
+	as_of = datetime(2026, 8, 25, 23)
+	dates, labels, matrix = season_plot.build_percentage_heatmap(history, as_of)
+	assert len(labels) == 24
+	assert len(dates) == 2
+	assert matrix[labels.index("Men's P1"), 0] == 50
+	assert matrix[labels.index("Lido L1")].tolist() == [50, 0]
+	assert matrix[labels.index("Lido L2"), 0] == 75
+	assert matrix[labels.index("Lido L3"), 0] == 50
+	assert math.isnan(matrix[labels.index("Lido L3"), 1])
+	_dates, original_labels, original_matrix = season_plot.build_heatmap(history, as_of)
+	assert len(original_labels) == 21
+	assert original_matrix[original_labels.index("Men's P1"), 0] == 60
+	_dates, labels, adjusted = season_plot.build_percentage_heatmap(history, as_of, {"L1": 1000, "L2": 800, "L3": 300})
+	assert adjusted[labels.index("Lido L1"), 0] == 60
+
+
+def test_percentage_heatmap_only_marks_actual_zero_availability_as_sold_out() -> None:
+	start = datetime(2026, 8, 24, 12)
+	history = {
+		("2026-0824", "Men's", "P1"): [(start - timedelta(days=2), 0, "12:00-13:00")],
+		("2026-0824", "Ladies", "P1"): [(start - timedelta(days=2), 4, "12:00-13:00")],
+		("2026-0824", "Mixed", "P1"): [
+			(start - timedelta(days=2), 0, "12:00-13:00"),
+			(start - timedelta(hours=1), 60, "12:00-13:00"),
+			(start + timedelta(hours=1), 0, "12:00-13:00"),
+		],
+	}
+	_dates, labels, matrix = season_plot.build_percentage_heatmap(history, start + timedelta(hours=2))
+	assert matrix[labels.index("Men's P1"), 0] == 120
+	assert math.isclose(matrix[labels.index("Ladies P1"), 0], 100 * 116 / 120)
+	assert matrix[labels.index("Mixed P1"), 0] == 50
+
+
+def test_percentage_figure_gives_lido_half_a_pond_height_and_reports_availability(tmp_path, monkeypatch) -> None:
+	day = datetime(2026, 8, 24)
+	history = {
+		("2026-0824", "Lido", "L1"): [
+			(day - timedelta(days=1), 800, "10:30-13:30"),
+			(day, 400, "10:30-13:30"),
+			(day + timedelta(hours=12), 900, "10:30-13:30"),
+		],
+	}
+	figures = []
+	monkeypatch.setattr(season_plot.plt.Figure, "savefig", lambda figure, *args, **kwargs: figures.append(figure))
+	season_plot.plot_percentage_season(history, day + timedelta(days=1), tmp_path / "percentage.png")
+	figure = figures[0]
+	assert figure.axes[0].get_gridspec().get_height_ratios() == [7, 7, 7, 3.5]
+	assert [axis.images[0].get_array().shape[0] for axis in figure.axes[:4]] == [7, 7, 7, 3]
+	with (tmp_path / "lido-availability.csv").open(newline="") as handle:
+		rows = list(csv.DictReader(handle))
+	assert len(rows) == 1
+	assert rows[0]["weekday"] == "Mon"
+	assert rows[0]["week_start"] == "2026-08-24"
+	assert rows[0]["max_availability"] == "800"
+	assert rows[0]["last_availability"] == "400"
+	assert rows[0]["estimated_capacity"] == "800"
 
 
 def test_closure_detection_requires_bounded_venue_specific_gaps() -> None:
