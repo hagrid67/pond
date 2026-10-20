@@ -207,15 +207,39 @@ def test_occupancy_figure_marks_monday_boundaries_and_shades_closures(tmp_path, 
 	for axis in figure.axes:
 		boundaries = [line for line in axis.lines if line.get_zorder() == 0]
 		assert [line.get_xdata()[0] for line in boundaries] == week_boundaries
-		weekly_line = next(line for line in axis.lines if line.get_label() == "Weekly (Mon-Sun)")
-		assert weekly_line.get_drawstyle() == "steps-post"
-		assert list(weekly_line.get_xdata()) == week_boundaries
-		np.testing.assert_allclose(weekly_line.get_ydata()[-1], weekly_line.get_ydata()[-2])
+		weekly_lines = [line for line in axis.lines if line.get_drawstyle() == "steps-post"]
+		if axis in figure.axes[:2]:
+			assert [list(line.get_xdata()) for line in weekly_lines] == [week_boundaries[:2], week_boundaries[1:]]
+			np.testing.assert_allclose(weekly_lines[-1].get_ydata()[-1], weekly_lines[-1].get_ydata()[-2])
+		else:
+			assert weekly_lines == []
 		np.testing.assert_allclose(axis.get_xticks(), season_plot.mdates.date2num(week_boundaries))
 	formatter = figure.axes[-1].xaxis.get_major_formatter()
 	assert formatter(season_plot.mdates.date2num(week_boundaries[0])) == "Mon\n24 Aug"
 	assert [len(axis.patches) for axis in figure.axes] == [0, 1, 0, 0]
 	assert figure.axes[1].patches[0].get_facecolor()[:3] == (0.92, 0.92, 0.92)
 	assert [text.get_text() for text in figure.axes[0].get_legend().get_texts()] == [
-		"Daily", "Weekly (Mon-Sun)", "Inferred closure",
+		"Daily", "Weekly (Mon-Sun)", "Weekly (missing days)", "Inferred closure",
 	]
+
+
+def test_weekly_lines_are_dashed_only_when_daily_observations_are_missing(tmp_path, monkeypatch) -> None:
+	first_day = datetime(2026, 8, 25)
+	history = {
+		(day.strftime("%Y-%m%d"), venue, "P1"): [(day - timedelta(days=1), 120, "12:00-13:00")]
+		for offset in range(27)
+		for day in [first_day + timedelta(days=offset)]
+		for venue in ("Men's", "Ladies")
+		if venue != "Ladies" or day != datetime(2026, 9, 2) and not datetime(2026, 9, 7) <= day < datetime(2026, 9, 14)
+	}
+	figures = []
+	monkeypatch.setattr(season_plot.plt.Figure, "savefig", lambda figure, *args, **kwargs: figures.append(figure))
+	season_plot.plot_occupancy(history, datetime(2026, 9, 21), tmp_path / "occupancy.png")
+	mens_lines = [line for line in figures[0].axes[0].lines if line.get_drawstyle() == "steps-post"]
+	ladies_lines = [line for line in figures[0].axes[1].lines if line.get_drawstyle() == "steps-post"]
+	assert [line.get_linestyle() for line in mens_lines] == ["--", "-", "-", "-"]
+	assert [line.get_linestyle() for line in ladies_lines] == ["--", "--", "-"]
+	assert [line.get_xdata()[0] for line in ladies_lines] == [
+		datetime(2026, 8, 24), datetime(2026, 8, 31), datetime(2026, 9, 14),
+	]
+	assert all(line.get_ydata()[0] == 0 for line in mens_lines + ladies_lines)

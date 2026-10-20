@@ -9,6 +9,7 @@ from pathlib import Path
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 from matplotlib.colors import BoundaryNorm, Colormap, ListedColormap
+from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
 import numpy as np
 
@@ -215,6 +216,7 @@ def plot_occupancy(history: SlotHistory, as_of: datetime, output_path: Path) -> 
 	dates, weeks, percentages = build_occupancy(history, as_of)
 	week_boundaries = [*weeks, weeks[-1] + timedelta(weeks=1)]
 	closures = infer_closure_periods(dates, history, percentages)
+	has_incomplete_weeks = False
 	fig, axes = plt.subplots(len(VENUE_CAPACITIES), 1, figsize=(15, 10), sharex=True, sharey=True, constrained_layout=True)
 	for axis, (venue, (daily, weekly)) in zip(axes, percentages.items()):
 		for week in week_boundaries:
@@ -222,7 +224,17 @@ def plot_occupancy(history: SlotHistory, as_of: datetime, output_path: Path) -> 
 		for start, end in closures[venue]:
 			axis.axvspan(start, end, facecolor="0.92", edgecolor="none", zorder=-1)
 		axis.plot(dates, daily, color="black", linewidth=0.7, linestyle=":", label="Daily")
-		axis.step(week_boundaries, [*weekly, weekly[-1]], where="post", color="black", linewidth=1.8, label="Weekly (Mon-Sun)")
+		observed_days = {day for day, value in zip(dates, daily) if np.isfinite(value)}
+		for index, (week, value) in enumerate(zip(weeks, weekly)):
+			if not np.isfinite(value):
+				continue
+			complete = all(week + timedelta(days=offset) in observed_days for offset in range(7))
+			has_incomplete_weeks = has_incomplete_weeks or not complete
+			next_value = weekly[index + 1] if index + 1 < len(weekly) else value
+			axis.step(
+				[week, week_boundaries[index + 1]], [value, next_value], where="post",
+				color="black", linewidth=1.8, linestyle="-" if complete else "--",
+			)
 		axis.set_title(venue, loc="left")
 		axis.set_ylabel("Occupancy (%)")
 		axis.set_ylim(0, 100)
@@ -230,6 +242,9 @@ def plot_occupancy(history: SlotHistory, as_of: datetime, output_path: Path) -> 
 		axis.grid(axis="y", color="0.85", linewidth=0.5)
 		axis.set_xlim(week_boundaries[0], week_boundaries[-1])
 	handles, _labels = axes[0].get_legend_handles_labels()
+	handles.append(Line2D([], [], color="black", linewidth=1.8, label="Weekly (Mon-Sun)"))
+	if has_incomplete_weeks:
+		handles.append(Line2D([], [], color="black", linewidth=1.8, linestyle="--", label="Weekly (missing days)"))
 	if any(closures.values()):
 		handles.append(Patch(facecolor="0.92", label="Inferred closure"))
 	axes[0].legend(handles=handles, loc="upper right")
