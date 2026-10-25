@@ -5,8 +5,13 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import pandas as pd
 
+START_YEAR = 2011
+
 repo_root = Path(__file__).resolve().parent.parent
 prices = pd.read_csv(repo_root / 'prices' / 'pond-fees.csv')
+if START_YEAR not in prices['year'].values:
+    raise ValueError(f'No ticket prices available for start year {START_YEAR}')
+prices = prices.loc[prices['year'] >= START_YEAR].copy()
 years = prices['year'].astype(int)
 
 
@@ -27,20 +32,16 @@ def load_monthly_index(path: Path) -> pd.Series:
 inflation_dir = repo_root / 'inflation'
 rpi_monthly = load_monthly_index(inflation_dir / 'rpi.csv')
 cpih_monthly = load_monthly_index(inflation_dir / 'cpih.csv')
-first_year = int(years.iloc[0])
 rpi_may = rpi_monthly[
-    (rpi_monthly.index.month == 5) & (rpi_monthly.index.year >= first_year)
+    (rpi_monthly.index.month == 5) & (rpi_monthly.index.year >= START_YEAR)
 ]
 cpih_may = cpih_monthly[
-    (cpih_monthly.index.month == 5) & (cpih_monthly.index.year >= first_year)
+    (cpih_monthly.index.month == 5) & (cpih_monthly.index.year >= START_YEAR)
 ]
-base_date = pd.Timestamp('2005-05-01')
-adult_season_base = prices.loc[prices['year'] == 2005, 'adult_season_12m_gbp'].iloc[0]
+base_date = pd.Timestamp(year=START_YEAR, month=5, day=1)
+adult_season_base = prices.loc[prices['year'] == START_YEAR, 'adult_season_12m_gbp'].iloc[0]
 rpi_adjusted = adult_season_base * rpi_may / rpi_may.loc[base_date]
 cpih_adjusted = adult_season_base * cpih_may / cpih_may.loc[base_date]
-adult_payg_base = prices.loc[prices['year'] == 2005, 'adult_payg_gbp'].iloc[0]
-rpi_payg_adjusted = adult_payg_base * rpi_may / rpi_may.loc[base_date]
-cpih_payg_adjusted = adult_payg_base * cpih_may / cpih_may.loc[base_date]
 
 fig, ax1 = plt.subplots(figsize=(14, 7))
 
@@ -56,17 +57,7 @@ line2 = ax1.plot(
     color=color_payg, linewidth=2, label='Concession PAYG (£)',
 )
 color_rpi = '#ff7f0e'
-line7 = ax1.plot(
-    rpi_payg_adjusted.index.year, rpi_payg_adjusted.values, marker='D',
-    linestyle=':', color=color_rpi, linewidth=2.5,
-    label='RPI-adjusted Adult PAYG (£)',
-)
 color_cpih = '#2ca02c'
-line8 = ax1.plot(
-    cpih_payg_adjusted.index.year, cpih_payg_adjusted.values, marker='P',
-    linestyle=':', color=color_cpih, linewidth=2.5,
-    label='CPIH-adjusted Adult PAYG (£)',
-)
 ax1.tick_params(axis='y', labelcolor=color_payg)
 ax1.set_ylim(0.0, 10.0)
 ax1.grid(True, linestyle=':', alpha=0.6)
@@ -133,7 +124,7 @@ for series, label, color, text_offset in (
         arrowprops=dict(arrowstyle='->', color=color),
     )
 
-all_lines = line1 + line2 + line7 + line8 + line3 + line4 + line5 + line6
+all_lines = line1 + line2 + line3 + line4 + line5 + line6
 all_labels = [line.get_label() for line in all_lines]
 ax1.legend(
     all_lines, all_labels, loc='upper left', frameon=True,

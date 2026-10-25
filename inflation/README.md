@@ -14,9 +14,11 @@ records the ONS release date in its metadata.
 
 `scripts/price-chart.py` uses pandas to select May observations from `rpi.csv`
 and `cpih.csv` for the annual comparison, and rebases both series to the
-12-month adult season ticket price of £125 in May 2005:
+12-month adult season ticket price in the script's hardcoded `START_YEAR`
+(currently 2011, with a verified price of £110). All ticket and inflation lines
+start in that year. Inflation-equivalent PAYG lines are not plotted:
 
-`Index-equivalent price = £125 × May index for year / May 2005 index`
+`Index-equivalent price = baseline ticket price × May index for year / May index for START_YEAR`
 
 Only years with an available May observation are plotted. This is a historical
 inflation comparison, not an ONS forecast; proposed ticket prices remain

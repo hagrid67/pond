@@ -16,3 +16,6 @@ requests==2.34.2
 matplotlib==3.11.1
 adjustText==1.4.0
 httpx2==2.9.1
+
+# Historical fee schedule PDF extraction
+pypdf==6.21.2
