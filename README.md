@@ -80,6 +80,19 @@ python -m pond.season-plot --lido-capacities 800 800 300 --percentage-output www
 
 These estimates affect only the new percentage heatmap, not the original pond
 heatmap or the existing daily/weekly chart (which still assumes 650 per lido
-session). Red indicates actual sell-out, darkening with the time sold out in
-advance; other colours indicate percentage occupancy. Grey indicates no session
-or no observation, not necessarily a closure.
+session). In `season-percentage.png`, red means the session reached actual
+sell-out (zero remaining tickets) at least once before or at its start. Its
+darkness measures the elapsed days from the **first observed sell-out** to the
+session start, capped at seven days. Later cancellations and rebookings do not
+reset this clock or remove the red colouring, even if tickets remain at the
+start. This represents demand reached, not continuous sell-out or final sales;
+it does not establish why tickets became available again. Snapshot frequency
+limits how precisely the first sell-out time is known.
+
+Sessions never observed at zero use their last pre-start percentage occupancy;
+nearly sold-out sessions are not treated as fully sold out. Grey indicates no
+session or no observation, not necessarily a closure. The original pond-only
+`season-plot.png` is unchanged: it uses a fewer-than-five-tickets threshold and
+requires the final pre-start availability to remain below that threshold.
+Daily/weekly occupancy charts still use last pre-start ticket counts, without
+booking-ahead weighting.

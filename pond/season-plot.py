@@ -314,10 +314,12 @@ def build_percentage_heatmap(
 		capacity = lido_capacities[slot] if venue == "Lido" else POND_CAPACITY
 		availability = max(observed, key=lambda point: point[0])[1]
 		percentage = 100 * max(0, min(capacity, capacity - availability)) / capacity
-		if availability == 0:
-			first_sold_out = min(snapshot for snapshot, available in observed if available == 0)
+		# This heatmap measures demand reached, not whether cancellations left tickets at the start.
+		# Keep the first true sell-out (zero remaining), ignoring subsequent cancellations or rebookings.
+		first_sold_out = min((snapshot for snapshot, available in observed if available == 0), default=None)
+		if first_sold_out is not None:
 			lead_days = (slot_start - first_sold_out).total_seconds() / 86400
-			percentage += min(lead_days, MAX_SOLD_OUT_DAYS) * SOLD_OUT_POINTS_PER_DAY
+			percentage = 100 + min(lead_days, MAX_SOLD_OUT_DAYS) * SOLD_OUT_POINTS_PER_DAY
 		column = (datetime.strptime(date_text, "%Y-%m%d") - first_day).days
 		matrix[row_indexes[(venue, slot)], column] = percentage
 	return dates, [f"{venue} {slot}" for venue, slot in rows], matrix

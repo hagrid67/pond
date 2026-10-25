@@ -235,7 +235,31 @@ def test_percentage_heatmap_only_marks_actual_zero_availability_as_sold_out() ->
 	_dates, labels, matrix = season_plot.build_percentage_heatmap(history, start + timedelta(hours=2))
 	assert matrix[labels.index("Men's P1"), 0] == 120
 	assert math.isclose(matrix[labels.index("Ladies P1"), 0], 100 * 116 / 120)
-	assert matrix[labels.index("Mixed P1"), 0] == 50
+	assert matrix[labels.index("Mixed P1"), 0] == 120
+
+
+def test_percentage_heatmap_preserves_first_sellout_despite_cancellations_and_rebookings() -> None:
+	start = datetime(2026, 8, 24, 12)
+	history = {
+		("2026-0824", "Ladies", "P1"): [
+			(start - timedelta(hours=1), 4, "12:00-13:00"),
+			(start - timedelta(days=1), 0, "12:00-13:00"),
+			(start - timedelta(days=3), 0, "12:00-13:00"),
+			(start - timedelta(days=2), 60, "12:00-13:00"),
+		],
+		("2026-0824", "Men's", "P1"): [
+			(start - timedelta(hours=1), 60, "12:00-13:00"),
+			(start + timedelta(hours=1), 0, "12:00-13:00"),
+		],
+		("2026-0824", "Lido", "L1"): [
+			(start - timedelta(days=9), 0, "10:30-13:30"),
+			(start - timedelta(hours=2), 400, "10:30-13:30"),
+		],
+	}
+	_dates, labels, matrix = season_plot.build_percentage_heatmap(history, start + timedelta(hours=2))
+	assert matrix[labels.index("Ladies P1"), 0] == 130
+	assert matrix[labels.index("Men's P1"), 0] == 50
+	assert matrix[labels.index("Lido L1"), 0] == 170
 
 
 def test_percentage_figure_gives_lido_half_a_pond_height_and_reports_availability(tmp_path, monkeypatch) -> None:
