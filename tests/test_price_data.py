@@ -9,7 +9,7 @@ def test_official_historical_pond_fees_and_provenance() -> None:
     with path.open(encoding='utf-8', newline='') as source:
         rows = list(csv.DictReader(source))
 
-    assert [int(row['year']) for row in rows] == list(range(2005, 2028))
+    assert [int(row['year']) for row in rows] == list(range(2005, 2029))
     expected_season_prices = {
         2011: ('110.00', '55.00'),
         2012: ('115.00', '60.00'),

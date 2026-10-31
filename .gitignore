@@ -48,6 +48,8 @@ meteo-data/
 metoffice-data/
 logs/*
 !logs/.gitkeep
+charts/*
+!charts/.gitkeep
 
 # Generated web output artifacts
 www-root/booking-plot*.png
@@ -57,6 +59,7 @@ www-root/pond-temps.html
 www-root/pond-temps.png
 www-root/user-updates.png
 www-root/user-updates-test.png
+www-root/season-percentage.png
 
 # Local nginx backup snapshots on gcweb1 deploy path
 deploy/gcweb1/nginx/nginx.conf.*
