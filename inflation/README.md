@@ -30,13 +30,18 @@ CLI options control the chart start year and inflation display:
 - `--geometric` / `--geometric-2027`: replace the linearly interpolated 2027
   prices with geometric interpolation between 2026 and 2028 ($r_2 = p_{28}/p_{26} - 1$,
   $r_1 = \sqrt{r_2 + 1} - 1$, $p_{27} = \text{round}(p_{26}(1 + r_1), 2)$).
+- `--monthly`: plot the annual equivalent (`12×`) cost of the new rolling monthly
+  tickets from April 2027, pinned to 20% above the equivalent 12-month season
+  ticket, with stepped lines and upward vertical `+20%` arrows at April 2027 and
+  April 2028 on the 12-month season plot.
 - `--rpi`: show RPI-adjusted lines for all four ticket series.
 - `--cpih`: show CPIH-adjusted lines for all four ticket series.
 - `--base-year YEAR`: year from which the inflation lines start (April of `YEAR`)
   and pass through the ticket prices (defaults to `--start-year`).
   `--rpi-base-year` and `--cpih-base-year` can also override the base year per
   index.
-- `--core`: generate the four core chart files in `charts/`:
+- `--core`: generate the four core chart files in `charts/` (with `--monthly`
+  enabled):
   - `ponds_fees_from_2011_rpi_2020.png`
   - `lido_fees_from_2011_rpi_2020.png`
   - `ponds_fees_from_2011_geometric_rpi_2020.png`
