@@ -36,10 +36,15 @@ CLI options control the chart start year and inflation display:
   and pass through the ticket prices (defaults to `--start-year`).
   `--rpi-base-year` and `--cpih-base-year` can also override the base year per
   index.
+- `--core`: generate the four core chart files in `charts/`:
+  - `ponds_fees_from_2011_rpi_2020.png`
+  - `lido_fees_from_2011_rpi_2020.png`
+  - `ponds_fees_from_2011_geometric_rpi_2020.png`
+  - `lido_fees_from_2011_geometric_rpi_2020.png`
 - `-o`, `--filename`, `--output`: output PNG filename or path. When omitted, a
   filename is constructed in `charts/` from the active CLI options (for example,
-  `bathing_ponds_fee_trajectory_from_2011.png` or
-  `bathing_ponds_fee_trajectory_from_2011_rpi_2020_cpih_2020.png`).
+  `ponds_fees_from_2011.png`, `lido_fees_from_2011.png`, or
+  `ponds_fees_from_2011_rpi_2020_cpih_2020.png`).
 
 Monthly observations are plotted as historical curves up to the latest ONS
 observation (September 2026). From September 2026 through May 2029, the script

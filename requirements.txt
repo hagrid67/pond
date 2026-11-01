@@ -19,3 +19,9 @@ httpx2==2.9.1
 
 # Historical fee schedule PDF extraction
 pypdf==6.21.2
+
+# Google Drive chart upload
+google-api-python-client==2.201.0
+google-auth-httplib2==0.4.4
+google-auth-oauthlib==1.5.0
+
