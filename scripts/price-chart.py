@@ -1,5 +1,6 @@
 import argparse
 import colorsys
+import importlib.util
 import math
 from pathlib import Path
 
@@ -32,9 +33,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         description='Plot Hampstead Heath bathing pond or Parliament Hill Lido ticket price trajectories.'
     )
     parser.add_argument(
+        '--ponds',
+        action='store_true',
+        help='Plot Bathing Ponds ticket prices (from prices/pond-fees.csv; default when --lido is not set).',
+    )
+    parser.add_argument(
         '--lido',
         action='store_true',
-        help='Plot Parliament Hill Lido ticket prices (from prices/lido-fees.csv) instead of Bathing Ponds.',
+        help='Plot Parliament Hill Lido ticket prices (from prices/lido-fees.csv). Pass both --ponds and --lido to plot both.',
     )
     parser.add_argument(
         '--combined',
@@ -102,6 +108,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             'Generate the four core charts (Bathing Ponds and Parliament Hill Lido '
             'from 2011 with RPI from 2020, for both linear and geometric 2027 prices).'
         ),
+    )
+    parser.add_argument(
+        '--upload',
+        action='store_true',
+        help='Upload the newly generated chart(s) to Google Drive (SwimForum-2026/charts).',
     )
     parser.add_argument(
         '-o',
@@ -1012,41 +1023,65 @@ def generate_chart(
     return output_path
 
 
+def upload_generated_charts(paths: list[Path]) -> None:
+    upload_script_path = Path(__file__).resolve().parent / 'upload-charts-drive.py'
+    spec = importlib.util.spec_from_file_location('upload_charts_drive', upload_script_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f'Unable to load upload script from {upload_script_path}')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    module.upload_chart_files(paths)
+
+
 def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
+    generated_paths: list[Path] = []
     if args.core:
         for use_geometric in (False, True):
             for use_lido in (False, True):
+                generated_paths.append(
+                    generate_chart(
+                        use_lido=use_lido,
+                        combined=False,
+                        start_year=2011,
+                        use_geometric=use_geometric,
+                        show_rpi=True,
+                        rpi_base_year=2020,
+                        show_cpih=False,
+                        cpih_base_year=2020,
+                        filename=None,
+                        show_monthly=True,
+                    )
+                )
+    else:
+        start_year = args.start_year
+        default_base_year = args.base_year if args.base_year is not None else start_year
+        rpi_base_year = args.rpi_base_year if args.rpi_base_year is not None else default_base_year
+        cpih_base_year = args.cpih_base_year if args.cpih_base_year is not None else default_base_year
+        lido_targets: list[bool] = []
+        if args.ponds or not args.lido:
+            lido_targets.append(False)
+        if args.lido:
+            lido_targets.append(True)
+
+        for use_lido in lido_targets:
+            generated_paths.append(
                 generate_chart(
                     use_lido=use_lido,
-                    combined=False,
-                    start_year=2011,
-                    use_geometric=use_geometric,
-                    show_rpi=True,
-                    rpi_base_year=2020,
-                    show_cpih=False,
-                    cpih_base_year=2020,
-                    filename=None,
-                    show_monthly=True,
+                    combined=args.combined,
+                    start_year=start_year,
+                    use_geometric=args.geometric,
+                    show_rpi=args.rpi,
+                    rpi_base_year=rpi_base_year,
+                    show_cpih=args.cpih,
+                    cpih_base_year=cpih_base_year,
+                    filename=args.filename if len(lido_targets) == 1 else None,
+                    show_monthly=args.monthly,
                 )
-        return
+            )
 
-    start_year = args.start_year
-    default_base_year = args.base_year if args.base_year is not None else start_year
-    rpi_base_year = args.rpi_base_year if args.rpi_base_year is not None else default_base_year
-    cpih_base_year = args.cpih_base_year if args.cpih_base_year is not None else default_base_year
-    generate_chart(
-        use_lido=args.lido,
-        combined=args.combined,
-        start_year=start_year,
-        use_geometric=args.geometric,
-        show_rpi=args.rpi,
-        rpi_base_year=rpi_base_year,
-        show_cpih=args.cpih,
-        cpih_base_year=cpih_base_year,
-        filename=args.filename,
-        show_monthly=args.monthly,
-    )
+    if args.upload:
+        upload_generated_charts(generated_paths)
 
 
 if __name__ == '__main__':

@@ -181,8 +181,9 @@ def upload_charts(
     charts_dir: Path,
     parent_folder_id: str,
     subfolder_name: str,
+    files: list[Path] | None = None,
 ) -> list[dict[str, str]]:
-    png_files = sorted(charts_dir.glob('*.png'))
+    png_files = list(files) if files is not None else sorted(charts_dir.glob('*.png'))
     if not png_files:
         raise FileNotFoundError(f'No .png files found in {charts_dir}')
 
@@ -231,6 +232,28 @@ def upload_charts(
         f"https://drive.google.com/drive/folders/{target_folder_id}"
     )
     return uploaded
+
+
+def upload_chart_files(
+    files: list[Path],
+    parent_folder_id: str = DEFAULT_PARENT_FOLDER_ID,
+    subfolder_name: str = DEFAULT_SUBFOLDER_NAME,
+) -> list[dict[str, str]]:
+    repo_root = Path(__file__).resolve().parent.parent
+    creds = authenticate(
+        credentials_path=resolve_default_credentials_path(repo_root),
+        token_path=repo_root / 'keys' / 'google-drive-token.json',
+        port=0,
+        open_browser=True,
+    )
+    service = build('drive', 'v3', credentials=creds)
+    return upload_charts(
+        service=service,
+        charts_dir=repo_root / 'charts',
+        parent_folder_id=extract_folder_id(parent_folder_id),
+        subfolder_name=subfolder_name,
+        files=files,
+    )
 
 
 def main(argv: list[str] | None = None) -> None:

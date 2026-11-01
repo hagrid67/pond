@@ -22,10 +22,12 @@ ticket price series in the matching line style:
 `Index-equivalent price = base-year ticket price × monthly index / April index for base year`
 
 CLI options control the chart start year and inflation display:
+- `--ponds`: plot Bathing Ponds fees (`prices/pond-fees.csv`), which is the
+  default when `--lido` is not specified.
 - `--lido`: plot Parliament Hill Lido fees (`prices/lido-fees.csv`) instead of
   Bathing Ponds fees (`prices/pond-fees.csv`), using three stacked sub-plots by
   default (12-Month Season tickets, Daily Peak PAYG tickets, and Daily Off-Peak
-  PAYG tickets).
+  PAYG tickets). Passing both `--ponds` and `--lido` generates both charts.
 - `--start-year YEAR`: chart start year (default `2011`).
 - `--geometric` / `--geometric-2027`: replace the linearly interpolated 2027
   prices with geometric interpolation between 2026 and 2028 ($r_2 = p_{28}/p_{26} - 1$,
@@ -46,6 +48,8 @@ CLI options control the chart start year and inflation display:
   - `lido_fees_from_2011_rpi_2020.png`
   - `ponds_fees_from_2011_geometric_rpi_2020.png`
   - `lido_fees_from_2011_geometric_rpi_2020.png`
+- `--upload`: upload the newly generated chart(s) to Google Drive
+  (`SwimForum-2026/charts`).
 - `-o`, `--filename`, `--output`: output PNG filename or path. When omitted, a
   filename is constructed in `charts/` from the active CLI options (for example,
   `ponds_fees_from_2011.png`, `lido_fees_from_2011.png`, or
