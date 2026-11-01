@@ -1,7 +1,7 @@
 # Bathing ponds and Lido fee data
 
 - `pond-fees.csv` stores the adult and concession PAYG and 12-month season-ticket
-  prices used by `scripts/price-chart.py`. Each year is the May price/index
+  prices used by `scripts/price-chart.py`. Each year is the April price/index
   comparison point; the 2027 and 2028 rows are proposed, not an observed tariff.
 - `lido-fees.csv` stores the Parliament Hill Lido adult and concession off-peak
   PAYG, peak PAYG, 1-month / rolling monthly season, 6-month season, and
@@ -17,7 +17,7 @@ The `status` column describes the evidence for each row:
 
 - `official_verified`: all four prices checked against City of London fee
   schedules. `source_url` links to the PDF and page containing the tariff.
-  `effective_from` is the official effective date, not the May index date.
+  `effective_from` is the official effective date (typically 1 April).
 - `historical_assumption`: for 2005-2010, the earliest verified (2011) prices
   are extended backwards: GBP 110 adult / GBP 55 concession for annual tickets,
   and GBP 2 / GBP 1 for PAYG. The 2019 row retains the supplied 2018/19 prices.
@@ -53,10 +53,10 @@ Lido, combined-facility passes, and six-month tickets:
 
 Blank provenance fields mean no official source has yet been recorded, not
 that the price has been verified elsewhere. In particular, **the 2005
-season-ticket price remains unverified**. The chart's hardcoded `START_YEAR`
-is currently 2011, so those earlier assumptions are not plotted. Both
-season-ticket inflation lines are rebased to the verified GBP 110 adult
-12-month price in that start year, using its May indices.
+season-ticket price remains unverified**. The chart's default `START_YEAR`
+is currently 2011, so those earlier assumptions are not plotted by default. Both
+season-ticket inflation lines are rebased to the verified price in the chosen
+base year, using its April indices.
 
 Copies of the research PDFs are preserved in [`../col-pdfs/`](../col-pdfs/).
 Its [`index.csv`](../col-pdfs/index.csv) maps local filenames to original URLs.
@@ -79,9 +79,7 @@ rows against the PDF before entering prices.
 
 ## Comparison month
 
-The month is not the same for every documented increase. [Time Out reported
-that the 2025 increase took effect on 1 April 2025](https://www.timeout.com/london/news/hampstead-heaths-swimming-ponds-are-going-up-in-price-022525).
-For the following increase, a [15 May 2026 report](https://www.timeout.com/london/news/prices-have-gone-up-at-four-of-north-londons-most-popular-open-water-swimming-spots-051526)
-says the new prices had gone up "this month" but does not give an exact
-effective day. The annual chart uses May index observations as requested; it
-does not claim all historical price changes took effect in May.
+City of London fee schedules take effect at the start of the Corporation's
+financial year in April (`1 April` in the 2011–2025 schedules, and `8 April
+2026` in the 2026/27 Report of Action Taken). The annual chart therefore aligns
+each year's prices and inflation index baseline with April.

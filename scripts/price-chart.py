@@ -196,7 +196,7 @@ def load_monthly_index(path: Path) -> pd.Series:
 
 
 def month_timestamps_to_x(dates: pd.DatetimeIndex) -> pd.Index:
-    return dates.year + (dates.month - 5) / 12.0
+    return dates.year + (dates.month - 4) / 12.0
 
 
 def compute_latest_annual_rate(index_monthly: pd.Series) -> float:
@@ -296,9 +296,9 @@ def generate_chart(
     def compute_inflation_series(
         price_col: str, index_monthly: pd.Series, base_year: int
     ) -> tuple[pd.Series, pd.Series, float]:
-        base_date = pd.Timestamp(year=base_year, month=5, day=1)
+        base_date = pd.Timestamp(year=base_year, month=4, day=1)
         if base_date not in index_monthly.index:
-            raise ValueError(f'No May inflation observation available for base year {base_year}')
+            raise ValueError(f'No April inflation observation available for base year {base_year}')
         base_price = float(
             all_prices.loc[all_prices['year'] == base_year, price_col].iloc[0]
         )
@@ -309,7 +309,7 @@ def generate_chart(
         annual_rate = compute_latest_annual_rate(index_monthly)
         latest_date = index_monthly.index.max()
         latest_index = float(index_monthly.loc[latest_date])
-        forecast_end_date = pd.Timestamp(year=FORECAST_END_YEAR, month=5, day=1)
+        forecast_end_date = pd.Timestamp(year=FORECAST_END_YEAR, month=4, day=1)
         forecast_dates = pd.date_range(start=latest_date, end=forecast_end_date, freq='MS')
         forecast_indices = pd.Series(
             [
@@ -378,7 +378,7 @@ def generate_chart(
         fig, ax1 = plt.subplots(figsize=(14, 7))
 
         ax1.set_xlabel(
-            'Year (May prices / index)' if show_inflation else 'Year (May prices)',
+            'Year (April prices / index)' if show_inflation else 'Year (April prices)',
             fontweight='bold', labelpad=12,
         )
         ax1.set_ylabel(
@@ -587,7 +587,7 @@ def generate_chart(
             ax_season, years, prices['concession_season_12m_gbp'], color_season, '--', 1.8,
             {2017: (6, -6, 'left'), 2021: (6, -8, 'left'), penultimate_year: (6, -4, 'left'), last_year: (6, 0, 'left')},
         )
-        ax_season.tick_params(axis='y', labelcolor=color_season)
+        ax_season.tick_params(axis='y', labelcolor=color_season, right=True, labelright=True)
         ax_season.tick_params(axis='x', labelbottom=True, rotation=45)
         ax_season.set_ylim(0.0, 440.0 if use_lido else 390.0)
         ax_season.grid(True, linestyle=':', alpha=0.6)
@@ -648,7 +648,7 @@ def generate_chart(
                 },
             )
             ax_peak.set_ylim(0.0, 15.0)
-            ax_peak.tick_params(axis='y', labelcolor=color_payg)
+            ax_peak.tick_params(axis='y', labelcolor=color_payg, right=True, labelright=True)
             ax_peak.tick_params(axis='x', labelbottom=True, rotation=45)
             ax_peak.grid(True, linestyle=':', alpha=0.6)
             ax_peak.annotate(
@@ -675,7 +675,7 @@ def generate_chart(
                 fontweight='bold', fontsize=12, pad=10,
             )
             ax_offpeak.set_xlabel(
-                'Year (May prices / index)' if show_inflation else 'Year (May prices)',
+                'Year (April prices / index)' if show_inflation else 'Year (April prices)',
                 fontweight='bold', labelpad=12,
             )
             ax_offpeak.set_ylabel(
@@ -716,7 +716,7 @@ def generate_chart(
                 },
             )
             ax_offpeak.set_ylim(0.0, 9.0)
-            ax_offpeak.tick_params(axis='y', labelcolor=color_payg_offpeak)
+            ax_offpeak.tick_params(axis='y', labelcolor=color_payg_offpeak, right=True, labelright=True)
             ax_offpeak.grid(True, linestyle=':', alpha=0.6)
             ax_offpeak.set_xticks(xtick_years)
             ax_offpeak.set_xlim(xtick_years[0] - 0.5, xtick_years[-1] + 0.5)
@@ -745,7 +745,7 @@ def generate_chart(
                 fontweight='bold', fontsize=12, pad=10,
             )
             ax_payg.set_xlabel(
-                'Year (May prices / index)' if show_inflation else 'Year (May prices)',
+                'Year (April prices / index)' if show_inflation else 'Year (April prices)',
                 fontweight='bold', labelpad=12,
             )
             ax_payg.set_ylabel(
@@ -787,7 +787,7 @@ def generate_chart(
                 textcoords='offset points', ha='right', color=color_payg,
                 arrowprops=dict(arrowstyle='->', color=color_payg),
             )
-            ax_payg.tick_params(axis='y', labelcolor=color_payg)
+            ax_payg.tick_params(axis='y', labelcolor=color_payg, right=True, labelright=True)
             ax_payg.grid(True, linestyle=':', alpha=0.6)
             ax_payg.set_xticks(xtick_years)
             ax_payg.set_xlim(xtick_years[0] - 0.5, xtick_years[-1] + 0.5)
