@@ -47,3 +47,39 @@ def test_official_historical_pond_fees_and_provenance() -> None:
             assert row['status'] == 'historical_assumption'
             assert Decimal(row['adult_season_12m_gbp']) == Decimal('110.00')
             assert Decimal(row['concession_season_12m_gbp']) == Decimal('55.00')
+
+
+def test_official_historical_lido_fees_and_provenance() -> None:
+    path = Path(__file__).resolve().parents[1] / 'prices' / 'lido-fees.csv'
+    with path.open(encoding='utf-8', newline='') as source:
+        rows = list(csv.DictReader(source))
+
+    assert [int(row['year']) for row in rows] == list(range(2005, 2029))
+    for row in rows:
+        year = int(row['year'])
+        if 2011 <= year <= 2026:
+            assert row['status'] == 'official_verified'
+            assert row['effective_from'].startswith(f'{year}-04-')
+            source_url = urlparse(row['source_url'])
+            assert source_url.scheme == 'https'
+            assert source_url.netloc in {
+                'democracy.cityoflondon.gov.uk',
+                'www.cityoflondon.gov.uk',
+            }
+            if year <= 2025:
+                assert Decimal(row['adult_season_1m_gbp']) > 0
+                assert Decimal(row['concession_season_1m_gbp']) > 0
+            else:
+                assert row['adult_season_1m_gbp'] == ''
+                assert row['concession_season_1m_gbp'] == ''
+            assert Decimal(row['adult_season_6m_gbp']) > 0
+            assert Decimal(row['concession_season_6m_gbp']) > 0
+            assert Decimal(row['adult_season_12m_gbp']) > 0
+            assert Decimal(row['concession_season_12m_gbp']) > 0
+        elif year <= 2010:
+            assert row['status'] == 'historical_assumption'
+            assert Decimal(row['adult_season_6m_gbp']) == Decimal('100.00')
+            assert Decimal(row['adult_season_12m_gbp']) == Decimal('136.00')
+        else:
+            assert row['status'] == 'proposed'
+

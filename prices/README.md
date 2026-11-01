@@ -1,8 +1,15 @@
-# Bathing ponds fee data
+# Bathing ponds and Lido fee data
 
-`pond-fees.csv` stores the adult and concession PAYG and 12-month season-ticket
-prices used by `scripts/price-chart.py`. Each year is the May price/index
-comparison point; the 2027 row is proposed, not an observed tariff.
+- `pond-fees.csv` stores the adult and concession PAYG and 12-month season-ticket
+  prices used by `scripts/price-chart.py`. Each year is the May price/index
+  comparison point; the 2027 and 2028 rows are proposed, not an observed tariff.
+- `lido-fees.csv` stores the Parliament Hill Lido adult and concession off-peak
+  PAYG, peak PAYG, 1-month / rolling monthly season, 6-month season, and
+  12-month season ticket prices from 2005 to 2028 with official City of London
+  schedule URLs and approval provenance.
+- `proposals-2026.csv` extracts the summary table of current (2026/27) and
+  proposed (2027–28) charges across Lido, Ponds, and Combined passes from page 5
+  of `../col-pdfs/Swim-Forum-slides-2026.pdf`.
 
 ## Verification and provenance
 
