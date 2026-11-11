@@ -14,7 +14,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import pandas as pd
 from adjustText import adjust_text
-from matplotlib.ticker import FuncFormatter
+from matplotlib.ticker import FuncFormatter, MultipleLocator
 from google.auth.exceptions import RefreshError
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -260,8 +260,12 @@ def plot_benchmark_scatter(
     )
     ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f'£{v:.0f}'))
     ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f'£{v:.0f}'))
-    ax.set_xlim(min(all_x) - 1.0, max(all_x) + 1.0)
+    ax.xaxis.set_major_locator(MultipleLocator(1))
+    x_limits = (min(all_x) - 1.0, max(all_x) + 1.0)
+    ax.set_xlim(*x_limits)
     ax.set_ylim(min(all_y) - 0.75, max(all_y) + 0.75)
+    ax.plot(x_limits, x_limits, linestyle='--', color='grey', alpha=0.5, linewidth=1.2,
+            zorder=1, label='Concession = Adult')
     ax.grid(True, linestyle=':', alpha=0.6)
     ax.legend(loc='upper left', frameon=True, facecolor='white', edgecolor='#e2e2e2')
     footnote = f"Source: Google Sheet '{sheet_title}' (Benchmarking - October 2026)."
