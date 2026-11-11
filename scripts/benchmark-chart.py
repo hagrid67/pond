@@ -60,6 +60,12 @@ HEATH_FACILITY_VENUES = {
     'Ponds': ("Kenwood Ladies' Pond", "Highgate Men's Pond", 'Hampstead Mixed Pond'),
     'Parliament Hill Lido': ('Parliament Hill Lido',),
 }
+# One pond season ticket covers all three ponds, so seasonal Mixed Pond users can swim year-round.
+SHARED_SEASON_TICKET_VENUES = frozenset(HEATH_FACILITY_VENUES['Ponds'])
+# The sheet's annual price is a year-round leisure membership with access to other centres' pools/gyms,
+# not a seasonal lido ticket (better.org.uk/leisure-centre/memberships/local, checked Oct 2026).
+YEAR_ROUND_MEMBERSHIP_VENUES = frozenset({'Hillingdon Lido'})
+SHADOW_ALPHA = 0.5
 
 
 def load_price_chart_module() -> ModuleType:
@@ -228,6 +234,37 @@ def prepare_scatter_points(
     return points, excluded
 
 
+def prepare_annualised_points(data: pd.DataFrame) -> pd.DataFrame:
+    """Scale seasonal venues' annual prices by 12/months, as if each season ticket ran for 12 months.
+
+    Assumes a seasonal venue's ticket covers only that venue's open months; the Heath ponds share
+    one year-round ticket and some venues' annual price is a year-round membership, so both are skipped.
+    """
+    skipped = SHARED_SEASON_TICKET_VENUES | YEAR_ROUND_MEMBERSHIP_VENUES
+    rows = []
+    for _, row in data.iterrows():
+        venue = row[VENUE_COLUMN].strip()
+        adult = parse_gbp(row[ANNUAL_ADULT_COLUMN])
+        concession = parse_gbp(row[ANNUAL_CONCESSION_COLUMN])
+        if venue in skipped or pd.isna(adult) or pd.isna(concession):
+            continue
+        label = format_venue_label(venue, row[MONTHS_PER_YEAR_COLUMN])
+        if label == venue:
+            continue
+        months = float(row[MONTHS_PER_YEAR_COLUMN])
+        if months == 0:
+            continue
+        scale = 12 / months
+        rows.append({
+            'venue': venue, 'months': months, 'heating': classify_heating(row[WATER_TEMPERATURE_COLUMN]),
+            'adult': adult, 'concession': concession,
+            'annualised_adult': adult * scale, 'annualised_concession': concession * scale,
+        })
+    columns = ['venue', 'months', 'heating', 'adult', 'concession',
+               'annualised_adult', 'annualised_concession']
+    return pd.DataFrame(rows, columns=columns)
+
+
 def build_labels(points: pd.DataFrame, tolerance: float = NEAR_PRICE_TOLERANCE) -> list[dict[str, Any]]:
     """Merge labels of same-heating markers within `tolerance` (£) on both axes.
 
@@ -262,8 +299,10 @@ def plot_benchmark_scatter(
     points: pd.DataFrame, excluded: list[str], output_path: Path, sheet_title: str,
     proposed: pd.DataFrame | None = None, use_geometric: bool = False,
     *, annual: bool = False, proposal_notes: dict[str, str] | None = None,
+    annualised: pd.DataFrame | None = None,
 ) -> Path:
-    fig, ax = plt.subplots(figsize=(14, 10))
+    # The annual chart is taller to give labels room once annualised markers widen the axes.
+    fig, ax = plt.subplots(figsize=(14, 13) if annual else (14, 10))
     for heating, colour in HEATING_COLOURS.items():
         subset = points.loc[points['heating'] == heating]
         ax.scatter(
@@ -310,10 +349,33 @@ def plot_benchmark_scatter(
             all_x += future['adult'].tolist()
             all_y += future['concession'].tolist()
 
+    if annualised is not None and not annualised.empty:
+        ax.scatter(annualised['annualised_adult'], annualised['annualised_concession'], s=60,
+                   color=[HEATING_COLOURS[h] for h in annualised['heating']], edgecolor='black',
+                   linewidth=0.6, alpha=SHADOW_ALPHA, zorder=3)
+        ax.scatter([], [], s=60, color='grey', edgecolor='black', linewidth=0.6, alpha=SHADOW_ALPHA,
+                   label='Seasonal venue annualised (price × 12 / months open)')
+        for row in annualised.itertuples():
+            colour = HEATING_COLOURS[row.heating]
+            ax.plot([row.adult, row.annualised_adult], [row.concession, row.annualised_concession],
+                    linestyle=':', color=colour, alpha=SHADOW_ALPHA, linewidth=1.0, zorder=2)
+            for step in range(1, ARROW_SAMPLES):
+                frac = step / ARROW_SAMPLES
+                all_x.append(row.adult + frac * (row.annualised_adult - row.adult))
+                all_y.append(row.concession + frac * (row.annualised_concession - row.concession))
+            labels.append({
+                'x': row.annualised_adult, 'y': row.annualised_concession, 'heating': row.heating,
+                'alpha': SHADOW_ALPHA,
+                'text': (f'{row.venue} annualised (×12/{row.months:g})\n'
+                         f'£{row.annualised_adult:.2f} / £{row.annualised_concession:.2f}'),
+            })
+            all_x.append(row.annualised_adult)
+            all_y.append(row.annualised_concession)
+
     # Annual heated and unheated groups can share prices; start their labels on opposite sides.
     texts = [
         ax.text(label['x'], label['y'], label['text'], fontsize=8,
-                color=HEATING_COLOURS[label['heating']],
+                color=HEATING_COLOURS[label['heating']], alpha=label.get('alpha', 1.0),
                 ha='center' if not annual else ('right' if label['heating'] == 'Heated' else 'left'),
                 va='center', zorder=4)
         for label in labels
@@ -350,6 +412,12 @@ def plot_benchmark_scatter(
             f' Proposed Heath prices from prices/pond-fees.csv and lido-fees.csv ({ticket_type});'
             f' 2027 is the {mean_name} mean of 2026 and 2028.'
         )
+    if annualised is not None and not annualised.empty:
+        footnote += (
+            ' Faded markers annualise seasonal venues (assumes a single-venue season ticket);'
+            ' not annualised: Heath ponds (one ticket covers all ponds year-round) and'
+            f" {', '.join(sorted(YEAR_ROUND_MEMBERSHIP_VENUES))} (year-round leisure membership)."
+        )
     fig.text(0.01, 0.01, footnote, fontsize=8, style='italic', color='#333333', wrap=True)
     fig.tight_layout(rect=(0, 0.04, 1, 1))
     adjust_text(
@@ -360,7 +428,7 @@ def plot_benchmark_scatter(
         y=all_y,
         ax=ax,
         ensure_inside_axes=True,
-        expand=(1.2, 1.5),
+        expand=(1.1, 1.3) if annual else (1.2, 1.5),
         force_text=(0.3, 0.6) if annual else (0.1, 0.2),
         force_static=(0.3, 0.5),
         # Avoid swapping co-located annual label blocks back into each other.
@@ -565,6 +633,7 @@ def main(argv: list[str] | None = None) -> None:
     plot_benchmark_scatter(
         annual_points, annual_excluded, args.annual_output, title,
         annual_proposed, args.geometric, annual=True, proposal_notes=proposal_notes,
+        annualised=prepare_annualised_points(data),
     )
 
 

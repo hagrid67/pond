@@ -72,6 +72,14 @@ concession annual columns directly, omitting venues missing either price. Both
 charts have labelled dashed reference lines for concessions at 100%, 50% and 25%
 of the adult price. Annual x-axis ticks are spaced at £100 (one-off ticks at £1).
 
+The annual chart also shows a faded "annualised" marker for each seasonal venue, at
+its annual prices × 12 / months open (e.g. DWSC's 6-month £150 / £105 becomes
+£300 / £210), assuming its ticket covers only that venue's season. The Heath ponds are
+not annualised because one pond ticket covers all three ponds, including the
+year-round Ladies' and Men's ponds. Venues whose annual price is a year-round
+multi-centre leisure membership (`YEAR_ROUND_MEMBERSHIP_VENUES`, currently Hillingdon
+Lido) are not annualised either.
+
 Proposed 2027 and 2028 Heath prices are drawn as hollow diamonds, joined by dashed
 arrows from today's pond and Parliament Hill Lido markers. They are read from
 `prices/pond-fees.csv` (PAYG) and `prices/lido-fees.csv` (peak PAYG) through

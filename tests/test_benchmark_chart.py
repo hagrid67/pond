@@ -1,7 +1,7 @@
 import importlib.util
 import pickle
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, patch, sentinel
 
 import httplib2
 import pandas as pd
@@ -455,6 +455,7 @@ def test_main_generates_one_off_and_annual_charts(
         patch.object(benchmark_chart, 'load_benchmark_table',
                      return_value=('Sheet1', annual_venues(), pd.DataFrame())),
         patch.object(benchmark_chart, 'build_proposed_opening_notes', return_value=expected_notes) as notes,
+        patch.object(benchmark_chart, 'prepare_annualised_points', return_value=sentinel.annualised),
         patch.object(benchmark_chart, 'plot_benchmark_scatter') as plot,
     ):
         benchmark_chart.main(args)
@@ -464,7 +465,9 @@ def test_main_generates_one_off_and_annual_charts(
     assert annual.args[2] == annual_output
     expected_proposal_notes = None if no_proposed else expected_notes
     assert one_off.kwargs == {'proposal_notes': expected_proposal_notes}
-    assert annual.kwargs == {'annual': True, 'proposal_notes': expected_proposal_notes}
+    assert annual.kwargs == {
+        'annual': True, 'proposal_notes': expected_proposal_notes, 'annualised': sentinel.annualised,
+    }
     if no_proposed:
         notes.assert_not_called()
     else:
@@ -526,3 +529,74 @@ def test_annual_labels_do_not_overlap_at_shared_heated_and_unheated_prices(tmp_p
                 assert not first.get_window_extent(renderer).overlaps(second.get_window_extent(renderer))
     finally:
         benchmark_chart.plt.close(fig)
+
+
+def seasonal_annual_venues() -> pd.DataFrame:
+    data = make_venues([
+        ('DWSC', '', '', 'Unheated'),
+        ('Hampstead Mixed Pond', '£5', '£3', 'Unheated'),
+        ('Year-round Lido', '£8', '£4', 'Unheated'),
+        ('Seasonal Pool', '£6', '£3', 'Heated'),
+        ('No Annual Price Lake', '£9', '£6', 'Unheated'),
+        ('Unknown Months Lake', '£9', '£6', 'Unheated'),
+    ])
+    data['Months per year'] = ['6', '7', '12', '4', '5', '']
+    data[benchmark_chart.ANNUAL_ADULT_COLUMN] = ['£150', '£157', '£400', '£200', '', '£120']
+    data[benchmark_chart.ANNUAL_CONCESSION_COLUMN] = ['£105', '£94', '£200', '£100', '', '£60']
+    return data
+
+
+def test_annualised_points_scale_seasonal_single_venue_tickets_to_12_months() -> None:
+    with pytest.warns(RuntimeWarning, match='Unknown Months Lake'):
+        annualised = benchmark_chart.prepare_annualised_points(seasonal_annual_venues())
+    assert annualised.to_dict('records') == [
+        {'venue': 'DWSC', 'months': 6.0, 'heating': 'Unheated', 'adult': 150.0, 'concession': 105.0,
+         'annualised_adult': 300.0, 'annualised_concession': 210.0},
+        {'venue': 'Seasonal Pool', 'months': 4.0, 'heating': 'Heated', 'adult': 200.0,
+         'concession': 100.0, 'annualised_adult': 600.0, 'annualised_concession': 300.0},
+    ]
+
+
+def test_annualised_points_skip_shared_pond_ticket() -> None:
+    assert 'Hampstead Mixed Pond' in benchmark_chart.SHARED_SEASON_TICKET_VENUES
+    annualised = benchmark_chart.prepare_annualised_points(heath_venues())
+    assert annualised['venue'].tolist() == ['Parliament Hill Lido']
+
+
+def test_plot_draws_faded_annualised_markers(tmp_path: Path) -> None:
+    data = seasonal_annual_venues().iloc[:4]
+    points, excluded = benchmark_chart.prepare_scatter_points(data, annual=True)
+    annualised = benchmark_chart.prepare_annualised_points(data)
+    fig, ax = benchmark_chart.plt.subplots()
+    try:
+        with (
+            patch.object(benchmark_chart.plt, 'subplots', return_value=(fig, ax)),
+            patch.object(benchmark_chart.plt, 'close'),
+        ):
+            benchmark_chart.plot_benchmark_scatter(
+                points, excluded, tmp_path / 'annual.png', 'Sheet1', annual=True, annualised=annualised,
+            )
+        shadows = [
+            c for c in ax.collections
+            if c.get_alpha() == benchmark_chart.SHADOW_ALPHA and len(c.get_offsets())
+        ]
+        assert len(shadows) == 1
+        assert shadows[0].get_offsets().tolist() == [[300.0, 210.0], [600.0, 300.0]]
+        legend_texts = [text.get_text() for text in ax.get_legend().get_texts()]
+        assert 'Seasonal venue annualised (price × 12 / months open)' in legend_texts
+        label_texts = [text.get_text() for text in ax.texts]
+        assert 'DWSC annualised (×12/6)\n£300.00 / £210.00' in label_texts
+        assert not any('Hampstead Mixed Pond annualised' in text for text in label_texts)
+        assert 'Heath ponds (one ticket covers all ponds year-round)' in fig.texts[0].get_text()
+        assert ax.get_xlim()[1] > 600
+    finally:
+        benchmark_chart.plt.close(fig)
+
+
+def test_annualised_points_skip_year_round_memberships() -> None:
+    data = make_venues([('Hillingdon Lido', '£8', '£5.40', 'Unheated')])
+    data['Months per year'] = '6'
+    data[benchmark_chart.ANNUAL_ADULT_COLUMN] = '£504'
+    data[benchmark_chart.ANNUAL_CONCESSION_COLUMN] = '£352.80'
+    assert 'Hillingdon Lido' in benchmark_chart.YEAR_ROUND_MEMBERSHIP_VENUES
+    assert benchmark_chart.prepare_annualised_points(data).empty
