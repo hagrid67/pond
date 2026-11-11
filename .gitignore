@@ -44,6 +44,7 @@ user-data/auth.sqlite
 data/*.csv
 !data/.gitkeep
 keys/
+secrets/
 meteo-data/
 metoffice-data/
 logs/*
