@@ -1,0 +1,35 @@
+{
+	"folders": [
+		{
+			"name": "pond",
+			"path": "."
+		},
+		{
+			"name": "hmpa",
+			"path": "../hmpa"
+		},
+		{
+			"name": "vibe-crowd",
+			"path": "../vibe-crowd"
+		}
+	],
+
+	"settings": {
+		"saveAndRun":{
+			"commands": [
+				{
+					"match": "DISABLED\\.*.py",
+					"cmd": "scp ${relativeFile} pz1:heating/${relativeFile}; scp ${relativeFile} pi6w:heating/${relativeFile}"
+				}
+			]
+		},
+		"files.exclude": {
+			"/home3/jeremy/projects/personal-finance/**": true
+		},
+		"python.venvPath": "/home/jeremy/ve",
+		"CodeGPT.apiKey": "OpenAI",
+		"chat.editing.autoAcceptDelay": 5,
+		"python.defaultInterpreterPath": "/home/jeremy/projects/heating/dev/ve312heat/bin/python"
+	
+	}
+}

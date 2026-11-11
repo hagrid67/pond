@@ -5,6 +5,7 @@ import argparse
 import importlib.util
 import pickle
 import sys
+import warnings
 from pathlib import Path
 from types import ModuleType
 from typing import Any
@@ -41,6 +42,7 @@ CONCESSION_COLUMN = 'Concession (£)'
 ANNUAL_ADULT_COLUMN = "Adult Annual M'ship/Season ticket"
 ANNUAL_CONCESSION_COLUMN = "Concession Annual M'ship/Season ticket"
 WATER_TEMPERATURE_COLUMN = 'Water Temperature'
+MONTHS_PER_YEAR_COLUMN = 'Months per year'
 HEATING_COLOURS = {'Heated': '#ff7f0e', 'Unheated': '#1f77b4'}
 DEFAULT_OUTPUT_PATH = REPO_ROOT / 'charts' / 'benchmark1.png'
 DEFAULT_ANNUAL_OUTPUT_PATH = REPO_ROOT / 'charts' / 'benchmark2.png'
@@ -54,6 +56,10 @@ HEATH_FACILITIES = (
     ('Ponds', False, 'adult_payg_gbp', 'concession_payg_gbp', 'Unheated'),
     ('Parliament Hill Lido', True, 'adult_peak_payg_gbp', 'concession_peak_payg_gbp', 'Unheated'),
 )
+HEATH_FACILITY_VENUES = {
+    'Ponds': ("Kenwood Ladies' Pond", "Highgate Men's Pond", 'Hampstead Mixed Pond'),
+    'Parliament Hill Lido': ('Parliament Hill Lido',),
+}
 
 
 def load_price_chart_module() -> ModuleType:
@@ -156,6 +162,45 @@ def classify_heating(value: str) -> str:
     raise ValueError(f'Cannot classify water temperature {value!r} as heated or unheated.')
 
 
+def format_venue_label(venue: str, opening_months: str | float | int | None) -> str:
+    if opening_months is None or pd.isna(opening_months) or not str(opening_months).strip():
+        warnings.warn(f'Venue {venue!r} has no {MONTHS_PER_YEAR_COLUMN}; opening months are unknown.',
+                      RuntimeWarning, stacklevel=2)
+        return venue
+    try:
+        months = float(opening_months)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f'Venue {venue!r}: invalid {MONTHS_PER_YEAR_COLUMN} {opening_months!r}; expected 0 to 12.'
+        ) from exc
+    if not 0 <= months <= 12:
+        raise ValueError(
+            f'Venue {venue!r}: invalid {MONTHS_PER_YEAR_COLUMN} {opening_months!r}; expected 0 to 12.'
+        )
+    return f'{venue} ({months:g}/12m)' if months < 12 else venue
+
+
+def build_proposed_opening_notes(data: pd.DataFrame) -> dict[str, str]:
+    venue_months = dict(zip(
+        data[VENUE_COLUMN].str.strip(), data[MONTHS_PER_YEAR_COLUMN], strict=True,
+    ))
+    notes = {}
+    for facility, venues in HEATH_FACILITY_VENUES.items():
+        seasonal_labels = []
+        for venue in venues:
+            if venue not in venue_months:
+                warnings.warn(
+                    f'Venue {venue!r} is missing from the sheet; proposal opening months are unknown.',
+                    RuntimeWarning, stacklevel=2,
+                )
+                continue
+            label = format_venue_label(venue, venue_months[venue])
+            if label != venue:
+                seasonal_labels.append(label)
+        notes[facility] = '\n'.join(seasonal_labels)
+    return notes
+
+
 def prepare_scatter_points(
     data: pd.DataFrame, *, annual: bool = False,
 ) -> tuple[pd.DataFrame, list[str]]:
@@ -169,12 +214,16 @@ def prepare_scatter_points(
         'concession': data[ANNUAL_CONCESSION_COLUMN if annual else CONCESSION_COLUMN].map(parse_gbp),
         'heating': data[WATER_TEMPERATURE_COLUMN].map(classify_heating),
     })
+    frame['venue_label'] = [
+        format_venue_label(venue, months)
+        for venue, months in zip(frame['venue'], data[MONTHS_PER_YEAR_COLUMN], strict=True)
+    ]
     missing = frame['adult'].isna() | frame['concession'].isna()
-    excluded = frame.loc[missing, 'venue'].tolist()
+    excluded = frame.loc[missing, 'venue_label'].tolist()
     points = (
         frame.loc[~missing]
         .groupby(['adult', 'concession', 'heating'], as_index=False, sort=False)
-        .agg(venues=('venue', list))
+        .agg(venues=('venue_label', list))
     )
     return points, excluded
 
@@ -212,7 +261,7 @@ def build_labels(points: pd.DataFrame, tolerance: float = NEAR_PRICE_TOLERANCE) 
 def plot_benchmark_scatter(
     points: pd.DataFrame, excluded: list[str], output_path: Path, sheet_title: str,
     proposed: pd.DataFrame | None = None, use_geometric: bool = False,
-    *, annual: bool = False,
+    *, annual: bool = False, proposal_notes: dict[str, str] | None = None,
 ) -> Path:
     fig, ax = plt.subplots(figsize=(14, 10))
     for heating, colour in HEATING_COLOURS.items():
@@ -231,6 +280,8 @@ def plot_benchmark_scatter(
         ax.scatter([], [], marker='D', s=60, facecolor='white', edgecolor='#555555', linewidth=1.8,
                    label=f'Proposed Heath prices (2027 = {mean_name} mean)')
         for facility, group in proposed.groupby('facility', sort=False):
+            if not isinstance(facility, str):
+                raise ValueError(f'Invalid proposed facility {facility!r}: expected a venue name.')
             group = group.sort_values('year')
             colour = HEATING_COLOURS[group['heating'].iloc[0]]
             coords = list(zip(group['adult'], group['concession']))
@@ -249,9 +300,12 @@ def plot_benchmark_scatter(
                        edgecolor=colour, linewidth=1.8, zorder=3)
             for row in future.itertuples():
                 suffix = f' ({mean_name})' if row.year == 2027 else ''
+                note = proposal_notes.get(facility, '') if proposal_notes is not None else ''
+                note_suffix = f'\n{note}' if note else ''
                 labels.append({
                     'x': row.adult, 'y': row.concession, 'heating': row.heating,
-                    'text': f'{facility} {row.year} proposed{suffix}\n£{row.adult:.2f} / £{row.concession:.2f}',
+                    'text': (f'{facility} {row.year} proposed{suffix}\n'
+                             f'£{row.adult:.2f} / £{row.concession:.2f}{note_suffix}'),
                 })
             all_x += future['adult'].tolist()
             all_y += future['concession'].tolist()
@@ -501,13 +555,16 @@ def main(argv: list[str] | None = None) -> None:
     if args.columns > 0:
         print_benchmark_table(title, data, summary, args.columns)
     points, excluded = prepare_scatter_points(data)
+    proposal_notes = None if args.no_proposed else build_proposed_opening_notes(data)
     proposed = None if args.no_proposed else load_proposed_prices(args.geometric)
-    plot_benchmark_scatter(points, excluded, args.output, title, proposed, args.geometric)
+    plot_benchmark_scatter(
+        points, excluded, args.output, title, proposed, args.geometric, proposal_notes=proposal_notes,
+    )
     annual_points, annual_excluded = prepare_scatter_points(data, annual=True)
     annual_proposed = None if args.no_proposed else load_proposed_prices(args.geometric, annual=True)
     plot_benchmark_scatter(
         annual_points, annual_excluded, args.annual_output, title,
-        annual_proposed, args.geometric, annual=True,
+        annual_proposed, args.geometric, annual=True, proposal_notes=proposal_notes,
     )
 
 

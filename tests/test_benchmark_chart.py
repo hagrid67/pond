@@ -183,10 +183,12 @@ def test_classify_heating() -> None:
 
 
 def make_venues(rows: list[tuple[str, str, str, str]]) -> pd.DataFrame:
-    return pd.DataFrame(rows, columns=[
+    data = pd.DataFrame(rows, columns=[
         benchmark_chart.VENUE_COLUMN, benchmark_chart.ADULT_COLUMN,
         benchmark_chart.CONCESSION_COLUMN, benchmark_chart.WATER_TEMPERATURE_COLUMN,
     ])
+    data['Months per year'] = '12'
+    return data
 
 
 def test_prepare_scatter_points_groups_and_excludes() -> None:
@@ -214,6 +216,56 @@ def test_build_labels_merges_near_duplicates_with_prices() -> None:
     labels = {label['text']: label for label in benchmark_chart.build_labels(points)}
     assert set(labels) == {'Swiss (£8.45)\nPancras (£8.46)', 'Lido', 'Far'}
     assert labels['Swiss (£8.45)\nPancras (£8.46)']['x'] == pytest.approx(8.455)
+
+
+@pytest.mark.parametrize('annual', [False, True])
+def test_seasonal_labels_are_per_venue_on_shared_markers(annual: bool) -> None:
+    data = annual_venues()
+    data['Months per year'] = ['7', '12', '6', '6', '12']
+    points, excluded = benchmark_chart.prepare_scatter_points(data, annual=annual)
+    labels = [label['text'] for label in benchmark_chart.build_labels(points)]
+    assert 'Pond A (7/12m)\nPond B' in labels
+    assert 'Pool C (6/12m)' in labels
+    assert excluded == (['Lake D (6/12m)', 'Lake E'] if annual else ['Lake D (6/12m)'])
+
+
+@pytest.mark.parametrize(
+    ('months', 'expected'),
+    [('0', 'Venue (0/12m)'), ('6', 'Venue (6/12m)'),
+     ('6.5', 'Venue (6.5/12m)'), ('11', 'Venue (11/12m)'), ('12', 'Venue')],
+)
+def test_venue_label_reflects_opening_months(months: str, expected: str) -> None:
+    data = make_venues([('Venue', '£5', '£3', 'Unheated')])
+    data['Months per year'] = months
+    points, _ = benchmark_chart.prepare_scatter_points(data)
+    assert points.loc[0, 'venues'] == [expected]
+
+
+@pytest.mark.parametrize('months', ['-1', '13', 'not a number', 'nan', 'inf'])
+def test_invalid_opening_months_are_reported(months: str) -> None:
+    data = make_venues([('Venue', '£5', '£3', 'Unheated')])
+    data['Months per year'] = months
+    with pytest.raises(ValueError, match='Venue.*Months per year'):
+        benchmark_chart.prepare_scatter_points(data)
+
+
+def test_missing_opening_months_warn_without_implying_a_season() -> None:
+    data = make_venues([('Venue', '£5', '£3', 'Unheated')])
+    data['Months per year'] = ''
+    with pytest.warns(RuntimeWarning, match='Venue.*Months per year'):
+        points, _ = benchmark_chart.prepare_scatter_points(data)
+    assert points.loc[0, 'venues'] == ['Venue']
+
+
+def test_merged_near_prices_keep_each_venue_opening_months() -> None:
+    data = make_venues([
+        ('Swiss', '£8.45', '£2.90', 'Heated'),
+        ('Pancras', '£8.46', '£2.90', 'Heated'),
+    ])
+    data['Months per year'] = ['6', '12']
+    points, _ = benchmark_chart.prepare_scatter_points(data)
+    labels = benchmark_chart.build_labels(points)
+    assert labels[0]['text'] == 'Swiss (6/12m) (£8.45)\nPancras (£8.46)'
 
 
 def test_plot_benchmark_scatter_writes_png(tmp_path: Path) -> None:
@@ -246,6 +298,23 @@ def test_plot_benchmark_scatter_with_proposed(tmp_path: Path) -> None:
     assert output.stat().st_size > 0
 
 
+def test_plot_rejects_non_string_proposal_facility(tmp_path: Path) -> None:
+    data = make_venues([('Pond A', '£5.00', '£3.00', 'Unheated')])
+    points, excluded = benchmark_chart.prepare_scatter_points(data)
+    proposed = benchmark_chart.load_proposed_prices()
+    proposed['facility'] = proposed['facility'].astype(object)
+    proposed.loc[0, 'facility'] = 123
+    fig, ax = benchmark_chart.plt.subplots(figsize=(14, 10))
+    try:
+        with patch.object(benchmark_chart.plt, 'subplots', return_value=(fig, ax)):
+            with pytest.raises(ValueError, match='Invalid proposed facility 123'):
+                benchmark_chart.plot_benchmark_scatter(
+                    points, excluded, tmp_path / 'chart.png', 'Sheet1', proposed,
+                )
+    finally:
+        benchmark_chart.plt.close(fig)
+
+
 def annual_venues() -> pd.DataFrame:
     data = make_venues([
         ('Pond A', '£5.00', '£3.00', 'Unheated'),
@@ -257,6 +326,56 @@ def annual_venues() -> pd.DataFrame:
     data[benchmark_chart.ANNUAL_ADULT_COLUMN] = ['£157', '£157', '£504', '£400', '']
     data[benchmark_chart.ANNUAL_CONCESSION_COLUMN] = ['£94', '£94', '£352.80', '', '£200']
     return data
+
+
+def heath_venues() -> pd.DataFrame:
+    data = make_venues([
+        ("Kenwood Ladies' Pond", '£5', '£3', 'Unheated'),
+        ("Highgate Men's Pond", '£5', '£3', 'Unheated'),
+        ('Hampstead Mixed Pond', '£5', '£3', 'Unheated'),
+        ('Parliament Hill Lido', '£8.80', '£5.20', 'Unheated'),
+    ])
+    data['Months per year'] = ['12', '12', '7', '6']
+    data[benchmark_chart.ANNUAL_ADULT_COLUMN] = ['£157', '£157', '£157', '£252']
+    data[benchmark_chart.ANNUAL_CONCESSION_COLUMN] = ['£94', '£94', '£94', '£152']
+    return data
+
+
+def test_proposal_notes_identify_seasonal_venues_within_facility_groups() -> None:
+    notes = benchmark_chart.build_proposed_opening_notes(heath_venues())
+    assert notes == {
+        'Ponds': 'Hampstead Mixed Pond (7/12m)',
+        'Parliament Hill Lido': 'Parliament Hill Lido (6/12m)',
+    }
+
+
+def test_missing_proposed_venue_is_reported() -> None:
+    data = heath_venues().iloc[:-1]
+    with pytest.warns(RuntimeWarning, match='Parliament Hill Lido.*missing'):
+        notes = benchmark_chart.build_proposed_opening_notes(data)
+    assert notes['Ponds'] == 'Hampstead Mixed Pond (7/12m)'
+    assert notes['Parliament Hill Lido'] == ''
+
+
+@pytest.mark.parametrize('annual', [False, True])
+def test_seasonal_venues_are_identified_on_proposed_price_labels(tmp_path: Path, annual: bool) -> None:
+    data = heath_venues()
+    points, excluded = benchmark_chart.prepare_scatter_points(data, annual=annual)
+    proposed = benchmark_chart.load_proposed_prices(annual=annual)
+    notes = benchmark_chart.build_proposed_opening_notes(data)
+    fig, ax = benchmark_chart.plt.subplots(figsize=(14, 10))
+    with patch.object(benchmark_chart.plt, 'subplots', return_value=(fig, ax)):
+        benchmark_chart.plot_benchmark_scatter(
+            points, excluded, tmp_path / 'chart.png', 'Sheet1',
+            proposed, annual=annual, proposal_notes=notes,
+        )
+    labels = [text.get_text() for text in ax.texts if 'proposed' in text.get_text()]
+    ponds = [label for label in labels if label.startswith('Ponds ')]
+    lido = [label for label in labels if label.startswith('Parliament Hill Lido ')]
+    assert len(ponds) == len(lido) == 2
+    assert all('Hampstead Mixed Pond (7/12m)' in label for label in ponds)
+    assert all('Parliament Hill Lido (6/12m)' in label for label in lido)
+    assert all("Kenwood Ladies' Pond" not in label for label in ponds)
 
 
 def test_prepare_annual_scatter_points() -> None:
@@ -329,11 +448,13 @@ def test_main_generates_one_off_and_annual_charts(
         args.append('--geometric')
     if no_proposed:
         args.append('--no-proposed')
+    expected_notes = {'Ponds': 'Hampstead Mixed Pond (7/12m)', 'Parliament Hill Lido': ''}
     with (
         patch.object(benchmark_chart, 'authenticate'),
         patch.object(benchmark_chart, 'build'),
         patch.object(benchmark_chart, 'load_benchmark_table',
                      return_value=('Sheet1', annual_venues(), pd.DataFrame())),
+        patch.object(benchmark_chart, 'build_proposed_opening_notes', return_value=expected_notes) as notes,
         patch.object(benchmark_chart, 'plot_benchmark_scatter') as plot,
     ):
         benchmark_chart.main(args)
@@ -341,7 +462,13 @@ def test_main_generates_one_off_and_annual_charts(
     one_off, annual = plot.call_args_list
     assert one_off.args[2] == one_off_output
     assert annual.args[2] == annual_output
-    assert annual.kwargs == {'annual': True}
+    expected_proposal_notes = None if no_proposed else expected_notes
+    assert one_off.kwargs == {'proposal_notes': expected_proposal_notes}
+    assert annual.kwargs == {'annual': True, 'proposal_notes': expected_proposal_notes}
+    if no_proposed:
+        notes.assert_not_called()
+    else:
+        notes.assert_called_once()
     for call in (one_off, annual):
         assert call.args[5] is use_geometric
         if no_proposed:
@@ -379,6 +506,7 @@ def test_annual_labels_do_not_overlap_at_shared_heated_and_unheated_prices(tmp_p
         benchmark_chart.VENUE_COLUMN, benchmark_chart.ANNUAL_ADULT_COLUMN,
         benchmark_chart.ANNUAL_CONCESSION_COLUMN, benchmark_chart.WATER_TEMPERATURE_COLUMN,
     ])
+    data['Months per year'] = '12'
     points, excluded = benchmark_chart.prepare_scatter_points(data, annual=True)
     fig, ax = benchmark_chart.plt.subplots(figsize=(14, 10))
     try:
