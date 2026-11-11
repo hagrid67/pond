@@ -60,6 +60,13 @@ marker, labels for venues within 2p of each other are merged with their adult pr
 and `adjustText` keeps labels apart. Venues without a concession price are listed in
 the footnote instead of plotted.
 
+Proposed 2027 and 2028 Heath prices are drawn as hollow diamonds, joined by dashed
+arrows from today's pond and Parliament Hill Lido markers. They are read from
+`prices/pond-fees.csv` (PAYG) and `prices/lido-fees.csv` (peak PAYG) through
+`load_prices` in `scripts/price-chart.py`. The 2027 values default to the linear mean of
+2026 and 2028; add `--geometric` to use the geometric mean, or `--no-proposed` to omit
+them.
+
 ```bash
 ./ve312pond/bin/python scripts/benchmark-chart.py
 ```

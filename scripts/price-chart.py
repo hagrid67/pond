@@ -230,6 +230,17 @@ def apply_geometric_2027_interpolation(
     return result
 
 
+def load_prices(use_lido: bool, use_geometric: bool = False) -> pd.DataFrame:
+    """Load pond or lido fees; the CSV's 2027 prices are the linear mean of 2026 and 2028."""
+    csv_name = 'lido-fees.csv' if use_lido else 'pond-fees.csv'
+    prices = pd.read_csv(repo_root / 'prices' / csv_name)
+    if use_geometric:
+        prices = apply_geometric_2027_interpolation(
+            prices, LIDO_PRICE_COLUMNS if use_lido else POND_PRICE_COLUMNS,
+        )
+    return prices
+
+
 def load_monthly_index(path: Path) -> pd.Series:
     observations = pd.read_csv(
         path, header=None, names=['period', 'value'], usecols=[0, 1],
@@ -378,9 +389,8 @@ def generate_chart(
     figsize: tuple[float, float] | None = None,
 ) -> Path:
     show_inflation = show_rpi or show_cpih
-    csv_name = 'lido-fees.csv' if use_lido else 'pond-fees.csv'
     price_columns = LIDO_PRICE_COLUMNS if use_lido else POND_PRICE_COLUMNS
-    all_prices = pd.read_csv(repo_root / 'prices' / csv_name)
+    all_prices = load_prices(use_lido)
     linear_2027_adult_season = float(
         all_prices.loc[all_prices['year'] == 2027, 'adult_season_12m_gbp'].iloc[0]
     )

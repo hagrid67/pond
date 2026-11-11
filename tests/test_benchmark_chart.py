@@ -225,3 +225,22 @@ def test_plot_benchmark_scatter_writes_png(tmp_path: Path) -> None:
     points, excluded = benchmark_chart.prepare_scatter_points(data)
     output = benchmark_chart.plot_benchmark_scatter(points, excluded, tmp_path / 'chart.png', 'Sheet1')
     assert output.read_bytes()[:8] == b'\x89PNG\r\n\x1a\n'
+
+
+def test_load_proposed_prices_linear_and_geometric() -> None:
+    linear = benchmark_chart.load_proposed_prices().set_index(['facility', 'year'])
+    geometric = benchmark_chart.load_proposed_prices(use_geometric=True).set_index(['facility', 'year'])
+    ponds_2026, ponds_2028 = linear.loc[('Ponds', 2026)], linear.loc[('Ponds', 2028)]
+    assert linear.loc[('Ponds', 2027), 'adult'] == pytest.approx((ponds_2026['adult'] + ponds_2028['adult']) / 2)
+    assert geometric.loc[('Ponds', 2027), 'adult'] == pytest.approx(
+        round((ponds_2026['adult'] * ponds_2028['adult']) ** 0.5, 2))
+    assert geometric.loc[('Parliament Hill Lido', 2028)].equals(linear.loc[('Parliament Hill Lido', 2028)])
+
+
+def test_plot_benchmark_scatter_with_proposed(tmp_path: Path) -> None:
+    data = make_venues([('Pond A', '£5.00', '£3.00', 'Unheated')])
+    points, excluded = benchmark_chart.prepare_scatter_points(data)
+    proposed = benchmark_chart.load_proposed_prices()
+    output = benchmark_chart.plot_benchmark_scatter(
+        points, excluded, tmp_path / 'chart.png', 'Sheet1', proposed)
+    assert output.stat().st_size > 0
