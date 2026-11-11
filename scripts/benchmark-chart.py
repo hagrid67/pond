@@ -266,6 +266,8 @@ def plot_benchmark_scatter(
     ax.set_ylim(min(all_y) - 0.75, max(all_y) + 0.75)
     ax.plot(x_limits, x_limits, linestyle='--', color='grey', alpha=0.5, linewidth=1.2,
             zorder=1, label='Concession = Adult')
+    ax.plot(x_limits, [0.5 * x for x in x_limits], linestyle='--', color='grey', alpha=0.5,
+            linewidth=1.2, zorder=1, label='Concession = 50% of Adult')
     ax.grid(True, linestyle=':', alpha=0.6)
     ax.legend(loc='upper left', frameon=True, facecolor='white', edgecolor='#e2e2e2')
     footnote = f"Source: Google Sheet '{sheet_title}' (Benchmarking - October 2026)."
