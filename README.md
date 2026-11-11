@@ -97,6 +97,8 @@ group, without implying that all venues in the group have the same opening perio
 Add `--upload` to upload both generated charts to `SwimForum-2026/charts` in
 Google Drive. This uses the separate Drive upload token at
 `keys/google-drive-token.json` and may prompt for OAuth authorization.
+To refresh that token without uploading any files, run
+`./ve312pond/bin/python scripts/upload-charts-drive.py --reauth --auth-only`.
 
 The table starts at the first row with at least three filled cells and ends at the
 next blank row; the `Average` row is kept separate from the venue data. Add

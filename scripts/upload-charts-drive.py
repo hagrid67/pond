@@ -86,14 +86,28 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action='store_true',
         help='Print the OAuth authorization URL without automatically launching a browser.',
     )
+    parser.add_argument(
+        '--reauth',
+        action='store_true',
+        help='Force a new OAuth authorization instead of using the cached token.',
+    )
+    parser.add_argument(
+        '--auth-only',
+        action='store_true',
+        help='Authenticate and save the token without uploading charts.',
+    )
     return parser.parse_args(argv)
 
 
 def authenticate(
-    credentials_path: Path, token_path: Path, port: int, open_browser: bool = True
+    credentials_path: Path,
+    token_path: Path,
+    port: int,
+    open_browser: bool = True,
+    force_reauth: bool = False,
 ) -> Credentials:
     creds: Credentials | None = None
-    if token_path.exists():
+    if token_path.exists() and not force_reauth:
         creds = Credentials.from_authorized_user_file(str(token_path), SCOPES)
 
     if not creds or not creds.valid:
@@ -264,7 +278,11 @@ def main(argv: list[str] | None = None) -> None:
         args.token,
         args.port,
         open_browser=not args.no_browser,
+        force_reauth=args.reauth,
     )
+    if args.auth_only:
+        print(f'Authentication complete; token saved to {args.token}')
+        return
     service = build('drive', 'v3', credentials=creds)
     upload_charts(
         service=service,
