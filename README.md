@@ -49,6 +49,49 @@ Endpoints:
 
 Submitted updates are appended to `user-updates/user-updates-yymmdd.jsonl` (daily rolling file names).
 
+## Benchmark spreadsheet
+
+Read the main venue table from the first sheet of the "Benchmarking - October 2026"
+Google Sheet (ID hardwired in the script) and plot adult one-off price (x) against
+concession price (y) in `charts/benchmark1.png` (`-o PATH` to change). Markers are
+orange for heated and blue for unheated venues (from the `Water Temperature` column).
+Each marker is labelled with its venue name(s); venues with identical prices share a
+marker, labels for venues within 2p of each other are merged with their adult prices,
+and `adjustText` keeps labels apart. Venues without a concession price are listed in
+the footnote instead of plotted.
+
+```bash
+./ve312pond/bin/python scripts/benchmark-chart.py
+```
+
+The table starts at the first row with at least three filled cells and ends at the
+next blank row; the `Average` row is kept separate from the venue data. Add
+`--columns N` to also print the first `N` columns of the table.
+
+List the ten most recently modified Google Sheets accessible to your Google
+account, including their containing folder paths, modification times, URLs and IDs:
+
+```bash
+./ve312pond/bin/python scripts/benchmark-chart.py --list-sheets
+```
+
+The script uses `secrets/token-google.pkl` relative to the repository root, or
+`--token PATH`. This must be a **trusted** pickle containing Google OAuth
+credentials with the `drive.metadata.readonly` and `spreadsheets.readonly` scopes.
+Never load a token pickle from an untrusted source. Expired credentials are
+refreshed and saved back to the same token file; no Drive files are changed.
+
+To create or replace the token (e.g. after `invalid_grant` or missing scopes),
+sign in via the browser using the `perfin` OAuth client
+(`../personal-finance/google/credentials.json`, override with `--credentials`):
+
+```bash
+./ve312pond/bin/python scripts/benchmark-chart.py --reauth --no-browser
+```
+
+Open the printed URL; the callback listens on `localhost:8765` (`--port`).
+Folders that cannot be read are marked explicitly, with a warning on stderr.
+
 ## Seasonal booking charts
 
 Generate the original pond demand heatmap, daily/weekly occupancy chart, and a

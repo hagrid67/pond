@@ -28,6 +28,25 @@ LIDO_PRICE_COLUMNS = (
 )
 
 
+def parse_figsize(value: str) -> tuple[float, float]:
+    parts = [part.strip() for part in value.split(',')]
+    if len(parts) != 2:
+        raise argparse.ArgumentTypeError(
+            f'Invalid --figsize {value!r}; expected "WIDTH,HEIGHT" (e.g. "10,15").'
+        )
+    try:
+        width, height = float(parts[0]), float(parts[1])
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(
+            f'Invalid --figsize {value!r}; width and height must be numbers.'
+        ) from exc
+    if width <= 0 or height <= 0:
+        raise argparse.ArgumentTypeError(
+            f'Invalid --figsize {value!r}; width and height must be positive.'
+        )
+    return (width, height)
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description='Plot Hampstead Heath bathing pond or Parliament Hill Lido ticket price trajectories.'
@@ -113,6 +132,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         '--upload',
         action='store_true',
         help='Upload the newly generated chart(s) to Google Drive (SwimForum-2026/charts).',
+    )
+    parser.add_argument(
+        '--figsize',
+        type=parse_figsize,
+        default=None,
+        metavar='WIDTH,HEIGHT',
+        help=(
+            'Matplotlib figure size in inches as "WIDTH,HEIGHT" (e.g. "10,15"). '
+            'Defaults to 14,10 for ponds, 14,15 for lido, and 14,7 for --combined.'
+        ),
     )
     parser.add_argument(
         '-o',
@@ -346,11 +375,15 @@ def generate_chart(
     cpih_base_year: int,
     filename: str | None = None,
     show_monthly: bool = False,
+    figsize: tuple[float, float] | None = None,
 ) -> Path:
     show_inflation = show_rpi or show_cpih
     csv_name = 'lido-fees.csv' if use_lido else 'pond-fees.csv'
     price_columns = LIDO_PRICE_COLUMNS if use_lido else POND_PRICE_COLUMNS
     all_prices = pd.read_csv(repo_root / 'prices' / csv_name)
+    linear_2027_adult_season = float(
+        all_prices.loc[all_prices['year'] == 2027, 'adult_season_12m_gbp'].iloc[0]
+    )
     if use_geometric:
         all_prices = apply_geometric_2027_interpolation(all_prices, price_columns)
     for label, year_val in (
@@ -452,6 +485,7 @@ def generate_chart(
         name for name, enabled in (('RPI', show_rpi), ('CPIH', show_cpih)) if enabled
     ]
     inflation_title_suffix = f" with {' and '.join(active_indices)}" if active_indices else ''
+    geometric_title_suffix = ' (Geometric mean)' if (not use_lido and use_geometric) else ''
     mean_label = 'geometric mean' if use_geometric else 'linear mean'
     note_2027 = (
         f'Note: April 2027 prices are interpolated using the {mean_label} of 2026 and 2028 '
@@ -459,7 +493,7 @@ def generate_chart(
     )
 
     if combined:
-        fig, ax1 = plt.subplots(figsize=(14, 7))
+        fig, ax1 = plt.subplots(figsize=figsize or (14, 7))
 
         ax1.set_xlabel(
             'Year (April prices / index)' if show_inflation else 'Year (April prices)',
@@ -653,6 +687,20 @@ def generate_chart(
             textcoords='offset points', ha='right', color=color_season,
             arrowprops=dict(arrowstyle='->', color=color_season),
         )
+        if not use_lido and use_geometric and 2027 in prices['year'].values:
+            geom_2027_adult_season = float(
+                prices.loc[prices['year'] == 2027, 'adult_season_12m_gbp'].iloc[0]
+            )
+            ax2.annotate(
+                f'£{geom_2027_adult_season:.2f} instead of £{linear_2027_adult_season:.2f}',
+                xy=(2027, geom_2027_adult_season),
+                xytext=(-16, 22),
+                textcoords='offset points',
+                ha='right',
+                va='bottom',
+                color=color_season,
+                arrowprops=dict(arrowstyle='->', color=color_season),
+            )
         if show_monthly and not monthly_df.empty:
             ax2.annotate(
                 f'Adult Rolling Monthly 12M (£{adult_monthly_equiv.iloc[-1]:.2f})',
@@ -675,7 +723,7 @@ def generate_chart(
         )
 
         plt.title(
-            f'{facility_title}\nAnnual User Fee Trajectory'
+            f'{facility_title}{geometric_title_suffix}\nAnnual User Fee Trajectory'
             + inflation_title_suffix,
             fontweight='bold', fontsize=14, pad=24,
         )
@@ -686,11 +734,11 @@ def generate_chart(
     else:
         if use_lido:
             fig, (ax_season, ax_peak, ax_offpeak) = plt.subplots(
-                3, 1, figsize=(14, 15), sharex=True
+                3, 1, figsize=figsize or (14, 15), sharex=True
             )
         else:
             fig, (ax_season, ax_payg) = plt.subplots(
-                2, 1, figsize=(14, 10), sharex=True
+                2, 1, figsize=figsize or (14, 10), sharex=True
             )
 
         ax_season.set_title(
@@ -761,36 +809,77 @@ def generate_chart(
         ax_season.tick_params(axis='y', labelcolor=color_season, right=True, labelright=True)
         ax_season.tick_params(axis='x', labelbottom=True, rotation=45)
         if show_monthly:
-            ax_season.set_ylim(0.0, 530.0 if use_lido else 470.0)
+            ax_season.set_ylim(0.0, 535.0 if use_lido else 475.0)
         else:
-            ax_season.set_ylim(0.0, 440.0 if use_lido else 390.0)
+            ax_season.set_ylim(0.0, 445.0 if use_lido else 395.0)
         ax_season.grid(True, linestyle=':', alpha=0.6)
-        ax_season.annotate(
-            f'Adult 12M Season (£{prices["adult_season_12m_gbp"].iloc[-1]:.2f})',
-            xy=(last_year, prices['adult_season_12m_gbp'].iloc[-1]),
-            xytext=(-75, -18) if show_monthly else (-14, -5),
-            textcoords='offset points', ha='right', va='center', color=color_season,
-            arrowprops=dict(arrowstyle='->', color=color_season),
-        )
+        n_years_span = max(1, xtick_years[-1] - xtick_years[0] + 1)
+        axis_width_pts = fig.get_figwidth() * 72.0 * 0.78
+        x_left_of_2027 = penultimate_year - (52.0 * n_years_span / axis_width_pts)
+        x_left_of_2028 = last_year - (22.0 * n_years_span / axis_width_pts)
+        x_right_of_2028 = last_year + (38.0 * n_years_span / axis_width_pts)
+        use_right_of_2028 = n_years_span <= 8
+        if show_monthly:
+            ax_season.annotate(
+                f'Adult 12M Season (£{prices["adult_season_12m_gbp"].iloc[-1]:.2f})',
+                xy=(last_year, prices['adult_season_12m_gbp'].iloc[-1]),
+                xytext=(
+                    x_right_of_2028 if use_right_of_2028 else x_left_of_2027,
+                    (365.0 if use_lido else 325.0) if use_right_of_2028 else (435.0 if use_lido else 388.0),
+                ),
+                textcoords='data',
+                ha='left' if use_right_of_2028 else 'right',
+                va='center',
+                color=color_season,
+                arrowprops=dict(arrowstyle='->', color=color_season),
+            )
+        else:
+            ax_season.annotate(
+                f'Adult 12M Season (£{prices["adult_season_12m_gbp"].iloc[-1]:.2f})',
+                xy=(last_year, prices['adult_season_12m_gbp'].iloc[-1]),
+                xytext=(-14, 10),
+                textcoords='offset points', ha='right', va='bottom', color=color_season,
+                arrowprops=dict(arrowstyle='->', color=color_season),
+            )
         ax_season.annotate(
             f'Concession 12M Season (£{prices["concession_season_12m_gbp"].iloc[-1]:.2f})',
             xy=(last_year, prices['concession_season_12m_gbp'].iloc[-1]),
-            xytext=(-14, -46) if use_lido else (-95, -45),
-            textcoords='offset points', ha='right', va='center', color=color_season,
+            xytext=(x_left_of_2028, 72.0 if use_lido else 58.0),
+            textcoords='data', ha='right', va='center', color=color_season,
             arrowprops=dict(arrowstyle='->', color=color_season),
         )
+        if not use_lido and use_geometric and 2027 in prices['year'].values:
+            geom_2027_adult_season = float(
+                prices.loc[prices['year'] == 2027, 'adult_season_12m_gbp'].iloc[0]
+            )
+            ax_season.annotate(
+                f'£{geom_2027_adult_season:.2f} instead of £{linear_2027_adult_season:.2f}',
+                xy=(2027, geom_2027_adult_season),
+                xytext=(x_left_of_2027, 295.0 if show_monthly else 260.0),
+                textcoords='data',
+                ha='right',
+                va='center',
+                color=color_season,
+                arrowprops=dict(arrowstyle='->', color=color_season),
+            )
         if show_monthly and not monthly_df.empty:
             ax_season.annotate(
                 f'Adult Rolling Monthly 12M (£{adult_monthly_equiv.iloc[-1]:.2f})',
-                xy=(last_year, adult_monthly_equiv.iloc[-1]), xytext=(-14, -4),
-                textcoords='offset points', ha='right', va='center', color=color_monthly,
+                xy=(last_year, adult_monthly_equiv.iloc[-1]), xytext=(-14, 10),
+                textcoords='offset points', ha='right', va='bottom', color=color_monthly,
                 arrowprops=dict(arrowstyle='->', color=color_monthly),
             )
             ax_season.annotate(
                 f'Concession Rolling Monthly 12M (£{concession_monthly_equiv.iloc[-1]:.2f})',
                 xy=(last_year, concession_monthly_equiv.iloc[-1]),
-                xytext=(-75, 16) if use_lido else (-75, 14),
-                textcoords='offset points', ha='right', va='center', color=color_monthly,
+                xytext=(
+                    x_right_of_2028 if use_right_of_2028 else x_left_of_2027,
+                    (285.0 if use_lido else 255.0) if use_right_of_2028 else (255.0 if use_lido else 235.0),
+                ),
+                textcoords='data',
+                ha='left' if use_right_of_2028 else 'right',
+                va='center',
+                color=color_monthly,
                 arrowprops=dict(arrowstyle='->', color=color_monthly),
             )
         season_lines = line3 + line4 + monthly_lines + season_inf_lines
@@ -989,7 +1078,7 @@ def generate_chart(
             )
 
         fig.suptitle(
-            f'{facility_title} — User Fee Trajectory',
+            f'{facility_title} — User Fee Trajectory{geometric_title_suffix}',
             fontweight='bold', fontsize=14, y=0.988 if use_lido else 0.985,
         )
         fig.text(
@@ -1051,6 +1140,7 @@ def main(argv: list[str] | None = None) -> None:
                         cpih_base_year=2020,
                         filename=None,
                         show_monthly=True,
+                        figsize=args.figsize,
                     )
                 )
     else:
@@ -1077,6 +1167,7 @@ def main(argv: list[str] | None = None) -> None:
                     cpih_base_year=cpih_base_year,
                     filename=args.filename if len(lido_targets) == 1 else None,
                     show_monthly=args.monthly,
+                    figsize=args.figsize,
                 )
             )
 

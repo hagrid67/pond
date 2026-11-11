@@ -50,6 +50,9 @@ CLI options control the chart start year and inflation display:
   - `lido_fees_from_2011_geometric_rpi_2020.png`
 - `--upload`: upload the newly generated chart(s) to Google Drive
   (`SwimForum-2026/charts`).
+- `--figsize WIDTH,HEIGHT`: override the matplotlib figure size in inches (for
+  example `--figsize 10,15`). Defaults to `14,10` for ponds, `14,15` for lido,
+  and `14,7` for `--combined`.
 - `-o`, `--filename`, `--output`: output PNG filename or path. When omitted, a
   filename is constructed in `charts/` from the active CLI options (for example,
   `ponds_fees_from_2011.png`, `lido_fees_from_2011.png`, or
