@@ -562,6 +562,16 @@ def print_recent_sheets(service: Resource) -> None:
         )
 
 
+def upload_generated_charts(paths: list[Path]) -> None:
+    upload_script_path = Path(__file__).resolve().parent / 'upload-charts-drive.py'
+    spec = importlib.util.spec_from_file_location('upload_charts_drive', upload_script_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f'Unable to load upload script from {upload_script_path}')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    module.upload_chart_files(paths)
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -601,6 +611,10 @@ def main(argv: list[str] | None = None) -> None:
         help='Annual price output PNG path (default: charts/benchmark2.png).',
     )
     parser.add_argument(
+        '--upload', action='store_true',
+        help='Upload the generated charts to Google Drive (SwimForum-2026/charts).',
+    )
+    parser.add_argument(
         '--geometric', action='store_true',
         help='Use the geometric (not linear) mean of 2026 and 2028 for proposed 2027 Heath prices.',
     )
@@ -635,6 +649,8 @@ def main(argv: list[str] | None = None) -> None:
         annual_proposed, args.geometric, annual=True, proposal_notes=proposal_notes,
         annualised=prepare_annualised_points(data),
     )
+    if args.upload:
+        upload_generated_charts([args.output, args.annual_output])
 
 
 if __name__ == '__main__':

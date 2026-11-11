@@ -122,6 +122,37 @@ def test_api_failure_is_not_hidden() -> None:
         benchmark_chart.print_recent_sheets(service)
 
 
+def test_upload_uploads_both_generated_charts(tmp_path: Path) -> None:
+    output = tmp_path / 'benchmark-one-off.png'
+    annual_output = tmp_path / 'benchmark-annual.png'
+    token = tmp_path / 'token.pkl'
+    token.touch()
+    with (
+        patch.object(benchmark_chart, 'DEFAULT_TOKEN_PATH', token),
+        patch.object(benchmark_chart, 'authenticate', return_value=sentinel.credentials),
+        patch.object(benchmark_chart, 'build'),
+        patch.object(
+            benchmark_chart, 'load_benchmark_table',
+            return_value=('Benchmarks', pd.DataFrame(), pd.DataFrame()),
+        ),
+        patch.object(
+            benchmark_chart, 'prepare_scatter_points',
+            return_value=(pd.DataFrame(), []),
+        ),
+        patch.object(benchmark_chart, 'plot_benchmark_scatter') as plot,
+        patch.object(benchmark_chart, 'prepare_annualised_points', return_value=pd.DataFrame()),
+        patch.object(benchmark_chart, 'upload_generated_charts') as upload,
+    ):
+        with (
+            patch.object(benchmark_chart, 'DEFAULT_OUTPUT_PATH', output),
+            patch.object(benchmark_chart, 'DEFAULT_ANNUAL_OUTPUT_PATH', annual_output),
+        ):
+            benchmark_chart.main(['--upload', '--no-proposed'])
+
+    assert plot.call_count == 2
+    upload.assert_called_once_with([output, annual_output])
+
+
 SHEET_VALUES = [
     ['Swimming Facilities Benchmarking'],
     ['Comparative pricing (October 2026)'],

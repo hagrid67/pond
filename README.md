@@ -94,6 +94,10 @@ group, without implying that all venues in the group have the same opening perio
 ./ve312pond/bin/python scripts/benchmark-chart.py
 ```
 
+Add `--upload` to upload both generated charts to `SwimForum-2026/charts` in
+Google Drive. This uses the separate Drive upload token at
+`keys/google-drive-token.json` and may prompt for OAuth authorization.
+
 The table starts at the first row with at least three filled cells and ends at the
 next blank row; the `Average` row is kept separate from the venue data. Add
 `--columns N` to also print the first `N` columns of the table.
