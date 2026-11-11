@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Plot the swimming facilities Benchmarking Google Sheet as a price scatter chart."""
+"""Plot one-off and annual prices from the swimming facilities Benchmarking Google Sheet."""
 
 import argparse
 import importlib.util
@@ -38,9 +38,12 @@ SUMMARY_ROW_LABELS = {'average'}
 VENUE_COLUMN = 'Venue'
 ADULT_COLUMN = 'Adult one-off (£)'
 CONCESSION_COLUMN = 'Concession (£)'
+ANNUAL_ADULT_COLUMN = "Adult Annual M'ship/Season ticket"
+ANNUAL_CONCESSION_COLUMN = "Concession Annual M'ship/Season ticket"
 WATER_TEMPERATURE_COLUMN = 'Water Temperature'
 HEATING_COLOURS = {'Heated': '#ff7f0e', 'Unheated': '#1f77b4'}
 DEFAULT_OUTPUT_PATH = REPO_ROOT / 'charts' / 'benchmark1.png'
+DEFAULT_ANNUAL_OUTPUT_PATH = REPO_ROOT / 'charts' / 'benchmark2.png'
 NEAR_PRICE_TOLERANCE = 0.02
 CURRENT_YEAR = 2026
 PROPOSED_YEARS = (2027, 2028)
@@ -62,7 +65,7 @@ def load_price_chart_module() -> ModuleType:
     return module
 
 
-def load_proposed_prices(use_geometric: bool = False) -> pd.DataFrame:
+def load_proposed_prices(use_geometric: bool = False, *, annual: bool = False) -> pd.DataFrame:
     """Return current and proposed Heath prices, one row per facility and year.
 
     2027 prices come from price-chart.py: linear mean of 2026 and 2028 by default, else geometric.
@@ -70,6 +73,9 @@ def load_proposed_prices(use_geometric: bool = False) -> pd.DataFrame:
     price_chart = load_price_chart_module()
     rows = []
     for facility, use_lido, adult_col, concession_col, heating in HEATH_FACILITIES:
+        if annual:
+            adult_col = 'adult_season_12m_gbp'
+            concession_col = 'concession_season_12m_gbp'
         prices = price_chart.load_prices(use_lido, use_geometric).set_index('year')
         for year in (CURRENT_YEAR, *PROPOSED_YEARS):
             rows.append({
@@ -150,15 +156,17 @@ def classify_heating(value: str) -> str:
     raise ValueError(f'Cannot classify water temperature {value!r} as heated or unheated.')
 
 
-def prepare_scatter_points(data: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
+def prepare_scatter_points(
+    data: pd.DataFrame, *, annual: bool = False,
+) -> tuple[pd.DataFrame, list[str]]:
     """Return one row per (adult, concession, heating) marker, and venues lacking prices.
 
     Venues with identical prices and heating share a marker and a multi-line label.
     """
     frame = pd.DataFrame({
         'venue': data[VENUE_COLUMN].str.strip(),
-        'adult': data[ADULT_COLUMN].map(parse_gbp),
-        'concession': data[CONCESSION_COLUMN].map(parse_gbp),
+        'adult': data[ANNUAL_ADULT_COLUMN if annual else ADULT_COLUMN].map(parse_gbp),
+        'concession': data[ANNUAL_CONCESSION_COLUMN if annual else CONCESSION_COLUMN].map(parse_gbp),
         'heating': data[WATER_TEMPERATURE_COLUMN].map(classify_heating),
     })
     missing = frame['adult'].isna() | frame['concession'].isna()
@@ -204,6 +212,7 @@ def build_labels(points: pd.DataFrame, tolerance: float = NEAR_PRICE_TOLERANCE) 
 def plot_benchmark_scatter(
     points: pd.DataFrame, excluded: list[str], output_path: Path, sheet_title: str,
     proposed: pd.DataFrame | None = None, use_geometric: bool = False,
+    *, annual: bool = False,
 ) -> Path:
     fig, ax = plt.subplots(figsize=(14, 10))
     for heating, colour in HEATING_COLOURS.items():
@@ -247,23 +256,28 @@ def plot_benchmark_scatter(
             all_x += future['adult'].tolist()
             all_y += future['concession'].tolist()
 
+    # Annual heated and unheated groups can share prices; start their labels on opposite sides.
     texts = [
         ax.text(label['x'], label['y'], label['text'], fontsize=8,
-                color=HEATING_COLOURS[label['heating']], ha='center', va='center', zorder=4)
+                color=HEATING_COLOURS[label['heating']],
+                ha='center' if not annual else ('right' if label['heating'] == 'Heated' else 'left'),
+                va='center', zorder=4)
         for label in labels
     ]
-    ax.set_xlabel(f'{ADULT_COLUMN}', fontweight='bold')
-    ax.set_ylabel(f'{CONCESSION_COLUMN}', fontweight='bold')
+    ax.set_xlabel('Adult annual price (£)' if annual else ADULT_COLUMN, fontweight='bold')
+    ax.set_ylabel('Concession annual price (£)' if annual else CONCESSION_COLUMN, fontweight='bold')
+    price_period = 'annual' if annual else 'one-off'
     ax.set_title(
-        'Swimming Facilities Benchmarking — Adult vs Concession one-off price',
+        f'Swimming Facilities Benchmarking — Adult vs Concession {price_period} price',
         fontweight='bold', fontsize=14,
     )
     ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f'£{v:.0f}'))
     ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f'£{v:.0f}'))
-    ax.xaxis.set_major_locator(MultipleLocator(1))
-    x_limits = (min(all_x) - 1.0, max(all_x) + 1.0)
+    ax.xaxis.set_major_locator(MultipleLocator(100 if annual else 1))
+    x_margin, y_margin = (50.0, 37.5) if annual else (1.0, 0.75)
+    x_limits = (min(all_x) - x_margin, max(all_x) + x_margin)
     ax.set_xlim(*x_limits)
-    ax.set_ylim(min(all_y) - 0.75, max(all_y) + 0.75)
+    ax.set_ylim(min(all_y) - y_margin, max(all_y) + y_margin)
     ax.plot(x_limits, x_limits, linestyle='--', color='grey', alpha=0.5, linewidth=1.2,
             zorder=1, label='Concession = Adult')
     ax.plot(x_limits, [0.5 * x for x in x_limits], linestyle='--', color='grey', alpha=0.5,
@@ -274,10 +288,12 @@ def plot_benchmark_scatter(
     ax.legend(loc='upper left', frameon=True, facecolor='white', edgecolor='#e2e2e2')
     footnote = f"Source: Google Sheet '{sheet_title}' (Benchmarking - October 2026)."
     if excluded:
-        footnote += f" Not plotted (no concession price): {', '.join(excluded)}."
+        reason = 'missing annual adult or concession price' if annual else 'no concession price'
+        footnote += f" Not plotted ({reason}): {', '.join(excluded)}."
     if proposed is not None and not proposed.empty:
+        ticket_type = '12-month season tickets' if annual else 'lido: peak PAYG'
         footnote += (
-            f' Proposed Heath prices from prices/pond-fees.csv and lido-fees.csv (lido: peak PAYG);'
+            f' Proposed Heath prices from prices/pond-fees.csv and lido-fees.csv ({ticket_type});'
             f' 2027 is the {mean_name} mean of 2026 and 2028.'
         )
     fig.text(0.01, 0.01, footnote, fontsize=8, style='italic', color='#333333', wrap=True)
@@ -291,7 +307,11 @@ def plot_benchmark_scatter(
         ax=ax,
         ensure_inside_axes=True,
         expand=(1.2, 1.5),
+        force_text=(0.3, 0.6) if annual else (0.1, 0.2),
         force_static=(0.3, 0.5),
+        # Avoid swapping co-located annual label blocks back into each other.
+        prevent_crossings=not annual,
+        iter_lim=1000 if annual else None,
         arrowprops={'arrowstyle': '-', 'color': '#888888', 'linewidth': 0.6},
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -452,7 +472,11 @@ def main(argv: list[str] | None = None) -> None:
     )
     parser.add_argument(
         '-o', '--output', type=Path, default=DEFAULT_OUTPUT_PATH,
-        help='Output PNG path (default: charts/benchmark1.png).',
+        help='One-off price output PNG path (default: charts/benchmark1.png).',
+    )
+    parser.add_argument(
+        '--annual-output', type=Path, default=DEFAULT_ANNUAL_OUTPUT_PATH,
+        help='Annual price output PNG path (default: charts/benchmark2.png).',
     )
     parser.add_argument(
         '--geometric', action='store_true',
@@ -463,6 +487,8 @@ def main(argv: list[str] | None = None) -> None:
         help='Do not plot proposed 2027/2028 pond and lido prices.',
     )
     args = parser.parse_args(argv)
+    if args.output.resolve() == args.annual_output.resolve():
+        parser.error('One-off and annual output paths must be different.')
     if args.reauth or not args.token.exists():
         credentials = authorize_in_browser(
             args.credentials, args.token, args.port, open_browser=not args.no_browser,
@@ -477,6 +503,12 @@ def main(argv: list[str] | None = None) -> None:
     points, excluded = prepare_scatter_points(data)
     proposed = None if args.no_proposed else load_proposed_prices(args.geometric)
     plot_benchmark_scatter(points, excluded, args.output, title, proposed, args.geometric)
+    annual_points, annual_excluded = prepare_scatter_points(data, annual=True)
+    annual_proposed = None if args.no_proposed else load_proposed_prices(args.geometric, annual=True)
+    plot_benchmark_scatter(
+        annual_points, annual_excluded, args.annual_output, title,
+        annual_proposed, args.geometric, annual=True,
+    )
 
 
 if __name__ == '__main__':

@@ -52,20 +52,31 @@ Submitted updates are appended to `user-updates/user-updates-yymmdd.jsonl` (dail
 ## Benchmark spreadsheet
 
 Read the main venue table from the first sheet of the "Benchmarking - October 2026"
-Google Sheet (ID hardwired in the script) and plot adult one-off price (x) against
-concession price (y) in `charts/benchmark1.png` (`-o PATH` to change). Markers are
-orange for heated and blue for unheated venues (from the `Water Temperature` column).
+Google Sheet (ID hardwired in the script) and make two scatter plots, with adult
+price on the x-axis and concession price on the y-axis:
+
+- One-off prices: `charts/benchmark1.png` (`-o PATH` to change).
+- Annual membership/season-ticket prices: `charts/benchmark2.png`
+  (`--annual-output PATH` to change).
+
+Markers are orange for heated and blue for unheated venues (from the
+`Water Temperature` column).
 Each marker is labelled with its venue name(s); venues with identical prices share a
 marker, labels for venues within 2p of each other are merged with their adult prices,
 and `adjustText` keeps labels apart. Venues without a concession price are listed in
-the footnote instead of plotted.
+the footnote instead of plotted. The annual chart uses the spreadsheet's adult and
+concession annual columns directly, omitting venues missing either price. Both
+charts have labelled dashed reference lines for concessions at 100%, 50% and 25%
+of the adult price. Annual x-axis ticks are spaced at £100 (one-off ticks at £1).
 
 Proposed 2027 and 2028 Heath prices are drawn as hollow diamonds, joined by dashed
 arrows from today's pond and Parliament Hill Lido markers. They are read from
 `prices/pond-fees.csv` (PAYG) and `prices/lido-fees.csv` (peak PAYG) through
 `load_prices` in `scripts/price-chart.py`. The 2027 values default to the linear mean of
 2026 and 2028; add `--geometric` to use the geometric mean, or `--no-proposed` to omit
-them.
+them. The annual chart uses the `adult_season_12m_gbp` and
+`concession_season_12m_gbp` columns from both price CSVs, with the same interpolation
+options.
 
 ```bash
 ./ve312pond/bin/python scripts/benchmark-chart.py

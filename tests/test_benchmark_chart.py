@@ -244,3 +244,157 @@ def test_plot_benchmark_scatter_with_proposed(tmp_path: Path) -> None:
     output = benchmark_chart.plot_benchmark_scatter(
         points, excluded, tmp_path / 'chart.png', 'Sheet1', proposed)
     assert output.stat().st_size > 0
+
+
+def annual_venues() -> pd.DataFrame:
+    data = make_venues([
+        ('Pond A', '£5.00', '£3.00', 'Unheated'),
+        ('Pond B', '£5.00', '£3.00', 'Unheated'),
+        ('Pool C', '£8.00', '£4.00', 'Heated'),
+        ('Lake D', '£9.00', '', 'Unheated'),
+        ('Lake E', '£10.00', '£5.00', 'Unheated'),
+    ])
+    data[benchmark_chart.ANNUAL_ADULT_COLUMN] = ['£157', '£157', '£504', '£400', '']
+    data[benchmark_chart.ANNUAL_CONCESSION_COLUMN] = ['£94', '£94', '£352.80', '', '£200']
+    return data
+
+
+def test_prepare_annual_scatter_points() -> None:
+    points, excluded = benchmark_chart.prepare_scatter_points(annual_venues(), annual=True)
+    assert excluded == ['Lake D', 'Lake E']
+    assert points.to_dict('records') == [
+        {'adult': 157.0, 'concession': 94.0, 'heating': 'Unheated', 'venues': ['Pond A', 'Pond B']},
+        {'adult': 504.0, 'concession': 352.8, 'heating': 'Heated', 'venues': ['Pool C']},
+    ]
+
+
+@pytest.mark.parametrize('use_geometric', [False, True])
+def test_load_proposed_annual_prices(use_geometric: bool) -> None:
+    prices = benchmark_chart.load_proposed_prices(use_geometric, annual=True)
+    assert len(prices) == 6
+    prices = prices.set_index(['facility', 'year'])
+    endpoints = {
+        'Ponds': ((157.0, 94.0), (360.0, 180.0)),
+        'Parliament Hill Lido': ((252.0, 152.0), (405.0, 202.5)),
+    }
+    for facility, (current, future) in endpoints.items():
+        assert prices.loc[(facility, 2026), ['adult', 'concession']].tolist() == list(current)
+        assert prices.loc[(facility, 2028), ['adult', 'concession']].tolist() == list(future)
+        expected = [
+            round((start * end) ** 0.5, 2) if use_geometric else (start + end) / 2
+            for start, end in zip(current, future)
+        ]
+        assert prices.loc[(facility, 2027), ['adult', 'concession']].tolist() == pytest.approx(expected)
+
+
+def test_plot_annual_scatter_with_proposed(tmp_path: Path) -> None:
+    points, excluded = benchmark_chart.prepare_scatter_points(annual_venues(), annual=True)
+    proposed = benchmark_chart.load_proposed_prices(annual=True)
+    fig, ax = benchmark_chart.plt.subplots(figsize=(14, 10))
+    with patch.object(benchmark_chart.plt, 'subplots', return_value=(fig, ax)):
+        output = benchmark_chart.plot_benchmark_scatter(
+            points, excluded, tmp_path / 'annual.png', 'Sheet1', proposed, annual=True,
+        )
+    assert output.read_bytes()[:8] == b'\x89PNG\r\n\x1a\n'
+    assert ax.get_xlabel() == 'Adult annual price (£)'
+    assert ax.get_ylabel() == 'Concession annual price (£)'
+    ticks = ax.get_xticks()
+    assert (ticks[1:] - ticks[:-1]).tolist() == pytest.approx([100] * (len(ticks) - 1))
+    assert len([text for text in ax.texts if 'proposed' in text.get_text()]) == 4
+    reference_lines = [line for line in ax.lines if line.get_label().startswith('Concession =')]
+    assert len(reference_lines) == 3
+    for line, ratio in zip(reference_lines, (1.0, 0.5, 0.25)):
+        assert list(line.get_ydata()) == pytest.approx([ratio * x for x in line.get_xdata()])
+        assert line.get_linestyle() == '--'
+        assert line.get_alpha() == 0.5
+    footnote = fig.texts[0].get_text()
+    assert 'missing annual adult or concession price' in footnote
+    assert '12-month season tickets' in footnote
+    assert 'peak PAYG' not in footnote
+
+
+@pytest.mark.parametrize('no_proposed', [False, True])
+@pytest.mark.parametrize('use_geometric', [False, True])
+def test_main_generates_one_off_and_annual_charts(
+    tmp_path: Path, no_proposed: bool, use_geometric: bool,
+) -> None:
+    token = tmp_path / 'token.pkl'
+    token.touch()
+    one_off_output = tmp_path / 'one-off.png'
+    annual_output = tmp_path / 'annual.png'
+    args = [
+        '--token', str(token), '-o', str(one_off_output), '--annual-output', str(annual_output),
+    ]
+    if use_geometric:
+        args.append('--geometric')
+    if no_proposed:
+        args.append('--no-proposed')
+    with (
+        patch.object(benchmark_chart, 'authenticate'),
+        patch.object(benchmark_chart, 'build'),
+        patch.object(benchmark_chart, 'load_benchmark_table',
+                     return_value=('Sheet1', annual_venues(), pd.DataFrame())),
+        patch.object(benchmark_chart, 'plot_benchmark_scatter') as plot,
+    ):
+        benchmark_chart.main(args)
+    assert plot.call_count == 2
+    one_off, annual = plot.call_args_list
+    assert one_off.args[2] == one_off_output
+    assert annual.args[2] == annual_output
+    assert annual.kwargs == {'annual': True}
+    for call in (one_off, annual):
+        assert call.args[5] is use_geometric
+        if no_proposed:
+            assert call.args[4] is None
+        else:
+            assert len(call.args[4]) == 6
+    assert annual.args[0]['adult'].tolist() == [157.0, 504.0]
+
+
+def test_main_rejects_overwriting_one_off_with_annual(tmp_path: Path) -> None:
+    output = str(tmp_path / 'chart.png')
+    with pytest.raises(SystemExit) as exc:
+        benchmark_chart.main(['-o', output, '--annual-output', output])
+    assert exc.value.code == 2
+
+
+def test_annual_labels_do_not_overlap_at_shared_heated_and_unheated_prices(tmp_path: Path) -> None:
+    rows = [
+        (f'Heated shared-price venue {i:02}', '£504', '£352.80', 'Heated')
+        for i in range(17)
+    ] + [
+        ('Unheated venue A', '£504', '£352.80', 'Unheated'),
+        ('Unheated venue B', '£504', '£352.80', 'Unheated'),
+        ('Hampton Pool', '£681.40', '£492', 'Heated'),
+        ('Sea Lanes', '£540', '£415.80', 'Unheated'),
+        ('Brockwell', '£540', '£378', 'Unheated'),
+        ('Greenland Dock', '£394.90', '£276', 'Unheated'),
+        ('Tooting Bec', '£380', '£266', 'Unheated'),
+        ('Aquatics Centre', '£429.90', '£300', 'Heated'),
+        ('Ponds', '£157', '£94', 'Unheated'),
+        ('Parliament Hill Lido', '£252', '£152', 'Unheated'),
+        ('DWSC', '£150', '£105', 'Unheated'),
+    ]
+    data = pd.DataFrame(rows, columns=[
+        benchmark_chart.VENUE_COLUMN, benchmark_chart.ANNUAL_ADULT_COLUMN,
+        benchmark_chart.ANNUAL_CONCESSION_COLUMN, benchmark_chart.WATER_TEMPERATURE_COLUMN,
+    ])
+    points, excluded = benchmark_chart.prepare_scatter_points(data, annual=True)
+    fig, ax = benchmark_chart.plt.subplots(figsize=(14, 10))
+    try:
+        with (
+            patch.object(benchmark_chart.plt, 'subplots', return_value=(fig, ax)),
+            patch.object(benchmark_chart.plt, 'close'),
+        ):
+            benchmark_chart.plot_benchmark_scatter(
+                points, excluded, tmp_path / 'annual.png', 'Sheet1',
+                benchmark_chart.load_proposed_prices(annual=True), annual=True,
+            )
+        fig.canvas.draw()
+        renderer = fig.canvas.get_renderer()
+        labels = [text for text in ax.texts if text.get_text()]
+        for index, first in enumerate(labels):
+            for second in labels[index + 1:]:
+                assert not first.get_window_extent(renderer).overlaps(second.get_window_extent(renderer))
+    finally:
+        benchmark_chart.plt.close(fig)
