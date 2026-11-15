@@ -132,10 +132,12 @@ Folders that cannot be read are marked explicitly, with a warning on stderr.
 
 Download the public reports packs of the Hampstead Heath, Highgate Wood and
 Queen's Park Committee into `col-pdfs/hhhwqp/` (e.g. `2026-0203-reports-pack.pdf`),
-skipping files already present and updating `col-pdfs/hhhwqp/index.csv`:
+skipping files already present and updating `col-pdfs/hhhwqp/index.csv`.
+Supplementary packs are included; use `--committee finance` (or `ras`, `hhcc`)
+for other committees:
 
 ```bash
-./ve312pond/bin/python scripts/city-download.py --years 2026 --supplementary
+./ve312pond/bin/python scripts/city-download.py --years 2026
 ```
 
 See [docs/city-download.md](docs/city-download.md) for options and details.

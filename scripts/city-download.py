@@ -19,9 +19,14 @@ import requests
 from bs4 import BeautifulSoup
 
 BASE_URL = 'https://democracy.cityoflondon.gov.uk/'
-DEFAULT_COMMITTEE_ID = 250
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_FOLDER = REPO_ROOT / 'col-pdfs' / 'hhhwqp'
+PDF_ROOT = REPO_ROOT / 'col-pdfs'
+COMMITTEES = {
+    'hhhwqp': 250,
+    'hhcc': 261,
+    'finance': 145,
+    'ras': 396,
+}
 INDEX_FIELDS = [
     'meeting_date', 'meeting_id', 'pack_type', 'filename', 'size_bytes', 'url', 'meeting_url',
 ]
@@ -45,6 +50,10 @@ class Pack:
     pack_type: str
     url: str
     filename: str
+
+
+def display(path: Path) -> str:
+    return str(path.relative_to(REPO_ROOT)) if path.is_relative_to(REPO_ROOT) else str(path)
 
 
 def fetch(session: requests.Session, url: str) -> requests.Response:
@@ -89,7 +98,12 @@ def find_packs(session: requests.Session, meeting: Meeting, include_supplementar
     counts: dict[str, int] = {}
     seen_paths = set()
     for page_url in (chooser_url, meeting.url):
-        soup = BeautifulSoup(fetch(session, page_url).text, 'html.parser')
+        try:
+            html = fetch(session, page_url).text
+        except requests.HTTPError as error:
+            print(f'warning  {page_url}: {error}')
+            continue
+        soup = BeautifulSoup(html, 'html.parser')
         for link in soup.find_all('a', href=re.compile(r'\.pdf', re.IGNORECASE)):
             pack_url = urljoin(BASE_URL, link['href'])
             path = unquote(urlsplit(pack_url).path)
@@ -109,7 +123,7 @@ def find_packs(session: requests.Session, meeting: Meeting, include_supplementar
 def download(session: requests.Session, pack: Pack, folder: Path) -> Path:
     target = folder / pack.filename
     if target.exists() and target.stat().st_size > 0:
-        print(f'exists   {target.relative_to(REPO_ROOT)}')
+        print(f'exists   {display(target)}')
         return target
     response = fetch(session, pack.url)
     if not response.content.startswith(b'%PDF'):
@@ -117,7 +131,7 @@ def download(session: requests.Session, pack: Pack, folder: Path) -> Path:
     partial = target.with_suffix('.pdf.part')
     partial.write_bytes(response.content)
     partial.replace(target)
-    print(f'saved    {target.relative_to(REPO_ROOT)} ({len(response.content) / 1e6:.1f} MB)')
+    print(f'saved    {display(target)} ({len(response.content) / 1e6:.1f} MB)')
     return target
 
 
@@ -152,23 +166,29 @@ def main() -> None:
         '--years', nargs='+', default=[str(date.today().year)],
         help='Meeting years to fetch, e.g. 2026 or 2019-2026 (default: current year)',
     )
-    parser.add_argument('--committee-id', type=int, default=DEFAULT_COMMITTEE_ID)
-    parser.add_argument('--folder', type=Path, default=DEFAULT_FOLDER)
     parser.add_argument(
-        '--supplementary', action='store_true',
-        help='Also download supplementary agenda packs',
+        '--committee', choices=sorted(COMMITTEES), default='hhhwqp',
+        help='Committee preset; sets the committee ID and col-pdfs/<name> folder (default: hhhwqp)',
+    )
+    parser.add_argument('--committee-id', type=int, help='Override the preset ModernGov committee ID')
+    parser.add_argument('--folder', type=Path, help='Override the output folder')
+    parser.add_argument(
+        '--no-supplementary', dest='supplementary', action='store_false',
+        help='Skip supplementary agenda packs (downloaded by default)',
     )
     parser.add_argument('--dry-run', action='store_true', help='List packs without downloading')
     args = parser.parse_args()
 
     years = parse_years(args.years)
-    args.folder.mkdir(parents=True, exist_ok=True)
+    committee_id = args.committee_id or COMMITTEES[args.committee]
+    folder = (args.folder or PDF_ROOT / args.committee).resolve()
+    folder.mkdir(parents=True, exist_ok=True)
     session = requests.Session()
     session.headers['User-Agent'] = 'pond-col-downloader/1.0 (+https://github.com/hagrid67/pond)'
 
     meetings: dict[int, Meeting] = {}
     for year in years:
-        for meeting in list_meetings(session, args.committee_id, year):
+        for meeting in list_meetings(session, committee_id, year):
             if meeting.meeting_date.year in years and meeting.meeting_date <= date.today():
                 meetings[meeting.meeting_id] = meeting
 
@@ -182,7 +202,7 @@ def main() -> None:
             if args.dry_run:
                 print(f'would    {pack.filename} <- {pack.url}')
                 continue
-            path = download(session, pack, args.folder)
+            path = download(session, pack, folder)
             rows.append({
                 'meeting_date': meeting.meeting_date.isoformat(),
                 'meeting_id': str(meeting.meeting_id),
@@ -193,7 +213,7 @@ def main() -> None:
                 'meeting_url': meeting.url,
             })
     if rows:
-        print(f'index    {update_index(args.folder, rows).relative_to(REPO_ROOT)}')
+        print(f'index    {display(update_index(folder, rows))}')
 
 
 if __name__ == '__main__':
