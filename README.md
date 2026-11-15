@@ -128,6 +128,18 @@ sign in via the browser using the `perfin` OAuth client
 Open the printed URL; the callback listens on `localhost:8765` (`--port`).
 Folders that cannot be read are marked explicitly, with a warning on stderr.
 
+## City of London committee papers
+
+Download the public reports packs of the Hampstead Heath, Highgate Wood and
+Queen's Park Committee into `col-pdfs/hhhwqp/` (e.g. `2026-0203-reports-pack.pdf`),
+skipping files already present and updating `col-pdfs/hhhwqp/index.csv`:
+
+```bash
+./ve312pond/bin/python scripts/city-download.py --years 2026 --supplementary
+```
+
+See [docs/city-download.md](docs/city-download.md) for options and details.
+
 ## Seasonal booking charts
 
 Generate the original pond demand heatmap, daily/weekly occupancy chart, and a

@@ -51,6 +51,8 @@ logs/*
 !logs/.gitkeep
 charts/*
 !charts/.gitkeep
+col-pdfs/**/*.pdf
+col-pdfs/**/*.part
 
 # Generated web output artifacts
 www-root/booking-plot*.png
