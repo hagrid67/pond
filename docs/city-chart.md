@@ -7,6 +7,10 @@ committee papers. Choose one with `--chart`:
 | --- | --- | --- |
 | `sankey` (default) | 2025/26 operating budget Sankey | `charts/hh-budget-sankey-2025-26.png` |
 | `income` | Lido/Ponds income: budgets, forecasts and actuals by report | `charts/swimming-income-forecasts.png` |
+| `costs` | Lido/Ponds staff, running and one-off costs against income, subsidy shaded | `charts/swimming-costs.png` |
+| `per-swim` | Cost and income per swim where swim counts were published | `charts/swimming-per-swim.png` |
+| `capital` | Capital project budget, estimate and spend by report date | `charts/swimming-capital.png` |
+| `maintenance` | Planned cyclical works for swimming buildings, 2021/22 bids vs 2026/27 list | `charts/swimming-maintenance.png` |
 
 `--figsize WIDTH,HEIGHT`, `--output PATH` and `--show` apply to both.
 
@@ -114,3 +118,64 @@ from the same report.
 - a final figure is more than 5% below an earlier actual-to-date.
 
 Identical figures restated in later reports are drawn and checked once.
+
+## Swimming costs, per swim, capital and maintenance
+
+These charts read the CSVs in [`finance/`](../finance/README.md); see
+[`finance/commentary.md`](../finance/commentary.md) for interpretation. They take
+only the shared `--figsize`, `--output` and `--show` options (`costs` and
+`per-swim` also use `--data` for income).
+
+```bash
+./ve312pond/bin/python scripts/city-chart.py --chart costs
+./ve312pond/bin/python scripts/city-chart.py --chart per-swim
+./ve312pond/bin/python scripts/city-chart.py --chart capital
+./ve312pond/bin/python scripts/city-chart.py --chart maintenance
+```
+
+### Costs against income (`--chart costs`)
+
+- **Panels:** one for the Ponds and one for the Lido, with one stacked bar per year
+  (staff, running costs, and the 2022/23 one-off access payment). 2018/19 has only
+  a grey total.
+- **Income markers:**
+  - black diamond: annual swimming review;
+  - white diamond: revenue-report actual. It is shown only when there is no
+    review figure or the two disagree; disagreements are red and joined by a
+    dashed line.
+  - white circle: latest projection.
+- **Subsidy:** the hatched area between income and cost, labelled with £ and % of
+  cost (from the annual reviews).
+- **2023/24 onwards:** marked "cost breakdown no longer published", but income is
+  still shown.
+
+### Cost and income per swim (`--chart per-swim`)
+
+- **Data:** joins `swim-counts.csv` with total costs and income for years with
+  published swim counts.
+- **Bars:** cost per swim, with the one-off access payment shown separately.
+- **Markers:** income per swim. When no review income exists the latest projection
+  is used (2025/26).
+- **Subsidy:** hatched.
+- **Caveats:** marked `*` on the swim counts: 2018/19 swims are estimated, and
+  2020/21 swims cover July–January only.
+
+### Capital timeline (`--chart capital`)
+
+- **Main panel:** the Swimming Facilities – Safety, Access & Security project.
+  - Step lines for the total estimated cost and the approved budget.
+  - Spend to date (including committed at gateways) as a filled area.
+  - Pre-tender estimate (×), the £755k funding award (★ and dotted line), and
+    milestone labels.
+- **Gaps:** segments more than 450 days apart with no reports are dashed or faint,
+  and the period with no updates in this committee's papers is shaded.
+- **Lower panel:** the Lido photovoltaic panels.
+
+### Planned maintenance (`--chart maintenance`)
+
+- **Data:** sums the `planned_cwp` items in `swimming-maintenance.csv` by building
+  (Lido, Men's, Ladies', Mixed, all-ponds infrastructure).
+- **Comparison:** paired bars for the 2021/22 bids and the 2026/27 project list,
+  labelled with £ and item counts.
+- **Not shown:** maintenance cited in outturn reports (for example the 2024/25
+  Men's Pond jetty).

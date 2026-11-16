@@ -13,6 +13,7 @@ April–March.
 | `swimming-income.csv` | Lido and Ponds income: budgets, actual to date, projected outturns, actuals, and annual review figures, one row per figure per report |
 | `swimming-costs.csv` | Per-facility employee, operational and total costs and subsidy (annual reviews 2018/19–2022/23), plus later cost variances |
 | `swimming-capital.csv` | Capital projects: Swimming Facilities Safety, Access & Security Improvements, and Lido photovoltaic panels |
+| `swim-counts.csv` | Swims per year at the Ponds and Lido, where reported (used for cost and income per swim) |
 | `swimming-maintenance.csv` | Cyclical Works Programme (CWP) items for Lido and bathing pond buildings, and maintenance cited in outturn reports |
 
 [commentary.md](commentary.md) has working notes: summary tables, hypotheses
@@ -47,6 +48,9 @@ about the contradictions, and the planned set of charts.
 - **Format change:** after Q3 2025/26 (Feb 2026), reports give only a combined
   Lido + Ponds figure. From 2026/27, swimming sits inside "Trading" in the charity
   (SOFA) format.
+- **Swim counts:** the Nov 2023 performance measures give "visitors recorded" of
+  Lido 181,372 and Ponds 280,137 without stating the period, so they are not
+  included.
 - **Missing years:** no per-facility income or costs were found for 2019/20. The
   annual reviews with staff and running costs stop after 2022/23.
 - **Capital project:** budget figures between Feb 2023 (£775,705 estimated cost)

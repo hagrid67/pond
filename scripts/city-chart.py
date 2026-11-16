@@ -3,6 +3,10 @@
 --chart sankey (default): Sankey diagram of the Hampstead Heath operating budget.
 --chart income: evolving Lido/Ponds income budgets, projections and actuals per
 fiscal year, from finance/swimming-income.csv, flagging contradictory restatements.
+--chart costs: Lido/Ponds staff, running and one-off costs against income (subsidy shaded).
+--chart per-swim: cost and income per swim where swim counts were published.
+--chart capital: budget timeline of the swimming facilities safety/access capital project.
+--chart maintenance: planned cyclical works for swimming buildings, 2021/22 bids vs 2026/27 list.
 
 Sankey data: 2025/26 projected outturn from the Hampstead Heath Operating Budget table
 (Finance Progress Report Q3, Appendix 1), page 147 of the HHHWQP Committee
@@ -30,8 +34,18 @@ from matplotlib.ticker import FuncFormatter
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT = REPO_ROOT / 'charts' / 'hh-budget-sankey-2025-26.png'
 DEFAULT_INCOME_DATA = REPO_ROOT / 'finance' / 'swimming-income.csv'
-DEFAULT_INCOME_OUTPUT = REPO_ROOT / 'charts' / 'swimming-income-forecasts.png'
-DEFAULT_FIGSIZES = {'sankey': (18.0, 10.0), 'income': (14.0, 13.0)}
+FINANCE_DIR = REPO_ROOT / 'finance'
+CHART_OUTPUTS = {
+    'income': 'swimming-income-forecasts.png',
+    'costs': 'swimming-costs.png',
+    'per-swim': 'swimming-per-swim.png',
+    'capital': 'swimming-capital.png',
+    'maintenance': 'swimming-maintenance.png',
+}
+DEFAULT_FIGSIZES = {
+    'sankey': (18.0, 10.0), 'income': (14.0, 13.0), 'costs': (14.0, 10.0), 'per-swim': (12.0, 9.0),
+    'capital': (14.0, 10.0), 'maintenance': (12.0, 6.5),
+}
 SOURCE_NOTE = (
     'Source: City of London, Hampstead Heath, Highgate Wood & Queen\'s Park Committee, 3 Feb 2026 — '
     'Hampstead Heath Operating Budget 2025/26 (reports pack p147), projected outturn.'
@@ -452,6 +466,362 @@ def draw_income_forecasts(
     return fig
 
 
+# --- Shared helpers for the finance CSVs ------------------------------------------------------
+
+COLOR_STAFF, COLOR_RUNNING, COLOR_ONE_OFF = '#4c72b0', '#dd8452', '#8172b3'
+COLOR_SUBSIDY, COLOR_CONTRADICTION = '#c44e52', '#d62728'
+FINANCE_NOTE = 'Source: Hampstead Heath, Highgate Wood & Queen\'s Park Committee papers (finance/*.csv, with page references).'
+
+
+def read_rows(path: Path) -> list[dict[str, str]]:
+    with path.open(newline='', encoding='utf-8') as handle:
+        return list(csv.DictReader(handle))
+
+
+def year_label(year: int) -> str:
+    return f'{year}/{(year + 1) % 100:02d}'
+
+
+def money_axis(ax, unit: str = 'k') -> None:
+    if unit == 'k':
+        ax.yaxis.set_major_formatter(FuncFormatter(lambda value, _: f'£{value:,.0f}k'))
+    else:
+        ax.yaxis.set_major_formatter(FuncFormatter(lambda value, _: f'£{value:,.2f}'))
+    ax.grid(True, axis='y', linestyle=':', alpha=0.6)
+
+
+def income_by_year(income_rows: list[dict[str, str]], facility: str) -> dict[str, dict[str, int]]:
+    """Per fiscal year: annual review income, first-reported ledger actual, and latest projection."""
+    result: dict[str, dict[str, int]] = defaultdict(dict)
+    for row in sorted(income_rows, key=lambda item: item['report_date']):
+        if row['facility'] != facility:
+            continue
+        value, year = int(row['value_gbp']), row['fiscal_year']
+        if row['figure'] == 'annual_review_actual':
+            result[year]['review'] = value
+        elif row['figure'] == 'actual':
+            result[year].setdefault('ledger', value)
+        elif row['figure'] in ('projected_outturn', 'outturn_derived'):
+            result[year]['projection'] = value
+    return result
+
+
+# --- Costs vs income (--chart costs) ----------------------------------------------------------
+
+COST_COMPONENTS = (('employee', 'Staff', COLOR_STAFF), ('operational', 'Running costs', COLOR_RUNNING),
+                   ('one_off', 'One-off: access project', COLOR_ONE_OFF))
+
+
+def costs_by_year(cost_rows: list[dict[str, str]], facility: str) -> dict[str, dict[str, int]]:
+    result: dict[str, dict[str, int]] = defaultdict(dict)
+    for row in cost_rows:
+        if row['facility'] == facility:
+            result[row['fiscal_year']][row['category']] = int(row['value_gbp'])
+    return result
+
+
+def draw_costs(cost_rows, income_rows, figsize) -> plt.Figure:
+    facilities = (('ponds', 'Bathing Ponds'), ('lido', 'Parliament Hill Lido'))
+    years = list(range(2018, 2026))
+    fig, axes = plt.subplots(len(facilities), 1, figsize=figsize, sharex=True, layout='constrained')
+    for ax, (facility, title) in zip(axes, facilities):
+        costs, income = costs_by_year(cost_rows, facility), income_by_year(income_rows, facility)
+        top = 0
+        for year in years:
+            label = year_label(year)
+            parts, incomes = costs.get(label, {}), income.get(label, {})
+            bottom = 0
+            for key, name, color in COST_COMPONENTS:
+                if key in parts:
+                    ax.bar(year, parts[key] / 1000, 0.6, bottom=bottom, color=color, label=name)
+                    bottom += parts[key] / 1000
+            if not bottom and 'total_expenditure' in parts:
+                bottom = parts['total_expenditure'] / 1000
+                ax.bar(year, bottom, 0.6, color='#bbbbbb', label='Total cost (no breakdown)')
+            if bottom:
+                ax.annotate(f'£{bottom:,.0f}k', (year, bottom), xytext=(0, 3), textcoords='offset points',
+                            ha='center', fontsize=8, fontweight='bold')
+            elif year >= 2023:
+                ax.text(year, 0.04, 'cost breakdown\nno longer\npublished', transform=ax.get_xaxis_transform(),
+                        ha='center', va='bottom', fontsize=8, color='#888888', style='italic')
+            else:
+                ax.text(year, 0.04, 'no figures\nfound', transform=ax.get_xaxis_transform(),
+                        ha='center', va='bottom', fontsize=8, color='#888888', style='italic')
+            review = incomes.get('review')
+            actual = review or incomes.get('ledger')
+            if bottom and actual is not None and actual < bottom * 1000:
+                subsidy = parts.get('subsidy', bottom * 1000 - actual)
+                ax.bar(year, bottom - actual / 1000, 0.6, bottom=actual / 1000, facecolor='none',
+                       edgecolor=COLOR_SUBSIDY, hatch='///', linewidth=0, label='Subsidy (cost − income)')
+                ax.annotate(f'subsidy £{subsidy / 1000:,.0f}k ({subsidy / (bottom * 1000):.0%})', (year, bottom),
+                            xytext=(0, 14), textcoords='offset points', ha='center', fontsize=7.5,
+                            color=COLOR_SUBSIDY)
+            if review is not None:
+                ax.scatter(year, review / 1000, marker='D', s=70, color='black', zorder=4,
+                           label='Income: annual swimming review')
+            ledger = incomes.get('ledger')
+            if ledger is not None and (review is None or abs(ledger - review) > 0.05 * review):
+                contradicts = review is not None
+                ax.scatter(year, ledger / 1000, marker='D', s=70, zorder=4,
+                           facecolor='white', edgecolor=COLOR_CONTRADICTION if contradicts else 'black',
+                           linewidths=1.8, label='Income: revenue report actual')
+                if contradicts:
+                    ax.plot([year, year], [review / 1000, ledger / 1000], color=COLOR_CONTRADICTION,
+                            linestyle='--', linewidth=1.2, zorder=3)
+                    ax.annotate(f'revenue report:\n£{ledger / 1000:,.0f}k', (year - 0.3, ledger / 1000), xytext=(-4, 0),
+                                textcoords='offset points', ha='right', va='center', fontsize=7.5,
+                                color=COLOR_CONTRADICTION)
+            elif review is None and ledger is None and 'projection' in incomes:
+                ax.scatter(year, incomes['projection'] / 1000, marker='o', s=60, facecolor='white',
+                           edgecolor='black', linewidths=1.5, zorder=4, label='Income: latest projection')
+            top = max(top, bottom, *(value / 1000 for value in incomes.values()))
+        ax.set_title(title, fontweight='bold', loc='left')
+        ax.set_ylabel('£k per year')
+        ax.set_ylim(0, top * 1.18)
+        money_axis(ax)
+    axes[-1].set_xticks(years, [year_label(year) for year in years])
+    axes[-1].set_xlabel('Fiscal year (April–March)')
+    handles: dict[str, object] = {}
+    for ax in axes:
+        for handle, label in zip(*ax.get_legend_handles_labels()):
+            handles.setdefault(label, handle)
+    legend = fig.legend(handles.values(), handles.keys(), loc='outside lower center', ncol=4, fontsize=8.5,
+                        frameon=False, title=FINANCE_NOTE + ' Costs from the annual swimming reviews; '
+                        '2020/21 affected by Covid closures.', title_fontsize=8)
+    legend.get_title().set(style='italic', color='#444444')
+    fig.suptitle('Hampstead Heath swimming: costs against income', fontsize=14, fontweight='bold')
+    return fig
+
+
+# --- Cost and income per swim (--chart per-swim) ----------------------------------------------
+
+def per_swim_figures(cost_rows, income_rows, swim_rows) -> list[dict]:
+    """Join swims with total cost and income for each facility-year where swims were published."""
+    results = []
+    for row in swim_rows:
+        year, facility, swims = row['fiscal_year'], row['facility'], int(row['swims'])
+        parts = ('lido', 'ponds') if facility == 'ponds+lido' else (facility,)
+        cost = one_off = income = 0
+        has_cost = has_income = True
+        for part in parts:
+            costs = costs_by_year(cost_rows, part).get(year, {})
+            incomes = income_by_year(income_rows, part).get(year, {})
+            has_cost &= 'total_expenditure' in costs
+            cost += costs.get('total_expenditure', 0)
+            one_off += costs.get('one_off', 0)
+            value = incomes.get('review', incomes.get('projection'))
+            has_income &= value is not None
+            income += value or 0
+        results.append({
+            'year': year, 'facility': facility, 'swims': swims,
+            'cost': cost / swims if has_cost else None, 'one_off': one_off / swims,
+            'income': income / swims if has_income else None,
+            'caveat': bool(row.get('note')),
+        })
+    return results
+
+
+def draw_per_swim(cost_rows, income_rows, swim_rows, figsize) -> plt.Figure:
+    figures = per_swim_figures(cost_rows, income_rows, swim_rows)
+    panels = [('ponds', 'Bathing Ponds'), ('lido', 'Parliament Hill Lido'), ('ponds+lido', 'Lido + Ponds combined')]
+    years = sorted({int(item['year'][:4]) for item in figures})
+    fig, axes = plt.subplots(len(panels), 1, figsize=figsize, sharex=True, layout='constrained')
+    for ax, (facility, title) in zip(axes, panels):
+        for item in (f for f in figures if f['facility'] == facility):
+            x = int(item['year'][:4])
+            if item['cost'] is not None:
+                recurring = item['cost'] - item['one_off']
+                ax.bar(x, recurring, 0.6, color=COLOR_STAFF, label='Cost per swim')
+                if item['one_off']:
+                    ax.bar(x, item['one_off'], 0.6, bottom=recurring, color=COLOR_ONE_OFF,
+                           label='One-off access project per swim')
+                ax.annotate(f'£{item["cost"]:.2f}', (x, item['cost']), xytext=(0, 3), textcoords='offset points',
+                            ha='center', fontsize=8.5, fontweight='bold')
+            top = max(value for value in (item['cost'], item['income']) if value is not None)
+            ax.annotate(f'{item["swims"]:,} swims{"*" if item["caveat"] else ""}', (x, top), xytext=(0, 16),
+                        textcoords='offset points', ha='center', fontsize=7.5, color='#555555')
+            if item['income'] is not None:
+                ax.scatter(x, item['income'], marker='D', s=70, color='black', zorder=4, label='Income per swim')
+                ax.annotate(f'£{item["income"]:.2f}', (x, item['income']), xytext=(9, 0),
+                            textcoords='offset points', va='center', fontsize=8.5)
+                if item['cost'] is not None and item['income'] < item['cost']:
+                    ax.bar(x, item['cost'] - item['income'], 0.6, bottom=item['income'], facecolor='none',
+                           edgecolor=COLOR_SUBSIDY, hatch='///', linewidth=0, label='Subsidy per swim')
+        ax.set_title(title, fontweight='bold', loc='left')
+        ax.set_ylabel('£ per swim')
+        money_axis(ax, unit='£')
+        ax.set_ylim(0, ax.get_ylim()[1] * 1.25)
+    axes[-1].set_xticks(years, [year_label(year) for year in years])
+    axes[-1].set_xlim(years[0] - 0.6, years[-1] + 0.6)
+    axes[-1].set_xlabel('Fiscal year (April–March); only years with published swim counts')
+    handles: dict[str, object] = {}
+    for ax in axes:
+        for handle, label in zip(*ax.get_legend_handles_labels()):
+            handles.setdefault(label, handle)
+    legend = fig.legend(handles.values(), handles.keys(), loc='outside lower center', ncol=4, fontsize=8.5,
+                        frameon=False, title=FINANCE_NOTE + ' *2018/19 swims estimated; 2020/21 swims Jul–Jan only (Covid); '
+                        '2025/26 income is the Feb 2026 projection.', title_fontsize=8)
+    legend.get_title().set(style='italic', color='#444444')
+    fig.suptitle('Hampstead Heath swimming: cost and income per swim', fontsize=14, fontweight='bold')
+    return fig
+
+
+# --- Capital project timeline (--chart capital) -----------------------------------------------
+
+SWIMMING_PROJECT = 'Swimming Facilities - Safety, Access & Security Improvements'
+LIDO_PV_PROJECT = 'Parliament Hill Lido Photovoltaic Panels'
+CAPITAL_GAP_DAYS = 450
+CAPITAL_MILESTONES = (
+    ('2022-02-09', 'Gateway 2:\n£697k (£755k incl. risk)'),
+    ('2022-06-15', 'Gateway 3/4:\n£691k'),
+    ('2023-02-08', 'All tenders above\n£490k estimate'),
+    ('2023-07-17', '£257k from Heath\nlocal risk budget'),
+    ('2025-10-21', 'First reported at\n£1,011k'),
+)
+
+
+def capital_series(rows, project: str, measures: tuple[str, ...]) -> list[tuple[date, int]]:
+    by_date: dict[date, int] = {}
+    for row in rows:
+        if row['project'] == project and row['measure'] in measures:
+            by_date[date.fromisoformat(row['report_date'])] = int(row['value_gbp'])
+    return sorted(by_date.items())
+
+
+def step_with_gaps(ax, series, color: str, label: str, end: date) -> None:
+    """Step line; segments spanning more than a year with no reports are dashed."""
+    points = series + [(end, series[-1][1])]
+    for (d0, v0), (d1, v1) in zip(points, points[1:]):
+        gap = (d1 - d0).days > CAPITAL_GAP_DAYS
+        ax.plot([d0, d1], [v0 / 1000, v0 / 1000], color=color, linewidth=2.2,
+                linestyle='--' if gap else '-', label=label)
+        ax.plot([d1, d1], [v0 / 1000, v1 / 1000], color=color, linewidth=2.2, linestyle='--' if gap else '-')
+        label = None
+    ax.scatter([d for d, _ in series], [v / 1000 for _, v in series], color=color, s=30, zorder=4)
+
+
+def draw_capital(rows, figsize) -> plt.Figure:
+    estimate = capital_series(rows, SWIMMING_PROJECT,
+                              ('total_estimated_cost_excl_risk', 'estimated_cost', 'total_estimated_cost'))
+    approved = capital_series(rows, SWIMMING_PROJECT, ('approved_budget',))
+    spent = capital_series(rows, SWIMMING_PROJECT, ('spent_to_date', 'spent_and_committed'))
+    award = capital_series(rows, SWIMMING_PROJECT, ('capital_funding_awarded',))[0]
+    pre_tender = capital_series(rows, SWIMMING_PROJECT, ('pre_tender_estimate',))
+    end = date(2027, 1, 31)
+    fig, (ax, ax_pv) = plt.subplots(2, 1, figsize=figsize, sharex=True, layout='constrained',
+                                    gridspec_kw={'height_ratios': [3, 1]})
+    gap_start = max(d for d, _ in estimate if d.year <= 2023)
+    gap_end = min(d for d, _ in estimate if d.year >= 2025)
+    for axis in (ax, ax_pv):
+        axis.axvspan(gap_start, gap_end, color='#f2f2f2', zorder=0)
+    ax.text(gap_start + (gap_end - gap_start) / 2, 0.97, 'No budget updates in\nthis committee\'s papers',
+            transform=ax.get_xaxis_transform(), ha='center', va='top', fontsize=8.5, color='#777777', style='italic')
+    ax.axhline(award[1] / 1000, color='#555555', linestyle=':', linewidth=1.4)
+    ax.scatter(award[0], award[1] / 1000, marker='*', s=160, color='#555555', zorder=5)
+    ax.annotate(f'£{award[1] / 1000:,.0f}k awarded {award[0]:%b %Y}', (award[0], award[1] / 1000), xytext=(8, 4),
+                textcoords='offset points', fontsize=8, color='#555555')
+    spent_label = 'Spent to date (incl. committed at gateways)'
+    for (d0, v0), (d1, v1) in zip(spent, spent[1:]):
+        # Spending between reports more than CAPITAL_GAP_DAYS apart is unknown: shade it faintly.
+        gap = (d1 - d0).days > CAPITAL_GAP_DAYS
+        ax.fill_between([d0, d1], [v0 / 1000, v1 / 1000], color='#55a868', alpha=0.12 if gap else 0.35,
+                        linewidth=0, label=None if gap else spent_label)
+        if not gap:
+            spent_label = None
+        ax.plot([d0, d1], [v0 / 1000, v1 / 1000], color='#55a868', linestyle=':' if gap else '-')
+    ax.scatter([d for d, _ in spent], [v / 1000 for _, v in spent], color='#55a868', s=18, zorder=4)
+    step_with_gaps(ax, estimate, '#c44e52', 'Total estimated cost', end)
+    step_with_gaps(ax, approved, '#4c72b0', 'Approved budget', end)
+    for d, value in pre_tender:
+        ax.scatter(d, value / 1000, marker='x', s=80, color='black', zorder=5, label='Pre-tender estimate')
+    for index, (when, text) in enumerate(CAPITAL_MILESTONES):
+        when = date.fromisoformat(when)
+        ax.axvline(when, color='#999999', linewidth=0.8, linestyle='-', zorder=1)
+        ax.text(when, 1210 - 110 * (index % 2), text, fontsize=7.5, ha='left', va='top', color='#333333',
+                bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor='#cccccc', alpha=0.9))
+    final = estimate[-1][1]
+    ax.annotate(f'£{final / 1000:,.0f}k\n+{final / award[1] - 1:.0%} vs £{award[1] / 1000:,.0f}k',
+                (end, final / 1000), xytext=(6, 0), textcoords='offset points', va='center', fontsize=9,
+                fontweight='bold', color='#c44e52')
+    ax.set_ylim(0, 1250)
+    ax.set_ylabel('£k')
+    money_axis(ax)
+    ax.set_title('Swimming Facilities – Safety, Access & Security Improvements', fontweight='bold', loc='left')
+    ax.legend(loc='upper center', bbox_to_anchor=(0.66, 0.83), fontsize=8.5)
+    pv_cost = capital_series(rows, LIDO_PV_PROJECT, ('total_estimated_cost',))
+    pv_spent = capital_series(rows, LIDO_PV_PROJECT, ('spent_to_date',))
+    ax_pv.plot(*zip(*[(d, v / 1000) for d, v in pv_cost]), color='#c44e52', marker='o', label='Total estimated cost')
+    ax_pv.plot(*zip(*[(d, v / 1000) for d, v in pv_spent]), color='#55a868', marker='o', label='Spent to date')
+    for d, value in pv_cost:
+        ax_pv.annotate(f'£{value / 1000:,.0f}k', (d, value / 1000), xytext=(6, 2), textcoords='offset points',
+                       fontsize=8)
+    ax_pv.set_ylim(0, 550)
+    ax_pv.set_ylabel('£k')
+    money_axis(ax_pv)
+    ax_pv.set_title('Parliament Hill Lido photovoltaic panels', fontweight='bold', loc='left')
+    ax_pv.legend(loc='upper left', fontsize=8)
+    ax_pv.set_xlim(date(2021, 3, 1), end)
+    ax_pv.xaxis.set_major_locator(mdates.MonthLocator(bymonth=(1, 7)))
+    ax_pv.xaxis.set_major_formatter(mdates.DateFormatter('%b %Y'))
+    ax_pv.set_xlabel('Report date. Sources: finance/swimming-capital.csv; 2025–26 figures from OCR of image tables.',
+                     fontsize=8.5)
+    fig.suptitle('Hampstead Heath swimming capital projects: budget and spend by report date',
+                 fontsize=14, fontweight='bold')
+    return fig
+
+
+# --- Planned maintenance (--chart maintenance) ------------------------------------------------
+
+MAINTENANCE_BUILDINGS = (
+    ('Parliament Hill Lido', ('Lido',)),
+    ("Men's Pond", ('Mens', "Men's", 'Highgate Ponds')),
+    ("Ladies' Pond", ('Ladies', 'Kenwood')),
+    ('Mixed Pond', ('Mixed',)),
+)
+
+
+def maintenance_building(item: str) -> str:
+    for building, keys in MAINTENANCE_BUILDINGS:
+        if any(key in item for key in keys):
+            return building
+    return 'All ponds: infrastructure'
+
+
+def draw_maintenance(rows, figsize) -> plt.Figure:
+    planned = [row for row in rows if row['kind'] == 'planned_cwp']
+    years = sorted({row['fiscal_year'] for row in planned})
+    buildings = [name for name, _ in MAINTENANCE_BUILDINGS] + ['All ponds: infrastructure']
+    totals = {(b, y): 0 for b in buildings for y in years}
+    counts = dict.fromkeys(totals, 0)
+    for row in planned:
+        key = (maintenance_building(row['item']), row['fiscal_year'])
+        totals[key] += int(row['value_gbp'])
+        counts[key] += 1
+    fig, ax = plt.subplots(figsize=figsize, layout='constrained')
+    colors = ('#8c8c8c', '#4c72b0')
+    height = 0.38
+    for index, year in enumerate(years):
+        ys = [len(buildings) - 1 - b + (0.5 - index) * height for b in range(len(buildings))]
+        values = [totals[(building, year)] / 1000 for building in buildings]
+        ax.barh(ys, values, height, color=colors[index % 2],
+                label=f'{year} CWP ({"bids" if index == 0 else "project list"}): '
+                      f'£{sum(values):,.0f}k total')
+        for y, value, building in zip(ys, values, buildings):
+            n = counts[(building, year)]
+            ax.annotate(f'£{value:,.1f}k ({n} item{"s" if n != 1 else ""})' if n else 'none',
+                        (value, y), xytext=(4, 0), textcoords='offset points', va='center', fontsize=8.5)
+    ax.set_yticks(range(len(buildings) - 1, -1, -1), buildings)
+    ax.xaxis.set_major_formatter(FuncFormatter(lambda value, _: f'£{value:,.0f}k'))
+    ax.grid(True, axis='x', linestyle=':', alpha=0.6)
+    ax.set_xlim(0, max(totals.values()) / 1000 * 1.3)
+    ax.legend(loc='lower right', fontsize=9)
+    ax.set_xlabel('Planned Cyclical Works Programme spend (£k). Largest 2026/27 item: '
+                  'Lido landlord\'s lighting & power rewire £180k (£30k in the 2021/22 bids). '
+                  'Source: finance/swimming-maintenance.csv.', fontsize=8.5)
+    fig.suptitle('Planned repairs and maintenance for swimming buildings', fontsize=14, fontweight='bold')
+    return fig
+
+
 def parse_figsize(value: str) -> tuple[float, float]:
     try:
         width, height = (float(part) for part in value.split(','))
@@ -462,8 +832,8 @@ def parse_figsize(value: str) -> tuple[float, float]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--chart', choices=('sankey', 'income'), default='sankey',
-                        help='sankey: 2025/26 budget Sankey (default); income: Lido/Ponds income forecasts vs actuals')
+    parser.add_argument('--chart', choices=('sankey', *CHART_OUTPUTS), default='sankey',
+                        help='sankey (default), income, costs, per-swim, capital or maintenance; see description')
     parser.add_argument('--depth', type=int, default=3,
                         help='Sankey: levels of breakdown on each side of the centre (default: 3)')
     parser.add_argument('--min-share', type=float, default=0.025,
@@ -475,15 +845,25 @@ def main() -> None:
     parser.add_argument('--no-ytd', dest='ytd', action='store_false',
                         help='Income: hide part-year actual-to-date points (still used to flag contradictions)')
     parser.add_argument('--figsize', type=parse_figsize, metavar='WIDTH,HEIGHT',
-                        help='Figure size in inches (default: 18,10 sankey; 14,13 income)')
+                        help='Figure size in inches (default depends on --chart)')
     parser.add_argument('--output', type=Path, help='Output PNG (default depends on --chart)')
     parser.add_argument('--show', action='store_true', help='Open an interactive window')
     args = parser.parse_args()
     figsize = args.figsize or DEFAULT_FIGSIZES[args.chart]
 
+    if args.chart != 'sankey':
+        output = args.output or REPO_ROOT / 'charts' / CHART_OUTPUTS[args.chart]
     if args.chart == 'income':
-        output = args.output or DEFAULT_INCOME_OUTPUT
         fig = draw_income_forecasts(with_combined(load_income(args.data)), args.facilities, args.ytd, figsize)
+    elif args.chart == 'costs':
+        fig = draw_costs(read_rows(FINANCE_DIR / 'swimming-costs.csv'), read_rows(args.data), figsize)
+    elif args.chart == 'per-swim':
+        fig = draw_per_swim(read_rows(FINANCE_DIR / 'swimming-costs.csv'), read_rows(args.data),
+                            read_rows(FINANCE_DIR / 'swim-counts.csv'), figsize)
+    elif args.chart == 'capital':
+        fig = draw_capital(read_rows(FINANCE_DIR / 'swimming-capital.csv'), figsize)
+    elif args.chart == 'maintenance':
+        fig = draw_maintenance(read_rows(FINANCE_DIR / 'swimming-maintenance.csv'), figsize)
     else:
         output = args.output or DEFAULT_OUTPUT
         income, expenditure = income_tree(), expenditure_tree()
@@ -498,7 +878,7 @@ def main() -> None:
             f'Hampstead Heath budget 2025/26 (projected outturn) — {format_gbp(total)}',
         )
     output.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(output, dpi=150, bbox_inches='tight' if args.chart == 'income' else None)
+    fig.savefig(output, dpi=150, bbox_inches=None if args.chart == 'sankey' else 'tight')
     print(f'Saved chart to {output}')
     if args.show:
         plt.show()

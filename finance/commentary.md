@@ -72,6 +72,22 @@ water in 2025/26.
 
 The Lido photovoltaic panels project grew from 294 (Oct 2025) to 454 (Oct 2026).
 
+## Per-swim figures
+
+| Year | Facility | Swims | Cost/swim | Income/swim |
+| --- | --- | ---: | ---: | ---: |
+| 2018/19 | Ponds | 655,000 (est.) | £1.14 | £0.10 |
+| 2020/21 | Combined | 160,172 (Jul–Jan) | £8.86 | £3.38 |
+| 2021/22 | Ponds | 335,005 | £2.37 | £2.02 |
+| 2021/22 | Lido | 160,749 | £5.33 | £2.83 |
+| 2022/23 | Ponds | 368,678 | £3.09 (£2.14 excl. one-off) | £2.23 |
+| 2022/23 | Lido | 234,099 | £3.35 | £2.92 |
+| 2025/26 | Ponds | 430,610 | – | £2.65 (projection) |
+
+The 2018/19 Ponds income of 10p per swim reflects the voluntary-payment era
+(about 6% compliance). The planned repair lists total £184k (2021/22 bids) and
+£597k (2026/27), of which the Lido accounts for £75k and £510k.
+
 ## Planned chart set
 
 1. **Income forecasts vs outcomes** (implemented: `city-chart.py --chart income`; see
@@ -79,11 +95,11 @@ The Lido photovoltaic panels project grew from 294 (Oct 2025) to 454 (Oct 2026).
    Three panels: Lido, Ponds, combined. For each fiscal year the chart shows the
    budget, successive projections shaded by report date, and the final actual.
    Restatements that disagree are flagged.
-2. **Costs vs income:** stacked staff, running and one-off costs per facility-year,
+2. **Costs vs income** (implemented: `--chart costs`; cost and income per swim: `--chart per-swim`): stacked staff, running and one-off costs per facility-year,
    with income overlaid and the subsidy shaded. Covers 2018/19 and 2020/21–2022/23,
    with later years marked "no longer published".
-3. **Capital project timeline:** step lines of estimated cost and approved budget
+3. **Capital project timeline** (implemented: `--chart capital`): step lines of estimated cost and approved budget
    against report date, with spent-to-date and labelled milestones. The 2023–2025
    gap is dashed.
-4. **Repair lists 2021 vs 2026:** horizontal bars by building, e.g. the Lido
+4. **Repair lists 2021 vs 2026** (implemented: `--chart maintenance`): horizontal bars by building, e.g. the Lido
    rewire at 30 in the 2021/22 list and 180 in the 2026/27 list.

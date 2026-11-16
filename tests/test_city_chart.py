@@ -37,3 +37,26 @@ def test_with_combined_sums_lido_and_ponds_from_the_same_report() -> None:
     q3_2024 = [e for e in estimates if e.facility == 'combined' and e.fiscal_year == '2024/25'
                and e.figure == 'projected_outturn' and str(e.report_date) == '2025-02-04']
     assert [e.value for e in q3_2024] == [2_045_000]
+
+
+def test_per_swim_figures_join_costs_income_and_swims() -> None:
+    finance = city_chart.FINANCE_DIR
+    figures = city_chart.per_swim_figures(
+        city_chart.read_rows(finance / 'swimming-costs.csv'), city_chart.read_rows(city_chart.DEFAULT_INCOME_DATA),
+        city_chart.read_rows(finance / 'swim-counts.csv'),
+    )
+    by_key = {(f['facility'], f['year']): f for f in figures}
+    ponds = by_key[('ponds', '2022/23')]
+    assert (round(ponds['cost'], 2), round(ponds['one_off'], 2), round(ponds['income'], 2)) == (3.09, 0.95, 2.23)
+    # Combined 2020/21 sums both facilities' costs and annual-review income.
+    combined = by_key[('ponds+lido', '2020/21')]
+    assert (round(combined['cost'], 2), round(combined['income'], 2)) == (8.86, 3.38)
+    # 2025/26 has swims and a projected income but no published costs.
+    assert by_key[('ponds', '2025/26')]['cost'] is None
+
+
+def test_maintenance_items_are_grouped_by_building() -> None:
+    assert city_chart.maintenance_building('Highgate Ponds - Mens Bathing Pond Toilets - ROOF') == "Men's Pond"
+    assert city_chart.maintenance_building('Kenwood - Ladies Bathing Pond Building - POOL LIFT') == "Ladies' Pond"
+    assert city_chart.maintenance_building('Hampstead Heath - TEST OF ALL INLET/OUT PIPES & VALVES (PONDS)') == (
+        'All ponds: infrastructure')
