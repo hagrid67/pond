@@ -1,0 +1,109 @@
+fiscal_year,component,figure,value,unit,report_date,report,source,page,note
+2017/18,salaries,accounts_actual,3631812,gbp,2020-01-22,Annual Report and Financial Statements 2018/19,2020-0122/05-s128211-a4-hampstead-heath-consolidated-2018-19-jgv2-bj.pdf,25,Comparative year
+2017/18,national_insurance,accounts_actual,362340,gbp,2020-01-22,Annual Report and Financial Statements 2018/19,2020-0122/05-s128211-a4-hampstead-heath-consolidated-2018-19-jgv2-bj.pdf,25,Comparative year
+2017/18,employer_pension,accounts_actual,644378,gbp,2020-01-22,Annual Report and Financial Statements 2018/19,2020-0122/05-s128211-a4-hampstead-heath-consolidated-2018-19-jgv2-bj.pdf,25,Comparative year
+2017/18,total_staff_costs,accounts_actual,4638530,gbp,2020-01-22,Annual Report and Financial Statements 2018/19,2020-0122/05-s128211-a4-hampstead-heath-consolidated-2018-19-jgv2-bj.pdf,25,Comparative year
+2018/19,salaries,accounts_actual,3717519,gbp,2020-01-22,Annual Report and Financial Statements 2018/19,2020-0122/05-s128211-a4-hampstead-heath-consolidated-2018-19-jgv2-bj.pdf,25,
+2018/19,national_insurance,accounts_actual,365551,gbp,2020-01-22,Annual Report and Financial Statements 2018/19,2020-0122/05-s128211-a4-hampstead-heath-consolidated-2018-19-jgv2-bj.pdf,25,
+2018/19,employer_pension,accounts_actual,666824,gbp,2020-01-22,Annual Report and Financial Statements 2018/19,2020-0122/05-s128211-a4-hampstead-heath-consolidated-2018-19-jgv2-bj.pdf,25,
+2018/19,total_staff_costs,accounts_actual,4749894,gbp,2020-01-22,Annual Report and Financial Statements 2018/19,2020-0122/05-s128211-a4-hampstead-heath-consolidated-2018-19-jgv2-bj.pdf,25,
+2019/20,salaries,accounts_actual,3787348,gbp,2021-05-26,Annual Report and Financial Statements 2019/20,2021-0526/13-s152906-a4-hampstead-heath-consolidated-redacted.pdf,32,OCR of image table
+2019/20,national_insurance,accounts_actual,371744,gbp,2021-05-26,Annual Report and Financial Statements 2019/20,2021-0526/13-s152906-a4-hampstead-heath-consolidated-redacted.pdf,32,OCR of image table
+2019/20,employer_pension,accounts_actual,672405,gbp,2021-05-26,Annual Report and Financial Statements 2019/20,2021-0526/13-s152906-a4-hampstead-heath-consolidated-redacted.pdf,32,OCR of image table
+2019/20,total_staff_costs,accounts_actual,4831497,gbp,2021-05-26,Annual Report and Financial Statements 2019/20,2021-0526/13-s152906-a4-hampstead-heath-consolidated-redacted.pdf,32,OCR of image table
+2020/21,salaries,accounts_actual,3906477,gbp,2022-06-15,Annual Report and Financial Statements 2020/21,2022-0615/12-s170858-a4-hampstead-heath-consolidated-2021-final.pdf,35,OCR of rendered vector table
+2020/21,national_insurance,accounts_actual,378165,gbp,2022-06-15,Annual Report and Financial Statements 2020/21,2022-0615/12-s170858-a4-hampstead-heath-consolidated-2021-final.pdf,35,OCR of rendered vector table
+2020/21,employer_pension,accounts_actual,659693,gbp,2022-06-15,Annual Report and Financial Statements 2020/21,2022-0615/12-s170858-a4-hampstead-heath-consolidated-2021-final.pdf,35,OCR of rendered vector table
+2020/21,total_staff_costs,accounts_actual,4944335,gbp,2022-06-15,Annual Report and Financial Statements 2020/21,2022-0615/12-s170858-a4-hampstead-heath-consolidated-2021-final.pdf,35,OCR of rendered vector table
+2021/22,salaries,accounts_actual,4101764,gbp,2024-05-21,Annual Report and Financial Statements 2022/23,2024-0521/12a-s202700-signed-a4-hampstead-heath-2223-final.pdf,32,Comparative in 2022/23 accounts; 2021/22 accounts table not legible by OCR; OCR of rendered vector table
+2021/22,national_insurance,accounts_actual,395949,gbp,2024-05-21,Annual Report and Financial Statements 2022/23,2024-0521/12a-s202700-signed-a4-hampstead-heath-2223-final.pdf,32,Comparative in 2022/23 accounts; 2021/22 accounts table not legible by OCR; OCR of rendered vector table
+2021/22,employer_pension,accounts_actual,684607,gbp,2024-05-21,Annual Report and Financial Statements 2022/23,2024-0521/12a-s202700-signed-a4-hampstead-heath-2223-final.pdf,32,Comparative in 2022/23 accounts; 2021/22 accounts table not legible by OCR; OCR of rendered vector table
+2021/22,total_staff_costs,accounts_actual,5182320,gbp,2024-05-21,Annual Report and Financial Statements 2022/23,2024-0521/12a-s202700-signed-a4-hampstead-heath-2223-final.pdf,32,Comparative in 2022/23 accounts; 2021/22 accounts table not legible by OCR; OCR of rendered vector table
+2022/23,salaries,accounts_actual,3965909,gbp,2024-05-21,Annual Report and Financial Statements 2022/23,2024-0521/12a-s202700-signed-a4-hampstead-heath-2223-final.pdf,32,OCR of rendered vector table
+2022/23,national_insurance,accounts_actual,405105,gbp,2024-05-21,Annual Report and Financial Statements 2022/23,2024-0521/12a-s202700-signed-a4-hampstead-heath-2223-final.pdf,32,OCR of rendered vector table
+2022/23,employer_pension,accounts_actual,639484,gbp,2024-05-21,Annual Report and Financial Statements 2022/23,2024-0521/12a-s202700-signed-a4-hampstead-heath-2223-final.pdf,32,OCR of rendered vector table
+2022/23,total_staff_costs,accounts_actual,5010498,gbp,2024-05-21,Annual Report and Financial Statements 2022/23,2024-0521/12a-s202700-signed-a4-hampstead-heath-2223-final.pdf,32,OCR of rendered vector table
+2023/24,salaries,accounts_actual,4285788,gbp,2025-02-04,Annual Report and Financial Statements 2023/24,2025-0204/13-s214651-appendix-1-hampstead-heath-2324-annual-report-1.pdf,33,OCR of rendered vector table
+2023/24,national_insurance,accounts_actual,415087,gbp,2025-02-04,Annual Report and Financial Statements 2023/24,2025-0204/13-s214651-appendix-1-hampstead-heath-2324-annual-report-1.pdf,33,OCR of rendered vector table
+2023/24,employer_pension,accounts_actual,703165,gbp,2025-02-04,Annual Report and Financial Statements 2023/24,2025-0204/13-s214651-appendix-1-hampstead-heath-2324-annual-report-1.pdf,33,OCR of rendered vector table
+2023/24,total_staff_costs,accounts_actual,5404040,gbp,2025-02-04,Annual Report and Financial Statements 2023/24,2025-0204/13-s214651-appendix-1-hampstead-heath-2324-annual-report-1.pdf,33,OCR of rendered vector table
+2024/25,salaries,accounts_actual,4213641,gbp,2025-10-21,Annual Report and Financial Statements 2024/25,2025-1021/09-s224392-appendix-1-hampstead-heath-annual-report-2024-25.pdf,34,OCR of image table
+2024/25,national_insurance,accounts_actual,409251,gbp,2025-10-21,Annual Report and Financial Statements 2024/25,2025-1021/09-s224392-appendix-1-hampstead-heath-annual-report-2024-25.pdf,34,OCR of image table
+2024/25,employer_pension,accounts_actual,690183,gbp,2025-10-21,Annual Report and Financial Statements 2024/25,2025-1021/09-s224392-appendix-1-hampstead-heath-annual-report-2024-25.pdf,34,OCR of image table
+2024/25,total_staff_costs,accounts_actual,5313075,gbp,2025-10-21,Annual Report and Financial Statements 2024/25,2025-1021/09-s224392-appendix-1-hampstead-heath-annual-report-2024-25.pdf,34,OCR of image table
+2025/26,salaries,accounts_actual,4540015,gbp,2026-10-27,Draft Annual Report and Financial Statements 2025/26,2026-1027/12-s238631-appendix-1-hampstead-heath-2025-26.pdf,43,Draft accounts; OCR of image table
+2025/26,national_insurance,accounts_actual,560173,gbp,2026-10-27,Draft Annual Report and Financial Statements 2025/26,2026-1027/12-s238631-appendix-1-hampstead-heath-2025-26.pdf,43,Draft accounts; OCR of image table
+2025/26,employer_pension,accounts_actual,823952,gbp,2026-10-27,Draft Annual Report and Financial Statements 2025/26,2026-1027/12-s238631-appendix-1-hampstead-heath-2025-26.pdf,43,Draft accounts; OCR of image table
+2025/26,total_staff_costs,accounts_actual,5924140,gbp,2026-10-27,Draft Annual Report and Financial Statements 2025/26,2026-1027/12-s238631-appendix-1-hampstead-heath-2025-26.pdf,43,Draft accounts; OCR of image table
+2017/18,average_headcount,accounts_actual,96,people,2020-01-22,Annual Report and Financial Statements 2018/19,2020-0122/05-s128211-a4-hampstead-heath-consolidated-2018-19-jgv2-bj.pdf,25,Comparative year
+2018/19,average_headcount,accounts_actual,99,people,2020-01-22,Annual Report and Financial Statements 2018/19,2020-0122/05-s128211-a4-hampstead-heath-consolidated-2018-19-jgv2-bj.pdf,25,Average number directly undertaking charity activities
+2019/20,average_headcount,accounts_actual,98,people,2021-05-26,Annual Report and Financial Statements 2019/20,2021-0526/13-s152906-a4-hampstead-heath-consolidated-redacted.pdf,32,Average number directly undertaking charity activities
+2020/21,average_headcount,accounts_actual,97,people,2022-06-15,Annual Report and Financial Statements 2020/21,2022-0615/12-s170858-a4-hampstead-heath-consolidated-2021-final.pdf,35,Average number directly undertaking charity activities
+2021/22,average_headcount,accounts_actual,100,people,2023-05-17,Annual Report and Financial Statements 2021/22,2023-0517/13-s185753-a4-hampstead-heath-consolidated-2122-final-col-signed.pdf,33,Average number directly undertaking charity activities
+2022/23,average_headcount,accounts_actual,83,people,2024-05-21,Annual Report and Financial Statements 2022/23,2024-0521/12a-s202700-signed-a4-hampstead-heath-2223-final.pdf,32,Average number directly undertaking charity activities
+2023/24,average_headcount,accounts_actual,88,people,2025-02-04,Annual Report and Financial Statements 2023/24,2025-0204/13-s214651-appendix-1-hampstead-heath-2324-annual-report-1.pdf,33,Average number directly undertaking charity activities
+2024/25,average_headcount,accounts_actual,78,people,2025-10-21,Annual Report and Financial Statements 2024/25,2025-1021/09-s224392-appendix-1-hampstead-heath-annual-report-2024-25.pdf,34,Average number directly undertaking charity activities
+2024/25,average_headcount,accounts_actual,88,people,2026-10-27,Draft Annual Report and Financial Statements 2025/26,2026-1027/12-s238631-appendix-1-hampstead-heath-2025-26.pdf,42,Restated in 2025/26 accounts; 2024/25 accounts said 78
+2025/26,average_headcount,accounts_actual,93,people,2026-10-27,Draft Annual Report and Financial Statements 2025/26,2026-1027/12-s238631-appendix-1-hampstead-heath-2025-26.pdf,42,Draft accounts
+2022/23,direct_employees,latest_budget,5316000,gbp,2022-12-07,Revenue monitoring P6 2022/23,2022-1207/08-s179069-appendix-1-hh-hw-qp-monitoring-p6.pdf,1,
+2022/23,direct_employees,actual_to_date,2594113,gbp,2022-12-07,Revenue monitoring P6 2022/23,2022-1207/08-s179069-appendix-1-hh-hw-qp-monitoring-p6.pdf,1,April-September
+2022/23,direct_employees,projected_outturn,5316000,gbp,2022-12-07,Revenue monitoring P6 2022/23,2022-1207/08-s179069-appendix-1-hh-hw-qp-monitoring-p6.pdf,1,
+2022/23,indirect_employees,latest_budget,15000,gbp,2022-12-07,Revenue monitoring P6 2022/23,2022-1207/08-s179069-appendix-1-hh-hw-qp-monitoring-p6.pdf,1,
+2022/23,indirect_employees,actual_to_date,8808,gbp,2022-12-07,Revenue monitoring P6 2022/23,2022-1207/08-s179069-appendix-1-hh-hw-qp-monitoring-p6.pdf,1,April-September
+2022/23,indirect_employees,projected_outturn,15000,gbp,2022-12-07,Revenue monitoring P6 2022/23,2022-1207/08-s179069-appendix-1-hh-hw-qp-monitoring-p6.pdf,1,
+2022/23,direct_employees,latest_budget,5316000,gbp,2023-02-08,Revenue monitoring P9 2022/23,2023-0208/07-s181814-hh-hw-qp-monitoring-p9-final-app1.pdf,1,
+2022/23,direct_employees,actual_to_date,3913505,gbp,2023-02-08,Revenue monitoring P9 2022/23,2023-0208/07-s181814-hh-hw-qp-monitoring-p9-final-app1.pdf,1,April-December
+2022/23,direct_employees,projected_outturn,5216000,gbp,2023-02-08,Revenue monitoring P9 2022/23,2023-0208/07-s181814-hh-hw-qp-monitoring-p9-final-app1.pdf,1,
+2022/23,indirect_employees,latest_budget,15000,gbp,2023-02-08,Revenue monitoring P9 2022/23,2023-0208/07-s181814-hh-hw-qp-monitoring-p9-final-app1.pdf,1,
+2022/23,indirect_employees,actual_to_date,10679,gbp,2023-02-08,Revenue monitoring P9 2022/23,2023-0208/07-s181814-hh-hw-qp-monitoring-p9-final-app1.pdf,1,April-December
+2022/23,indirect_employees,projected_outturn,15000,gbp,2023-02-08,Revenue monitoring P9 2022/23,2023-0208/07-s181814-hh-hw-qp-monitoring-p9-final-app1.pdf,1,
+2023/24,direct_employees,latest_budget,5335000,gbp,2023-11-29,Revenue budget P6 2023/24,2023-1129/13-s194373-appendix-1-hampstead-heath-budget-summary-2023-24-september-23.pdf,1,
+2023/24,direct_employees,actual_to_date,2611714,gbp,2023-11-29,Revenue budget P6 2023/24,2023-1129/13-s194373-appendix-1-hampstead-heath-budget-summary-2023-24-september-23.pdf,1,April-September
+2023/24,direct_employees,projected_outturn,5200000,gbp,2023-11-29,Revenue budget P6 2023/24,2023-1129/13-s194373-appendix-1-hampstead-heath-budget-summary-2023-24-september-23.pdf,1,
+2023/24,indirect_employees,latest_budget,15000,gbp,2023-11-29,Revenue budget P6 2023/24,2023-1129/13-s194373-appendix-1-hampstead-heath-budget-summary-2023-24-september-23.pdf,1,
+2023/24,indirect_employees,actual_to_date,19735,gbp,2023-11-29,Revenue budget P6 2023/24,2023-1129/13-s194373-appendix-1-hampstead-heath-budget-summary-2023-24-september-23.pdf,1,April-September
+2023/24,indirect_employees,projected_outturn,20000,gbp,2023-11-29,Revenue budget P6 2023/24,2023-1129/13-s194373-appendix-1-hampstead-heath-budget-summary-2023-24-september-23.pdf,1,
+2023/24,direct_employees,latest_budget,5530000,gbp,2024-02-12,Revenue budget P9 2023/24,2024-0212/15-s197706-appendix-1-hampstead-heath-budget-summary-2023-24.pdf,1,
+2023/24,direct_employees,actual_to_date,4176879,gbp,2024-02-12,Revenue budget P9 2023/24,2024-0212/15-s197706-appendix-1-hampstead-heath-budget-summary-2023-24.pdf,1,April-December
+2023/24,direct_employees,projected_outturn,5485000,gbp,2024-02-12,Revenue budget P9 2023/24,2024-0212/15-s197706-appendix-1-hampstead-heath-budget-summary-2023-24.pdf,1,
+2023/24,indirect_employees,latest_budget,15000,gbp,2024-02-12,Revenue budget P9 2023/24,2024-0212/15-s197706-appendix-1-hampstead-heath-budget-summary-2023-24.pdf,1,
+2023/24,indirect_employees,actual_to_date,24999,gbp,2024-02-12,Revenue budget P9 2023/24,2024-0212/15-s197706-appendix-1-hampstead-heath-budget-summary-2023-24.pdf,1,April-December
+2023/24,indirect_employees,projected_outturn,32000,gbp,2024-02-12,Revenue budget P9 2023/24,2024-0212/15-s197706-appendix-1-hampstead-heath-budget-summary-2023-24.pdf,1,
+2024/25,direct_employees,latest_budget,5092000,gbp,2024-10-22,Revenue budget P5 2024/25,2024-1022/10-s209483-appendix-1-hampstead-heath-revenue-budget-2024-25-p5-1.pdf,1,
+2024/25,direct_employees,actual_to_date,2260117,gbp,2024-10-22,Revenue budget P5 2024/25,2024-1022/10-s209483-appendix-1-hampstead-heath-revenue-budget-2024-25-p5-1.pdf,1,April-August
+2024/25,direct_employees,projected_outturn,5059000,gbp,2024-10-22,Revenue budget P5 2024/25,2024-1022/10-s209483-appendix-1-hampstead-heath-revenue-budget-2024-25-p5-1.pdf,1,
+2024/25,indirect_employees,latest_budget,15000,gbp,2024-10-22,Revenue budget P5 2024/25,2024-1022/10-s209483-appendix-1-hampstead-heath-revenue-budget-2024-25-p5-1.pdf,1,
+2024/25,indirect_employees,actual_to_date,10019,gbp,2024-10-22,Revenue budget P5 2024/25,2024-1022/10-s209483-appendix-1-hampstead-heath-revenue-budget-2024-25-p5-1.pdf,1,April-August
+2024/25,indirect_employees,projected_outturn,15000,gbp,2024-10-22,Revenue budget P5 2024/25,2024-1022/10-s209483-appendix-1-hampstead-heath-revenue-budget-2024-25-p5-1.pdf,1,
+2024/25,direct_employees,latest_budget,5092000,gbp,2025-02-04,Revenue budget Q3 2024/25,2025-0204/14-s214659-appendix-1-hampstead-heath-revenue-budget-1.pdf,1,
+2024/25,direct_employees,actual_to_date,4038060,gbp,2025-02-04,Revenue budget Q3 2024/25,2025-0204/14-s214659-appendix-1-hampstead-heath-revenue-budget-1.pdf,1,April-December
+2024/25,direct_employees,projected_outturn,5150000,gbp,2025-02-04,Revenue budget Q3 2024/25,2025-0204/14-s214659-appendix-1-hampstead-heath-revenue-budget-1.pdf,1,
+2024/25,indirect_employees,latest_budget,15000,gbp,2025-02-04,Revenue budget Q3 2024/25,2025-0204/14-s214659-appendix-1-hampstead-heath-revenue-budget-1.pdf,1,
+2024/25,indirect_employees,actual_to_date,19908,gbp,2025-02-04,Revenue budget Q3 2024/25,2025-0204/14-s214659-appendix-1-hampstead-heath-revenue-budget-1.pdf,1,April-December
+2024/25,indirect_employees,projected_outturn,20000,gbp,2025-02-04,Revenue budget Q3 2024/25,2025-0204/14-s214659-appendix-1-hampstead-heath-revenue-budget-1.pdf,1,
+2025/26,direct_employees,latest_budget,5468000,gbp,2025-10-21,Revenue budget Q1 2025/26,2025-1021/08-s224389-appendix-1-hampstead-heath-revenue-budget.pdf,1,
+2025/26,direct_employees,actual_to_date,1418418,gbp,2025-10-21,Revenue budget Q1 2025/26,2025-1021/08-s224389-appendix-1-hampstead-heath-revenue-budget.pdf,1,April-June
+2025/26,direct_employees,projected_outturn,5403000,gbp,2025-10-21,Revenue budget Q1 2025/26,2025-1021/08-s224389-appendix-1-hampstead-heath-revenue-budget.pdf,1,
+2025/26,indirect_employees,latest_budget,25000,gbp,2025-10-21,Revenue budget Q1 2025/26,2025-1021/08-s224389-appendix-1-hampstead-heath-revenue-budget.pdf,1,
+2025/26,indirect_employees,actual_to_date,9117,gbp,2025-10-21,Revenue budget Q1 2025/26,2025-1021/08-s224389-appendix-1-hampstead-heath-revenue-budget.pdf,1,April-June
+2025/26,indirect_employees,projected_outturn,30000,gbp,2025-10-21,Revenue budget Q1 2025/26,2025-1021/08-s224389-appendix-1-hampstead-heath-revenue-budget.pdf,1,
+2025/26,direct_employees,latest_budget,5406000,gbp,2026-02-03,Revenue budget Q3 2025/26,2026-0203/11-s228664-appendix-1-hampstead-heath-revenue-budget.pdf,1,
+2025/26,direct_employees,actual_to_date,4611279,gbp,2026-02-03,Revenue budget Q3 2025/26,2026-0203/11-s228664-appendix-1-hampstead-heath-revenue-budget.pdf,1,April-December
+2025/26,direct_employees,projected_outturn,5750000,gbp,2026-02-03,Revenue budget Q3 2025/26,2026-0203/11-s228664-appendix-1-hampstead-heath-revenue-budget.pdf,1,
+2025/26,indirect_employees,latest_budget,25000,gbp,2026-02-03,Revenue budget Q3 2025/26,2026-0203/11-s228664-appendix-1-hampstead-heath-revenue-budget.pdf,1,
+2025/26,indirect_employees,actual_to_date,32878,gbp,2026-02-03,Revenue budget Q3 2025/26,2026-0203/11-s228664-appendix-1-hampstead-heath-revenue-budget.pdf,1,April-December
+2025/26,indirect_employees,projected_outturn,40000,gbp,2026-02-03,Revenue budget Q3 2025/26,2026-0203/11-s228664-appendix-1-hampstead-heath-revenue-budget.pdf,1,
+2022/23,direct_employees,actual,5010658,gbp,2023-11-29,Revenue budget P6 2023/24 (prior-year actuals),2023-1129/13-s194373-appendix-1-hampstead-heath-budget-summary-2023-24-september-23.pdf,1,
+2022/23,indirect_employees,actual,15583,gbp,2023-11-29,Revenue budget P6 2023/24 (prior-year actuals),2023-1129/13-s194373-appendix-1-hampstead-heath-budget-summary-2023-24-september-23.pdf,1,
+2023/24,direct_employees,actual,5404039,gbp,2024-10-22,Revenue budget P5 2024/25 (prior-year actuals),2024-1022/10-s209483-appendix-1-hampstead-heath-revenue-budget-2024-25-p5-1.pdf,1,
+2023/24,indirect_employees,actual,29795,gbp,2024-10-22,Revenue budget P5 2024/25 (prior-year actuals),2024-1022/10-s209483-appendix-1-hampstead-heath-revenue-budget-2024-25-p5-1.pdf,1,
+2024/25,direct_employees,actual,5287537,gbp,2025-10-21,Revenue budget Q1 2025/26 (prior-year actuals),2025-1021/08-s224389-appendix-1-hampstead-heath-revenue-budget.pdf,1,
+2024/25,indirect_employees,actual,32761,gbp,2025-10-21,Revenue budget Q1 2025/26 (prior-year actuals),2025-1021/08-s224389-appendix-1-hampstead-heath-revenue-budget.pdf,1,
+2025/26,direct_employees,original_budget,5218000,gbp,2025-12-08,2026/27 Revenue Budget SOFA,2025-1208/05-s226848-appendix-1-hampstead-heath-sofa-26-27.pdf,1,Charity SOFA basis (£000); differs from the 5468000/5406000 latest budget in revenue reports
+2026/27,direct_employees,original_budget,5572000,gbp,2025-12-08,2026/27 Revenue Budget SOFA,2025-1208/05-s226848-appendix-1-hampstead-heath-sofa-26-27.pdf,1,Includes transfer of support service posts (note 5)
+2026/27,direct_employees,latest_budget,5538000,gbp,2026-10-27,Finance Progress Report P5 2026/27,2026-1027/11-s238629-finance-progress-report-2026-27-hampstead-heath.pdf,7,OCR of image table (£000)
+2026/27,direct_employees,actual_to_date,3016000,gbp,2026-10-27,Finance Progress Report P5 2026/27,2026-1027/11-s238629-finance-progress-report-2026-27-hampstead-heath.pdf,7,OCR of image table (£000); April-August
+2026/27,direct_employees,projected_outturn,5736000,gbp,2026-10-27,Finance Progress Report P5 2026/27,2026-1027/11-s238629-finance-progress-report-2026-27-hampstead-heath.pdf,7,OCR of image table (£000)
+2026/27,indirect_employees,latest_budget,48000,gbp,2026-10-27,Finance Progress Report P5 2026/27,2026-1027/11-s238629-finance-progress-report-2026-27-hampstead-heath.pdf,7,OCR of image table (£000)
+2026/27,indirect_employees,actual_to_date,29000,gbp,2026-10-27,Finance Progress Report P5 2026/27,2026-1027/11-s238629-finance-progress-report-2026-27-hampstead-heath.pdf,7,OCR of image table (£000); April-August
+2026/27,indirect_employees,projected_outturn,48000,gbp,2026-10-27,Finance Progress Report P5 2026/27,2026-1027/11-s238629-finance-progress-report-2026-27-hampstead-heath.pdf,7,OCR of image table (£000)

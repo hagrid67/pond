@@ -54,9 +54,12 @@ separately in `<folder>/text/<meeting>/<pdf-stem>.ocr-<engine>.txt`.
 | `rapidocr` | `rapidocr-onnxruntime` (in `requirements.txt`) | No system install; ~4× slower. Reads `£` as `f` and drops `–`; lines are rebuilt from word boxes. |
 
 On the p39 "Income from charitable activities" table, both engines read all 18
-figures correctly; every column sums to its printed total. Image-only pages with
-no embedded image (e.g. a whole page scanned as vector graphics) are still
-missed, since pages are not rendered.
+figures correctly; every column sums to its printed total. Some tables are not images but vector drawings (Windows metafiles pasted from
+Excel, stored as PDF Form XObjects), e.g. the staff-cost notes in the annual
+accounts. `--ocr` also renders every page that contains Form XObjects at 300 dpi
+with `pypdfium2`, OCRs it, and appends the result under `[OCR page render, engine]`.
+This is slower than reading images, so the first `--ocr` run over large packs
+takes longer.
 
 ## Limits
 

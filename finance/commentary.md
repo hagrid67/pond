@@ -63,6 +63,42 @@ part-fund the capital project, so these two figures may overlap.
 Later years report only variances, e.g. 266 on seasonal lifeguards and 50 on Lido
 water in 2025/26.
 
+## Heath staff costs and swimming's share
+
+Hampstead Heath charity staff costs (accounts, £k; average headcount):
+
+| Year | Salaries | NI | Pension | Total | Headcount | Swimming staff | Swimming share |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 2017/18 | 3,632 | 362 | 644 | 4,639 | 96 | | |
+| 2018/19 | 3,718 | 366 | 667 | 4,750 | 99 | | |
+| 2019/20 | 3,787 | 372 | 672 | 4,831 | 98 | | |
+| 2020/21 | 3,906 | 378 | 660 | 4,944 | 97 | 1,106 | 22.4% |
+| 2021/22 | 4,102 | 396 | 685 | 5,182 | 100 | 1,479 | 28.5% |
+| 2022/23 | 3,966 | 405 | 639 | 5,010 | 83 | 1,320 | 26.3% |
+| 2023/24 | 4,286 | 415 | 703 | 5,404 | 88 | | |
+| 2024/25 | 4,214 | 409 | 690 | 5,313 | 78 / 88 | | |
+| 2025/26 | 4,540 | 560 | 824 | 5,924 | 93 | | |
+
+Heath staff costs rose 28% from 2017/18 to 2025/26. Most of the rise is in
+2025/26 (+11.5% in one year), with NI up 37% after the April 2025 employer NI
+increase.
+
+**Rough estimate of later swimming staff costs** (no breakdown published after
+2022/23):
+
+- **Scaling** the 2022/23 swimming staff cost (1,320) by Heath staff growth gives
+  1,423 (2023/24), 1,399 (2024/25) and 1,560 (2025/26).
+- **Applying the observed share range** (22.4–28.5%) to 2025/26 gives 1,327–1,688.
+- **Upward pressure:** the 2025/26 outturn reports a 266 overspend on seasonal
+  lifeguards because of higher usage, which suggests the upper half of that range.
+  The Q3 2025/26 Direct Employees projection was 5,750 against a 5,406 budget.
+- **Caveats:**
+  - only three years of shares;
+  - 2020/21 was Covid-affected;
+  - 2022/23 swimming totals have the arithmetic error noted in the README;
+  - the swimming reviews may define staff costs differently from the accounts
+    (e.g. recharged staff).
+
 ## Capital: Swimming Facilities – Safety, Access & Security Improvements
 
 - **May 2021:** 755 funding awarded.

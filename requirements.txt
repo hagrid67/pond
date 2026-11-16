@@ -20,6 +20,7 @@ httpx2==2.9.1
 # PDF text extraction and OCR of image tables in committee papers
 pypdf==6.21.2
 rapidocr-onnxruntime==1.4.4
+pypdfium2==5.15.2
 
 # Google Drive chart upload
 google-api-python-client==2.201.0

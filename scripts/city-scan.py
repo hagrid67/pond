@@ -127,11 +127,35 @@ def ocr_page_images(page, engine: str) -> str:
     return '\n\n'.join(texts)
 
 
+RENDER_DPI = 300
+
+
+def has_vector_forms(page) -> bool:
+    """True if the page draws Form XObjects, e.g. tables pasted as Windows metafiles."""
+    resources = page.get('/Resources') or {}
+    xobjects = resources.get('/XObject') or {}
+    return any(item.get_object().get('/Subtype') == '/Form' for item in xobjects.values())
+
+
+def ocr_rendered_page(document, index: int, engine: str) -> str:
+    image = document[index].render(scale=RENDER_DPI / 72).to_pil().convert('RGB')
+    text = (ocr_tesseract if engine == 'tesseract' else ocr_rapidocr)(image).strip('\n').rstrip()
+    return f'[OCR page render, {engine}]\n{text}' if text.strip() else ''
+
+
 def extract_ocr_pages(pdf: Path, engine: str) -> list[str]:
+    """OCR embedded images on every page, and render+OCR pages drawn with vector Form XObjects."""
     pages = []
-    for page in PdfReader(pdf).pages:
+    document = None
+    for index, page in enumerate(PdfReader(pdf).pages):
         try:
-            pages.append(ocr_page_images(page, engine))
+            parts = [ocr_page_images(page, engine)]
+            if has_vector_forms(page):
+                if document is None:
+                    import pypdfium2
+                    document = pypdfium2.PdfDocument(pdf)
+                parts.append(ocr_rendered_page(document, index, engine))
+            pages.append('\n\n'.join(part for part in parts if part))
         except Exception as error:
             pages.append(f'<<OCR failed: {error}>>')
     return pages
