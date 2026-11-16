@@ -53,6 +53,7 @@ charts/*
 !charts/.gitkeep
 col-pdfs/*/*.pdf
 col-pdfs/*/*.part
+col-pdfs/*/text/
 
 # Generated web output artifacts
 www-root/booking-plot*.png

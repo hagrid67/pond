@@ -142,6 +142,15 @@ for other committees:
 
 See [docs/city-download.md](docs/city-download.md) for options and details.
 
+Search the downloaded packs for budget tables, swimming income and other topics
+(regex based; page text is cached under `col-pdfs/<committee>/text/`):
+
+```bash
+./ve312pond/bin/python scripts/city-scan.py --agenda
+```
+
+See [docs/city-scan.md](docs/city-scan.md).
+
 Draw a Sankey diagram of the Hampstead Heath 2025/26 operating budget (projected
 outturn) to `charts/hh-budget-sankey-2025-26.png`:
 
