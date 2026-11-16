@@ -154,6 +154,9 @@ tesseract-ocr`, or use `--ocr rapidocr`):
 
 See [docs/city-scan.md](docs/city-scan.md).
 
+Swimming income, costs, capital and maintenance figures extracted from these papers
+(2018/19–2026/27, with sources) are in [finance/](finance/README.md).
+
 Draw a Sankey diagram of the Hampstead Heath 2025/26 operating budget (projected
 outturn) to `charts/hh-budget-sankey-2025-26.png`:
 
