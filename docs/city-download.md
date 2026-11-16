@@ -74,6 +74,10 @@ Other IDs are shown in the `mgCommitteeDetails.aspx?ID=...` links on the
    from this run, so running different years accumulates a single index.
 
 Requests are made sequentially with a one-second pause to be polite to the server.
+The server sometimes returns gateway errors (502/504). Timeouts, connection errors and
+HTTP 429/500/502/503/504 are retried after 10, 30 and 90 seconds. A document that
+still fails is reported as `FAILED` and skipped. The index is still written, and the
+script exits non-zero listing the failures; re-running fetches only the missing files.
 
 ## Index columns
 

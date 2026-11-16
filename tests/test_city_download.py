@@ -28,6 +28,7 @@ MEETING_HTML = '''
 class FakeSession:
     def get(self, url, timeout):
         class Response:
+            status_code = 200
             text = '' if 'mgChooseDocPack' in url else MEETING_HTML
 
             def raise_for_status(self):
@@ -46,3 +47,24 @@ def test_find_documents_names_files_by_meeting_and_agenda_item(monkeypatch) -> N
         ('2026-0714/10-s235512-outturn-appendix-1.pdf', 'document', '10', '*Hampstead Heath 2025/26 Outturn'),
         ('2026-0714/03a-s235500-draft-minutes.pdf', 'document', '3a', 'Draft minutes'),
     ]
+
+
+def test_fetch_retries_transient_server_errors(monkeypatch) -> None:
+    monkeypatch.setattr(city_download, 'REQUEST_DELAY_SECONDS', 0)
+    monkeypatch.setattr(city_download, 'RETRY_DELAYS_SECONDS', (0, 0))
+    statuses = [504, 503, 200]
+
+    class Response:
+        def __init__(self, status_code):
+            self.status_code = status_code
+
+        def raise_for_status(self):
+            if self.status_code >= 400:
+                raise city_download.requests.HTTPError(str(self.status_code))
+
+    class Session:
+        def get(self, url, timeout):
+            return Response(statuses.pop(0))
+
+    assert city_download.fetch(Session(), 'https://example.test/doc.pdf').status_code == 200
+    assert statuses == []

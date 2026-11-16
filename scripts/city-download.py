@@ -34,6 +34,8 @@ INDEX_FIELDS = [
     'url', 'meeting_url',
 ]
 REQUEST_DELAY_SECONDS = 1.0
+RETRY_DELAYS_SECONDS = (10, 30, 90)
+RETRY_STATUS_CODES = {429, 500, 502, 503, 504}
 
 
 @dataclass(frozen=True)
@@ -63,10 +65,22 @@ def display(path: Path) -> str:
 
 
 def fetch(session: requests.Session, url: str) -> requests.Response:
-    response = session.get(url, timeout=120)
-    response.raise_for_status()
-    time.sleep(REQUEST_DELAY_SECONDS)
-    return response
+    """GET with a polite delay, retrying timeouts and transient server errors with back-off."""
+    for attempt, retry_delay in enumerate((*RETRY_DELAYS_SECONDS, None), start=1):
+        try:
+            response = session.get(url, timeout=120)
+            if response.status_code not in RETRY_STATUS_CODES or retry_delay is None:
+                response.raise_for_status()
+                time.sleep(REQUEST_DELAY_SECONDS)
+                return response
+            reason = f'HTTP {response.status_code}'
+        except (requests.ConnectionError, requests.Timeout) as error:
+            if retry_delay is None:
+                raise
+            reason = type(error).__name__
+        print(f'retry    {reason} (attempt {attempt}), waiting {retry_delay}s: {url}', flush=True)
+        time.sleep(retry_delay)
+    raise AssertionError('unreachable')
 
 
 def list_meetings(session: requests.Session, committee_id: int, year: int) -> list[Meeting]:
@@ -260,6 +274,7 @@ def main() -> None:
                 meetings[meeting.meeting_id] = meeting
 
     rows = []
+    failures = []
     for meeting in sorted(meetings.values(), key=lambda item: item.meeting_date):
         documents = find_documents(session, meeting, args.supplementary, args.documents)
         if not any(document.doc_type == 'reports-pack' for document in documents):
@@ -268,7 +283,12 @@ def main() -> None:
             if args.dry_run:
                 print(f'would    {document.path} <- {document.url}')
                 continue
-            path = download(session, document, folder)
+            try:
+                path = download(session, document, folder)
+            except (requests.RequestException, ValueError) as error:
+                print(f'FAILED   {document.path}: {error}', flush=True)
+                failures.append(document.path)
+                continue
             rows.append({
                 'meeting_date': meeting.meeting_date.isoformat(),
                 'meeting_id': str(meeting.meeting_id),
@@ -283,6 +303,8 @@ def main() -> None:
             })
     if rows:
         print(f'index    {display(update_index(folder, rows))}')
+    if failures:
+        raise SystemExit(f'{len(failures)} download(s) failed; re-run to retry: {", ".join(failures)}')
 
 
 if __name__ == '__main__':
