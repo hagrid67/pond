@@ -1,10 +1,15 @@
 # City of London committee papers downloader
 
-[`scripts/city-download.py`](../scripts/city-download.py) downloads the agenda
-"reports packs" for a City of London committee from the Corporation's ModernGov
-archive at <https://democracy.cityoflondon.gov.uk/>. A reports pack is a single
-PDF containing the agenda and all public reports and appendices for a meeting
-concatenated together (the February budget meeting pack is ~10 MB / ~270 pages).
+[`scripts/city-download.py`](../scripts/city-download.py) downloads committee
+papers from the City of London Corporation's ModernGov archive at
+<https://democracy.cityoflondon.gov.uk/>. For each meeting it downloads:
+
+- the **reports pack**: one PDF containing the agenda and all public reports and
+  appendices published with it (the February budget pack is ~10 MB / ~270 pages);
+- any **supplementary** and **information packs**;
+- the **individual agenda documents**, including reports marked `*` ("to
+  follow"), which are often published only as separate documents and never
+  appear in a pack (e.g. the July 2026 "Hampstead Heath 2025/26 Outturn").
 
 The default committee is the **Hampstead Heath, Highgate Wood and Queen's Park
 Committee** (ModernGov `CommitteeId=250`, abbreviated HHHWQP).
@@ -29,7 +34,8 @@ Committee** (ModernGov `CommitteeId=250`, abbreviated HHHWQP).
 | `--committee-id` | from preset | Override the ModernGov committee ID |
 | `--folder` | `col-pdfs/<committee>` | Override the output folder |
 | `--no-supplementary` | off | Skip supplementary agenda packs (fetched by default) |
-| `--dry-run` | off | List packs without downloading |
+| `--no-documents` | off | Only fetch the reports and supplementary packs |
+| `--dry-run` | off | List documents without downloading |
 
 | Preset | ID | Committee |
 | --- | --- | --- |
@@ -47,18 +53,24 @@ Other IDs are shown in the `mgCommitteeDetails.aspx?ID=...` links on the
    page also shows neighbouring years, so meetings are filtered by date and
    de-duplicated by meeting ID (`MId`). Future meetings are skipped.
 2. `mgChooseDocPack.aspx?ID=<MId>` and the meeting page are both scanned for PDF
-   links, because some meetings only link the pack from one of them. A PDF whose
-   file name (or link text) contains "reports pack" is the main pack; one
-   containing "supplementary" and "pack" is a supplementary pack. Links are
-   de-duplicated by path, ignoring the `?T=` query. If the chooser page returns an
-   error (it 404s for some meetings), a warning is printed and only the meeting
-   page is used.
-3. Each pack is saved as `YYYY-MMDD-reports-pack.pdf` or
-   `YYYY-MMDD-supplementary-pack.pdf` (a `-2`, `-3` suffix is added if a meeting
-   has several of the same type). Existing non-empty files are not downloaded
-   again; downloads are written to a `.part` file and renamed once complete, and
-   must start with the `%PDF` signature.
-4. `index.csv` in the output folder is merged (keyed by filename) with the rows
+   links, because some meetings only link the pack from one of them. If the
+   chooser page returns an error (it 404s for some meetings), a warning is
+   printed and only the meeting page is used. Links are de-duplicated by path,
+   ignoring the `?T=` query.
+3. On the meeting page each agenda row (`td.mgItemNumberCell`) gives the item
+   number and title for the documents linked within it.
+4. Files are saved in a folder per meeting, e.g. `col-pdfs/hhhwqp/2026-0714/`:
+
+   | File | Source |
+   | --- | --- |
+   | `reports-pack.pdf`, `supplementary-pack.pdf`, `information-pack.pdf` | Packs (`-2`, `-3` suffix if repeated) |
+   | `agenda-frontsheet.pdf`, `printed-minutes.pdf` | Meeting-level documents |
+   | `10-s235511-hampstead-heath-2025-26-outturn.pdf` | Agenda item `10`, document `s235511`, slug of its title |
+   | `03a-s235500-…pdf` | Sub-items keep their letter/roman suffix |
+
+   Existing non-empty files are not downloaded again. Downloads are written to a
+   `.part` file, renamed when complete, and must start with the `%PDF` signature.
+5. `index.csv` in the committee folder is merged (keyed by `path`) with the rows
    from this run, so running different years accumulates a single index.
 
 Requests are made sequentially with a one-second pause to be polite to the server.
@@ -69,19 +81,20 @@ Requests are made sequentially with a one-second pause to be polite to the serve
 | --- | --- |
 | `meeting_date` | ISO meeting date |
 | `meeting_id` | ModernGov `MId` |
-| `pack_type` | `reports-pack` or `supplementary-pack` |
-| `filename` | Local file name in the output folder |
+| `item` | Agenda item number (blank for packs and meeting-level files) |
+| `item_title` | Agenda item title (a leading `*` means "to follow") |
+| `doc_type` | `reports-pack`, `supplementary-pack`, `information-pack`, `agenda-frontsheet`, `printed-minutes` or `document` |
+| `title` | Document title from the link |
+| `path` | Path relative to the committee folder, e.g. `2026-0714/reports-pack.pdf` |
 | `size_bytes` | Local file size |
 | `url` | Source PDF URL |
 | `meeting_url` | Meeting page listing the individual documents |
 
 ## Notes
 
-- The packs are large and are not committed to git (`col-pdfs/*/*.pdf` is
-  ignored); `index.csv` is committed so the archive can be re-created.
-- Individual reports are also available separately from the meeting page
-  (`documents/s<id>/...pdf`); only the concatenated packs are downloaded.
-- Page text can be extracted with pypdf, e.g.
-  `PdfReader(path).pages[146].extract_text(extraction_mode='layout')` gives a
-  well-aligned copy of the Hampstead Heath operating budget table on page 147 of
-  `2026-0203-reports-pack.pdf`.
+- The PDFs are not committed to git (`col-pdfs/*/**/*.pdf` is ignored). The 2026
+  HHHWQP meetings come to 165 files, 188 MB. `index.csv` is committed so the
+  archive can be re-created.
+- Individual documents duplicate most of the pack contents, but are easier to cite
+  and include the "to follow" reports the packs lack.
+- Search the downloaded files with [`city-scan.py`](city-scan.md).

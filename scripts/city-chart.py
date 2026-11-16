@@ -2,7 +2,7 @@
 
 Data: 2025/26 projected outturn from the Hampstead Heath Operating Budget table
 (Finance Progress Report Q3, Appendix 1), page 147 of the HHHWQP Committee
-reports pack for 3 Feb 2026 (col-pdfs/hhhwqp/2026-0203-reports-pack.pdf).
+reports pack for 3 Feb 2026 (col-pdfs/hhhwqp/2026-0203/reports-pack.pdf).
 
 Income sources flow in from the left, through the Heath in the centre, and out
 to expenditure categories on the right, broken down by subtotal level.

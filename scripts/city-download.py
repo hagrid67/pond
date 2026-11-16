@@ -1,8 +1,10 @@
 """Download City of London committee reports packs from the ModernGov archive.
 
 Defaults to the Hampstead Heath, Highgate Wood and Queen's Park Committee
-(CommitteeId 250) and saves packs as col-pdfs/hhhwqp/YYYY-MMDD-reports-pack.pdf.
-Existing files are not downloaded again. An index.csv is kept alongside them.
+(CommitteeId 250). Each meeting gets a folder such as col-pdfs/hhhwqp/2026-0203/
+holding reports-pack.pdf, supplementary-pack.pdf and the individual agenda
+documents. Existing files are not downloaded again. An index.csv is kept in the
+committee folder.
 """
 
 import argparse
@@ -28,12 +30,9 @@ COMMITTEES = {
     'ras': 396,
 }
 INDEX_FIELDS = [
-    'meeting_date', 'meeting_id', 'pack_type', 'filename', 'size_bytes', 'url', 'meeting_url',
+    'meeting_date', 'meeting_id', 'item', 'item_title', 'doc_type', 'title', 'path', 'size_bytes',
+    'url', 'meeting_url',
 ]
-PACK_TYPES = {
-    'reports pack': 'reports-pack',
-    'supplementary agenda pack': 'supplementary-pack',
-}
 REQUEST_DELAY_SECONDS = 1.0
 
 
@@ -43,13 +42,20 @@ class Meeting:
     meeting_date: date
     url: str
 
+    @property
+    def folder_name(self) -> str:
+        return f'{self.meeting_date:%Y-%m%d}'
+
 
 @dataclass(frozen=True)
-class Pack:
+class Document:
     meeting: Meeting
-    pack_type: str
+    doc_type: str
     url: str
-    filename: str
+    path: str
+    title: str = ''
+    item: str = ''
+    item_title: str = ''
 
 
 def display(path: Path) -> str:
@@ -83,18 +89,69 @@ def list_meetings(session: requests.Session, committee_id: int, year: int) -> li
 
 
 def classify_pack(name: str) -> str | None:
+    """Classify meeting-level files (packs, frontsheet, minutes); agenda documents return None."""
     text = name.lower()
     if 'supplementary' in text and 'pack' in text:
-        return PACK_TYPES['supplementary agenda pack']
-    if 'reports pack' in text:
-        return PACK_TYPES['reports pack']
+        return 'supplementary-pack'
+    for phrase, doc_type in (
+        ('reports pack', 'reports-pack'),
+        ('information pack', 'information-pack'),
+        ('agenda frontsheet', 'agenda-frontsheet'),
+        ('printed minutes', 'printed-minutes'),
+    ):
+        if phrase in text:
+            return doc_type
     return None
 
 
-def find_packs(session: requests.Session, meeting: Meeting, include_supplementary: bool) -> list[Pack]:
+def slugify(text: str, max_length: int = 60) -> str:
+    slug = re.sub(r'[^a-z0-9]+', '-', text.lower()).strip('-')
+    return slug[:max_length].rstrip('-') or 'document'
+
+
+def link_title(link) -> str:
+    match = re.search(r"Link to document '(.+)' pdf file", unescape(link.get('title', '')))
+    if match:
+        return match.group(1)
+    return Path(unquote(urlsplit(link['href']).path)).stem
+
+
+def agenda_items_by_document(soup: BeautifulSoup) -> dict[str, tuple[str, str]]:
+    """Map document URL paths to (agenda item number, agenda item title)."""
+    items = {}
+    for row in soup.find_all('tr'):
+        number_cell = row.find('td', class_='mgItemNumberCell')
+        if number_cell is None:
+            continue
+        number = number_cell.get_text(strip=True).rstrip('.')
+        title_link = row.find('a', class_='mgAiTitleLnk')
+        title_para = row.find_all('p', class_='mgAiTitleTxt')
+        if title_link is not None:
+            title = link_title(title_link)
+        else:
+            title = title_para[-1].get_text(' ', strip=True) if title_para else ''
+        for link in row.find_all('a', href=re.compile(r'\.pdf', re.IGNORECASE)):
+            items.setdefault(unquote(urlsplit(urljoin(BASE_URL, link['href'])).path), (number, title))
+    return items
+
+
+def document_filename(doc_type: str, url_path: str, title: str, item: str, counts: dict[str, int]) -> str:
+    if doc_type != 'document':
+        counts[doc_type] = counts.get(doc_type, 0) + 1
+        suffix = '' if counts[doc_type] == 1 else f'-{counts[doc_type]}'
+        return f'{doc_type}{suffix}.pdf'
+    document_id = Path(url_path).parent.name
+    match = re.match(r'(\d+)(.*)', item)
+    prefix = f'{int(match.group(1)):02d}{match.group(2)}-' if match else (f'{item}-' if item else '')
+    return f'{prefix}{document_id}-{slugify(title)}.pdf'
+
+
+def find_documents(
+    session: requests.Session, meeting: Meeting, include_supplementary: bool, include_documents: bool,
+) -> list[Document]:
     # Some meetings only link the pack from the chooser page, others only from the meeting page.
     chooser_url = urljoin(BASE_URL, f'mgChooseDocPack.aspx?ID={meeting.meeting_id}')
-    packs = []
+    documents = []
     counts: dict[str, int] = {}
     seen_paths = set()
     for page_url in (chooser_url, meeting.url):
@@ -104,30 +161,36 @@ def find_packs(session: requests.Session, meeting: Meeting, include_supplementar
             print(f'warning  {page_url}: {error}')
             continue
         soup = BeautifulSoup(html, 'html.parser')
+        items = agenda_items_by_document(soup)
         for link in soup.find_all('a', href=re.compile(r'\.pdf', re.IGNORECASE)):
-            pack_url = urljoin(BASE_URL, link['href'])
-            path = unquote(urlsplit(pack_url).path)
-            pack_type = classify_pack(Path(path).name) or classify_pack(link.get_text(' ', strip=True))
-            if pack_type is None or (pack_type != 'reports-pack' and not include_supplementary):
+            url = urljoin(BASE_URL, link['href'])
+            url_path = unquote(urlsplit(url).path)
+            if url_path in seen_paths:
                 continue
-            if path in seen_paths:
+            title = link_title(link)
+            doc_type = classify_pack(Path(url_path).name) or classify_pack(title) or 'document'
+            if (doc_type == 'supplementary-pack' and not include_supplementary) or (
+                    doc_type not in ('reports-pack', 'supplementary-pack') and not include_documents):
                 continue
-            seen_paths.add(path)
-            counts[pack_type] = counts.get(pack_type, 0) + 1
-            suffix = '' if counts[pack_type] == 1 else f'-{counts[pack_type]}'
-            filename = f'{meeting.meeting_date:%Y-%m%d}-{pack_type}{suffix}.pdf'
-            packs.append(Pack(meeting=meeting, pack_type=pack_type, url=pack_url, filename=filename))
-    return packs
+            seen_paths.add(url_path)
+            item, item_title = items.get(url_path, ('', ''))
+            filename = document_filename(doc_type, url_path, title, item, counts)
+            documents.append(Document(
+                meeting=meeting, doc_type=doc_type, url=url, path=f'{meeting.folder_name}/{filename}',
+                title=title, item=item, item_title=item_title,
+            ))
+    return documents
 
 
-def download(session: requests.Session, pack: Pack, folder: Path) -> Path:
-    target = folder / pack.filename
+def download(session: requests.Session, document: Document, folder: Path) -> Path:
+    target = folder / document.path
     if target.exists() and target.stat().st_size > 0:
         print(f'exists   {display(target)}')
         return target
-    response = fetch(session, pack.url)
+    response = fetch(session, document.url)
     if not response.content.startswith(b'%PDF'):
-        raise ValueError(f'{pack.url} did not return a PDF')
+        raise ValueError(f'{document.url} did not return a PDF')
+    target.parent.mkdir(parents=True, exist_ok=True)
     partial = target.with_suffix('.pdf.part')
     partial.write_bytes(response.content)
     partial.replace(target)
@@ -140,12 +203,12 @@ def update_index(folder: Path, rows: list[dict[str, str]]) -> Path:
     existing: dict[str, dict[str, str]] = {}
     if index_path.exists():
         with index_path.open(newline='', encoding='utf-8') as handle:
-            existing = {row['filename']: row for row in csv.DictReader(handle)}
-    existing.update({row['filename']: row for row in rows})
+            existing = {row['path']: row for row in csv.DictReader(handle) if row.get('path')}
+    existing.update({row['path']: row for row in rows})
     with index_path.open('w', newline='', encoding='utf-8') as handle:
         writer = csv.DictWriter(handle, fieldnames=INDEX_FIELDS)
         writer.writeheader()
-        writer.writerows(sorted(existing.values(), key=lambda row: row['filename']))
+        writer.writerows(sorted(existing.values(), key=lambda row: row['path']))
     return index_path
 
 
@@ -176,7 +239,11 @@ def main() -> None:
         '--no-supplementary', dest='supplementary', action='store_false',
         help='Skip supplementary agenda packs (downloaded by default)',
     )
-    parser.add_argument('--dry-run', action='store_true', help='List packs without downloading')
+    parser.add_argument(
+        '--no-documents', dest='documents', action='store_false',
+        help='Skip the individual agenda documents (downloaded by default)',
+    )
+    parser.add_argument('--dry-run', action='store_true', help='List documents without downloading')
     args = parser.parse_args()
 
     years = parse_years(args.years)
@@ -194,22 +261,24 @@ def main() -> None:
 
     rows = []
     for meeting in sorted(meetings.values(), key=lambda item: item.meeting_date):
-        packs = find_packs(session, meeting, args.supplementary)
-        if not packs:
+        documents = find_documents(session, meeting, args.supplementary, args.documents)
+        if not any(document.doc_type == 'reports-pack' for document in documents):
             print(f'no pack  {meeting.meeting_date} ({meeting.url})')
-            continue
-        for pack in packs:
+        for document in documents:
             if args.dry_run:
-                print(f'would    {pack.filename} <- {pack.url}')
+                print(f'would    {document.path} <- {document.url}')
                 continue
-            path = download(session, pack, folder)
+            path = download(session, document, folder)
             rows.append({
                 'meeting_date': meeting.meeting_date.isoformat(),
                 'meeting_id': str(meeting.meeting_id),
-                'pack_type': pack.pack_type,
-                'filename': pack.filename,
+                'item': document.item,
+                'item_title': document.item_title,
+                'doc_type': document.doc_type,
+                'title': document.title,
+                'path': document.path,
                 'size_bytes': str(path.stat().st_size),
-                'url': pack.url,
+                'url': document.url,
                 'meeting_url': meeting.url,
             })
     if rows:

@@ -130,11 +130,12 @@ Folders that cannot be read are marked explicitly, with a warning on stderr.
 
 ## City of London committee papers
 
-Download the public reports packs of the Hampstead Heath, Highgate Wood and
-Queen's Park Committee into `col-pdfs/hhhwqp/` (e.g. `2026-0203-reports-pack.pdf`),
-skipping files already present and updating `col-pdfs/hhhwqp/index.csv`.
-Supplementary packs are included; use `--committee finance` (or `ras`, `hhcc`)
-for other committees:
+Download the papers of the Hampstead Heath, Highgate Wood and Queen's Park
+Committee into a folder per meeting, e.g. `col-pdfs/hhhwqp/2026-0203/` holding
+`reports-pack.pdf`, `supplementary-pack.pdf` and each agenda document
+(`11-s228663-….pdf`). Files already present are skipped and
+`col-pdfs/hhhwqp/index.csv` is updated. Use `--committee finance` (or `ras`,
+`hhcc`) for other committees:
 
 ```bash
 ./ve312pond/bin/python scripts/city-download.py --years 2026

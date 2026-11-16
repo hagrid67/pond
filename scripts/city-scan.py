@@ -29,8 +29,8 @@ TOPICS = {
 AGENDA_ITEM = re.compile(r'^\s*(\d{1,2})\.\s+(\*?)\s*([A-Z][A-Z0-9 &,()\'’/.:-]{6,})$')
 
 
-def load_pages(pdf: Path, cache_dir: Path) -> list[str]:
-    cache = cache_dir / f'{pdf.stem}.txt'
+def load_pages(pdf: Path, folder: Path) -> list[str]:
+    cache = folder / 'text' / pdf.relative_to(folder).with_suffix('.txt')
     if not cache.exists() or cache.stat().st_mtime < pdf.stat().st_mtime:
         logging.getLogger('pypdf').setLevel(logging.ERROR)
         parts = []
@@ -40,7 +40,7 @@ def load_pages(pdf: Path, cache_dir: Path) -> list[str]:
             except Exception as error:  # pypdf can fail on individual malformed pages
                 text = f'<<text extraction failed: {error}>>'
             parts.append(f'=====PAGE {number}=====\n{text}')
-        cache_dir.mkdir(parents=True, exist_ok=True)
+        cache.parent.mkdir(parents=True, exist_ok=True)
         cache.write_text('\n'.join(parts), encoding='utf-8')
     chunks = PAGE_MARKER.split(cache.read_text(encoding='utf-8'))[1:]
     return chunks[1::2]
@@ -55,7 +55,7 @@ def meeting_dates(folder: Path) -> dict[str, str]:
     if not index.exists():
         return {}
     with index.open(newline='', encoding='utf-8') as handle:
-        return {row['filename']: row['meeting_date'] for row in csv.DictReader(handle)}
+        return {row['path']: row['meeting_date'] for row in csv.DictReader(handle) if row.get('path')}
 
 
 def agenda_items(pages: list[str], max_pages: int = 6) -> list[tuple[int, bool, str]]:
@@ -76,7 +76,9 @@ def main() -> None:
     parser.add_argument('--topic', nargs='+', choices=sorted(TOPICS), default=['budget', 'swimming-money'],
                         help='Topic regex presets to search for (default: budget swimming-money)')
     parser.add_argument('--pattern', action='append', default=[], help='Extra case-insensitive regex')
-    parser.add_argument('--glob', default='*.pdf', help='PDF file glob within the folder')
+    parser.add_argument('--glob', default='*/*.pdf',
+                        help="PDF glob within the folder, e.g. '2026-07*/*.pdf' or '*/reports-pack.pdf' "
+                             "(default: '*/*.pdf')")
     parser.add_argument('--agenda', action='store_true',
                         help='List agenda items, flagging "*" (to follow) items, which are often only in a '
                              'supplementary pack or published as a separate document')
@@ -90,9 +92,10 @@ def main() -> None:
     compiled = {name: re.compile(pattern, re.IGNORECASE) for name, pattern in patterns.items()}
     dates = meeting_dates(args.folder)
     rows = []
-    for pdf in sorted(args.folder.glob(args.glob)):
-        pages = load_pages(pdf, args.folder / 'text')
-        print(f'== {pdf.name} (meeting {dates.get(pdf.name, "?")}, {len(pages)} pages)')
+    for pdf in sorted(path for path in args.folder.glob(args.glob) if 'text' not in path.parts):
+        name = pdf.relative_to(args.folder).as_posix()
+        pages = load_pages(pdf, args.folder)
+        print(f'== {name} (meeting {dates.get(name, "?")}, {len(pages)} pages)')
         if args.agenda:
             for number, to_follow, title in agenda_items(pages):
                 print(f'   agenda {number:>2}. {title}{"  [* to follow]" if to_follow else ""}')
@@ -108,7 +111,7 @@ def main() -> None:
             if args.show_pages:
                 print(text)
             rows.extend({
-                'filename': pdf.name, 'meeting_date': dates.get(pdf.name, ''), 'page': page_number,
+                'filename': name, 'meeting_date': dates.get(name, ''), 'page': page_number,
                 'topic': name, 'line': line,
             } for name, line in matches)
     if args.csv:

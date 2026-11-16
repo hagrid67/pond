@@ -51,8 +51,8 @@ logs/*
 !logs/.gitkeep
 charts/*
 !charts/.gitkeep
-col-pdfs/*/*.pdf
-col-pdfs/*/*.part
+col-pdfs/*/**/*.pdf
+col-pdfs/*/**/*.part
 col-pdfs/*/text/
 
 # Generated web output artifacts

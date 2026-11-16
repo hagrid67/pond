@@ -4,7 +4,7 @@
 diagram (with Matplotlib) of the Hampstead Heath operating budget, using the
 2025/26 **projected outturn** column from the Hampstead Heath Operating Budget
 table: page 147 of the 3 Feb 2026 HHHWQP Committee reports pack
-(`col-pdfs/hhhwqp/2026-0203-reports-pack.pdf`, Finance Progress Report Q3,
+(`col-pdfs/hhhwqp/2026-0203/reports-pack.pdf`, Finance Progress Report Q3,
 Appendix 1).
 
 ```bash
