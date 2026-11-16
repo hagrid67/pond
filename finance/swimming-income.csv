@@ -1,0 +1,70 @@
+fiscal_year,facility,figure,value_gbp,report_date,report,source,page,note
+2018/19,ponds,annual_review_actual,67000,2020-03-11,Swimming Review 2020 position paper,2020-0311/06-s131419-appendix-1-city-of-london-corporation-position-paper.pdf,5,Rounded
+2018/19,lido,annual_review_actual,377000,2020-03-11,Swimming Review 2020 position paper,2020-0311/06-s131419-appendix-1-city-of-london-corporation-position-paper.pdf,5,Rounded
+2020/21,ponds,annual_review_actual,367649,2021-05-26,Bathing Ponds and Lido Annual Report 2020-21,2021-0526/11-s152762-appendix-1-bathing-ponds-and-lido-annual-report-2020-21.pdf,9,Net of online booking fees and VAT; Covid closures
+2020/21,lido,annual_review_actual,173473,2021-05-26,Bathing Ponds and Lido Annual Report 2020-21,2021-0526/11-s152762-appendix-1-bathing-ponds-and-lido-annual-report-2020-21.pdf,9,Net of online booking fees and VAT; Covid closures
+2021/22,ponds,annual_review_actual,676912,2022-06-15,Bathing Ponds and Lido Annual Review 2021-22,2022-0615/05-s170811-appendix-2-bathing-ponds-and-lido-annual-review-2021-22.pdf,6,Net of online booking fees and VAT
+2021/22,lido,annual_review_actual,454913,2022-06-15,Bathing Ponds and Lido Annual Review 2021-22,2022-0615/05-s170811-appendix-2-bathing-ponds-and-lido-annual-review-2021-22.pdf,6,Net of online booking fees and VAT
+2022/23,lido,latest_budget,350000,2023-02-08,Revenue monitoring P9 2022/23,2023-0208/07-s181814-hh-hw-qp-monitoring-p9-final-app1.pdf,1,
+2022/23,lido,actual_to_date,683371,2023-02-08,Revenue monitoring P9 2022/23,2023-0208/07-s181814-hh-hw-qp-monitoring-p9-final-app1.pdf,1,April-December
+2022/23,lido,projected_outturn,750000,2023-02-08,Revenue monitoring P9 2022/23,2023-0208/07-s181814-hh-hw-qp-monitoring-p9-final-app1.pdf,1,
+2022/23,ponds,latest_budget,390000,2023-02-08,Revenue monitoring P9 2022/23,2023-0208/07-s181814-hh-hw-qp-monitoring-p9-final-app1.pdf,1,
+2022/23,ponds,actual_to_date,176043,2023-02-08,Revenue monitoring P9 2022/23,2023-0208/07-s181814-hh-hw-qp-monitoring-p9-final-app1.pdf,1,April-December; note 10: some Lido income could relate to Ponds
+2022/23,ponds,projected_outturn,290000,2023-02-08,Revenue monitoring P9 2022/23,2023-0208/07-s181814-hh-hw-qp-monitoring-p9-final-app1.pdf,1,
+2022/23,ponds,annual_review_actual,823352,2023-07-17,Bathing Ponds and Lido Annual Review 2022/23,2023-0717/06-s188739-hampstead-heath-bathing-ponds-and-lido-annual-review-2022-23.pdf,3,Net of online booking fees and VAT
+2022/23,lido,annual_review_actual,684548,2023-07-17,Bathing Ponds and Lido Annual Review 2022/23,2023-0717/06-s188739-hampstead-heath-bathing-ponds-and-lido-annual-review-2022-23.pdf,3,Net of online booking fees and VAT
+2022/23,lido,actual,1341174,2023-11-29,Revenue budget P6 2023/24 (prior-year actuals),2023-1129/13-s194373-appendix-1-hampstead-heath-budget-summary-2023-24-september-23.pdf,1,Contradicts annual review split (Lido 684548)
+2022/23,ponds,actual,176043,2023-11-29,Revenue budget P6 2023/24 (prior-year actuals),2023-1129/13-s194373-appendix-1-hampstead-heath-budget-summary-2023-24-september-23.pdf,1,Same as P9 actual-to-date; contradicts annual review (Ponds 823352)
+2022/23,lido,actual,1341174,2024-02-12,Revenue budget P9 2023/24 (prior-year actuals),2024-0212/15-s197706-appendix-1-hampstead-heath-budget-summary-2023-24.pdf,1,
+2022/23,ponds,actual,176043,2024-02-12,Revenue budget P9 2023/24 (prior-year actuals),2024-0212/15-s197706-appendix-1-hampstead-heath-budget-summary-2023-24.pdf,1,
+2023/24,ponds+lido,budget_change,760000,2023-11-29,Revenue and Capital Budgets 2024/25,2023-1129/14-s194380-revenue-and-capital-budgets-2024-25.pdf,4,Additional income projected for 2024/25 vs 2023/24 original budget
+2023/24,lido,latest_budget,667000,2023-11-29,Revenue budget P6 2023/24,2023-1129/13-s194373-appendix-1-hampstead-heath-budget-summary-2023-24-september-23.pdf,1,
+2023/24,lido,actual_to_date,989708,2023-11-29,Revenue budget P6 2023/24,2023-1129/13-s194373-appendix-1-hampstead-heath-budget-summary-2023-24-september-23.pdf,1,April-September
+2023/24,lido,projected_outturn,900000,2023-11-29,Revenue budget P6 2023/24,2023-1129/13-s194373-appendix-1-hampstead-heath-budget-summary-2023-24-september-23.pdf,1,
+2023/24,ponds,latest_budget,725000,2023-11-29,Revenue budget P6 2023/24,2023-1129/13-s194373-appendix-1-hampstead-heath-budget-summary-2023-24-september-23.pdf,1,
+2023/24,ponds,actual_to_date,149549,2023-11-29,Revenue budget P6 2023/24,2023-1129/13-s194373-appendix-1-hampstead-heath-budget-summary-2023-24-september-23.pdf,1,April-September
+2023/24,ponds,projected_outturn,850000,2023-11-29,Revenue budget P6 2023/24,2023-1129/13-s194373-appendix-1-hampstead-heath-budget-summary-2023-24-september-23.pdf,1,
+2023/24,lido,latest_budget,667000,2024-02-12,Revenue budget P9 2023/24,2024-0212/15-s197706-appendix-1-hampstead-heath-budget-summary-2023-24.pdf,1,Approved revised budget
+2023/24,lido,actual_to_date,1081251,2024-02-12,Revenue budget P9 2023/24,2024-0212/15-s197706-appendix-1-hampstead-heath-budget-summary-2023-24.pdf,1,April-December
+2023/24,lido,projected_outturn,967000,2024-02-12,Revenue budget P9 2023/24,2024-0212/15-s197706-appendix-1-hampstead-heath-budget-summary-2023-24.pdf,1,Below actual-to-date
+2023/24,ponds,latest_budget,725000,2024-02-12,Revenue budget P9 2023/24,2024-0212/15-s197706-appendix-1-hampstead-heath-budget-summary-2023-24.pdf,1,Approved revised budget
+2023/24,ponds,actual_to_date,149549,2024-02-12,Revenue budget P9 2023/24,2024-0212/15-s197706-appendix-1-hampstead-heath-budget-summary-2023-24.pdf,1,April-December; unchanged since P6
+2023/24,ponds,projected_outturn,900000,2024-02-12,Revenue budget P9 2023/24,2024-0212/15-s197706-appendix-1-hampstead-heath-budget-summary-2023-24.pdf,1,
+2023/24,lido,actual,1088773,2024-10-22,Revenue budget P5 2024/25 (prior-year actuals),2024-1022/10-s209483-appendix-1-hampstead-heath-revenue-budget-2024-25-p5-1.pdf,1,
+2023/24,ponds,actual,738421,2024-10-22,Revenue budget P5 2024/25 (prior-year actuals),2024-1022/10-s209483-appendix-1-hampstead-heath-revenue-budget-2024-25-p5-1.pdf,1,
+2023/24,lido,actual,1088773,2025-02-04,Revenue budget Q3 2024/25 (prior-year actuals),2025-0204/14-s214659-appendix-1-hampstead-heath-revenue-budget-1.pdf,1,
+2023/24,ponds,actual,738421,2025-02-04,Revenue budget Q3 2024/25 (prior-year actuals),2025-0204/14-s214659-appendix-1-hampstead-heath-revenue-budget-1.pdf,1,
+2024/25,lido,latest_budget,850000,2024-10-22,Revenue budget P5 2024/25,2024-1022/10-s209483-appendix-1-hampstead-heath-revenue-budget-2024-25-p5-1.pdf,1,
+2024/25,lido,actual_to_date,766318,2024-10-22,Revenue budget P5 2024/25,2024-1022/10-s209483-appendix-1-hampstead-heath-revenue-budget-2024-25-p5-1.pdf,1,April-August
+2024/25,lido,projected_outturn,950000,2024-10-22,Revenue budget P5 2024/25,2024-1022/10-s209483-appendix-1-hampstead-heath-revenue-budget-2024-25-p5-1.pdf,1,
+2024/25,ponds,latest_budget,810000,2024-10-22,Revenue budget P5 2024/25,2024-1022/10-s209483-appendix-1-hampstead-heath-revenue-budget-2024-25-p5-1.pdf,1,
+2024/25,ponds,actual_to_date,603232,2024-10-22,Revenue budget P5 2024/25,2024-1022/10-s209483-appendix-1-hampstead-heath-revenue-budget-2024-25-p5-1.pdf,1,April-August
+2024/25,ponds,projected_outturn,840000,2024-10-22,Revenue budget P5 2024/25,2024-1022/10-s209483-appendix-1-hampstead-heath-revenue-budget-2024-25-p5-1.pdf,1,
+2024/25,lido,latest_budget,850000,2025-02-04,Revenue budget Q3 2024/25,2025-0204/14-s214659-appendix-1-hampstead-heath-revenue-budget-1.pdf,1,
+2024/25,lido,actual_to_date,980980,2025-02-04,Revenue budget Q3 2024/25,2025-0204/14-s214659-appendix-1-hampstead-heath-revenue-budget-1.pdf,1,April-December
+2024/25,lido,projected_outturn,1150000,2025-02-04,Revenue budget Q3 2024/25,2025-0204/14-s214659-appendix-1-hampstead-heath-revenue-budget-1.pdf,1,
+2024/25,ponds,latest_budget,810000,2025-02-04,Revenue budget Q3 2024/25,2025-0204/14-s214659-appendix-1-hampstead-heath-revenue-budget-1.pdf,1,
+2024/25,ponds,actual_to_date,786353,2025-02-04,Revenue budget Q3 2024/25,2025-0204/14-s214659-appendix-1-hampstead-heath-revenue-budget-1.pdf,1,April-December
+2024/25,ponds,projected_outturn,895000,2025-02-04,Revenue budget Q3 2024/25,2025-0204/14-s214659-appendix-1-hampstead-heath-revenue-budget-1.pdf,1,
+2024/25,ponds,budget_change,200000,2025-02-04,Budget Estimates 2025/26,2025-0204/07-s214640-budget-estimates-2025-26-hampstead-heath-charity.pdf,5,2025/26 Ponds budget increase "expected to match prior year"
+2024/25,lido,budget_change,100000,2025-02-04,Budget Estimates 2025/26,2025-0204/07-s214640-budget-estimates-2025-26-hampstead-heath-charity.pdf,5,2025/26 Lido budget increase; 850000+100000 does not match the later 1104000 budget
+2024/25,lido,actual,1112744,2025-10-21,Revenue budget Q1 2025/26 (prior-year actuals),2025-1021/08-s224389-appendix-1-hampstead-heath-revenue-budget.pdf,1,
+2024/25,ponds,actual,214726,2025-10-21,Revenue budget Q1 2025/26 (prior-year actuals),2025-1021/08-s224389-appendix-1-hampstead-heath-revenue-budget.pdf,1,Below April-December actual-to-date of 786353
+2024/25,lido,actual,1112744,2026-02-03,Revenue budget Q3 2025/26 (prior-year actuals),2026-0203/11-s228664-appendix-1-hampstead-heath-revenue-budget.pdf,1,
+2024/25,ponds,actual,214726,2026-02-03,Revenue budget Q3 2025/26 (prior-year actuals),2026-0203/11-s228664-appendix-1-hampstead-heath-revenue-budget.pdf,1,
+2025/26,lido,latest_budget,1104000,2025-10-21,Revenue budget Q1 2025/26,2025-1021/08-s224389-appendix-1-hampstead-heath-revenue-budget.pdf,1,
+2025/26,lido,actual_to_date,511580,2025-10-21,Revenue budget Q1 2025/26,2025-1021/08-s224389-appendix-1-hampstead-heath-revenue-budget.pdf,1,April-June
+2025/26,lido,projected_outturn,1104000,2025-10-21,Revenue budget Q1 2025/26,2025-1021/08-s224389-appendix-1-hampstead-heath-revenue-budget.pdf,1,
+2025/26,ponds,latest_budget,1010000,2025-10-21,Revenue budget Q1 2025/26,2025-1021/08-s224389-appendix-1-hampstead-heath-revenue-budget.pdf,1,
+2025/26,ponds,actual_to_date,169706,2025-10-21,Revenue budget Q1 2025/26,2025-1021/08-s224389-appendix-1-hampstead-heath-revenue-budget.pdf,1,April-June
+2025/26,ponds,projected_outturn,1010000,2025-10-21,Revenue budget Q1 2025/26,2025-1021/08-s224389-appendix-1-hampstead-heath-revenue-budget.pdf,1,
+2025/26,lido,latest_budget,1104000,2026-02-03,Revenue budget Q3 2025/26,2026-0203/11-s228664-appendix-1-hampstead-heath-revenue-budget.pdf,1,
+2025/26,lido,actual_to_date,1175589,2026-02-03,Revenue budget Q3 2025/26,2026-0203/11-s228664-appendix-1-hampstead-heath-revenue-budget.pdf,1,April-December
+2025/26,lido,projected_outturn,1260000,2026-02-03,Revenue budget Q3 2025/26,2026-0203/11-s228664-appendix-1-hampstead-heath-revenue-budget.pdf,1,
+2025/26,ponds,latest_budget,1010000,2026-02-03,Revenue budget Q3 2025/26,2026-0203/11-s228664-appendix-1-hampstead-heath-revenue-budget.pdf,1,
+2025/26,ponds,actual_to_date,882228,2026-02-03,Revenue budget Q3 2025/26,2026-0203/11-s228664-appendix-1-hampstead-heath-revenue-budget.pdf,1,April-December
+2025/26,ponds,projected_outturn,1140000,2026-02-03,Revenue budget Q3 2025/26,2026-0203/11-s228664-appendix-1-hampstead-heath-revenue-budget.pdf,1,
+2025/26,ponds+lido,projected_outturn,2400000,2026-02-03,Revenue budget Q3 2025/26 (note 6),2026-0203/11-s228664-appendix-1-hampstead-heath-revenue-budget.pdf,2,"Combined ""trajectory"" of £2.4m"
+2025/26,ponds+lido,outturn_derived,2427000,2026-07-14,Revenue Outturn 2025/26 Appendix 2,2026-0714/10-s235513-hampstead-heath-outturn-2025-26-appendix-2.pdf,2,Derived: budget 2114000 plus stated £313k additional combined income; not stated directly
+2026/27,ponds+lido,budget_change,185000,2026-02-03,2026/27 Revenue Budget SOFA,2026-0203/12-s228673-appendix-1-hampstead-heath-sofa-26-27.pdf,2,"Increase in ""Swimming and sporting income"" within Trading"
+2026/27,ponds+lido,projected_outturn,2400000,2026-10-27,Finance Progress Report 2026/27,2026-1027/11-s238629-finance-progress-report-2026-27-hampstead-heath.pdf,3,"£100k above budget; ""trajectory"" of £2.4m"

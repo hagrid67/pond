@@ -1,0 +1,34 @@
+fiscal_year,facility,category,value_gbp,report_date,report,source,page,note
+2018/19,ponds,total_expenditure,747048,2020-03-11,Swimming Review 2020 position paper,2020-0311/06-s131419-appendix-1-city-of-london-corporation-position-paper.pdf,21,
+2018/19,lido,total_expenditure,521000,2020-03-11,Swimming Review 2020 position paper,2020-0311/06-s131419-appendix-1-city-of-london-corporation-position-paper.pdf,5,Rounded
+2018/19,ponds,subsidy,680000,2020-03-11,Swimming Review 2020 position paper,2020-0311/06-s131419-appendix-1-city-of-london-corporation-position-paper.pdf,5,Rounded
+2018/19,lido,subsidy,144000,2020-03-11,Swimming Review 2020 position paper,2020-0311/06-s131419-appendix-1-city-of-london-corporation-position-paper.pdf,5,Rounded
+2020/21,ponds,total_expenditure_forecast,1061000,2020-03-11,Swimming Review 2020 position paper,2020-0311/06-s131419-appendix-1-city-of-london-corporation-position-paper.pdf,5,Projected with new safety measures (+314000)
+2020/21,lido,total_expenditure_forecast,582000,2020-03-11,Swimming Review 2020 position paper,2020-0311/06-s131419-appendix-1-city-of-london-corporation-position-paper.pdf,5,Projected (+61000)
+2020/21,ponds,employee,794723,2021-05-26,Bathing Ponds and Lido Annual Report 2020-21,2021-0526/11-s152762-appendix-1-bathing-ponds-and-lido-annual-report-2020-21.pdf,9,
+2020/21,ponds,operational,172260,2021-05-26,Bathing Ponds and Lido Annual Report 2020-21,2021-0526/11-s152762-appendix-1-bathing-ponds-and-lido-annual-report-2020-21.pdf,9,
+2020/21,ponds,total_expenditure,966983,2021-05-26,Bathing Ponds and Lido Annual Report 2020-21,2021-0526/11-s152762-appendix-1-bathing-ponds-and-lido-annual-report-2020-21.pdf,9,
+2020/21,ponds,subsidy,599334,2021-05-26,Bathing Ponds and Lido Annual Report 2020-21,2021-0526/11-s152762-appendix-1-bathing-ponds-and-lido-annual-report-2020-21.pdf,9,Funding from Heath local risk budget
+2020/21,lido,employee,311128,2021-05-26,Bathing Ponds and Lido Annual Report 2020-21,2021-0526/11-s152762-appendix-1-bathing-ponds-and-lido-annual-report-2020-21.pdf,9,
+2020/21,lido,operational,140940,2021-05-26,Bathing Ponds and Lido Annual Report 2020-21,2021-0526/11-s152762-appendix-1-bathing-ponds-and-lido-annual-report-2020-21.pdf,9,
+2020/21,lido,total_expenditure,452068,2021-05-26,Bathing Ponds and Lido Annual Report 2020-21,2021-0526/11-s152762-appendix-1-bathing-ponds-and-lido-annual-report-2020-21.pdf,9,
+2020/21,lido,subsidy,278595,2021-05-26,Bathing Ponds and Lido Annual Report 2020-21,2021-0526/11-s152762-appendix-1-bathing-ponds-and-lido-annual-report-2020-21.pdf,9,Funding from Heath local risk budget
+2021/22,ponds,employee,758649,2022-06-15,Bathing Ponds and Lido Annual Review 2021-22,2022-0615/05-s170811-appendix-2-bathing-ponds-and-lido-annual-review-2021-22.pdf,6,
+2021/22,ponds,operational,34814,2022-06-15,Bathing Ponds and Lido Annual Review 2021-22,2022-0615/05-s170811-appendix-2-bathing-ponds-and-lido-annual-review-2021-22.pdf,6,
+2021/22,ponds,total_expenditure,793463,2022-06-15,Bathing Ponds and Lido Annual Review 2021-22,2022-0615/05-s170811-appendix-2-bathing-ponds-and-lido-annual-review-2021-22.pdf,6,
+2021/22,ponds,subsidy,116551,2022-06-15,Bathing Ponds and Lido Annual Review 2021-22,2022-0615/05-s170811-appendix-2-bathing-ponds-and-lido-annual-review-2021-22.pdf,6,
+2021/22,lido,employee,720651,2022-06-15,Bathing Ponds and Lido Annual Review 2021-22,2022-0615/05-s170811-appendix-2-bathing-ponds-and-lido-annual-review-2021-22.pdf,6,
+2021/22,lido,operational,135867,2022-06-15,Bathing Ponds and Lido Annual Review 2021-22,2022-0615/05-s170811-appendix-2-bathing-ponds-and-lido-annual-review-2021-22.pdf,6,
+2021/22,lido,total_expenditure,856518,2022-06-15,Bathing Ponds and Lido Annual Review 2021-22,2022-0615/05-s170811-appendix-2-bathing-ponds-and-lido-annual-review-2021-22.pdf,6,
+2021/22,lido,subsidy,401605,2022-06-15,Bathing Ponds and Lido Annual Review 2021-22,2022-0615/05-s170811-appendix-2-bathing-ponds-and-lido-annual-review-2021-22.pdf,6,
+2022/23,ponds,employee,752487,2023-07-17,Bathing Ponds and Lido Annual Review 2022/23,2023-0717/06-s188739-hampstead-heath-bathing-ponds-and-lido-annual-review-2022-23.pdf,3,
+2022/23,ponds,operational,36799,2023-07-17,Bathing Ponds and Lido Annual Review 2022/23,2023-0717/06-s188739-hampstead-heath-bathing-ponds-and-lido-annual-review-2022-23.pdf,3,
+2022/23,ponds,one_off,351000,2023-07-17,Bathing Ponds and Lido Annual Review 2022/23,2023-0717/06-s188739-hampstead-heath-bathing-ponds-and-lido-annual-review-2022-23.pdf,3,One-off payment to support access project at ponds
+2022/23,ponds,total_expenditure,1140286,2023-07-17,Bathing Ponds and Lido Annual Review 2022/23,2023-0717/06-s188739-hampstead-heath-bathing-ponds-and-lido-annual-review-2022-23.pdf,3,Includes 351000 one-off
+2022/23,ponds,subsidy,316934,2023-07-17,Bathing Ponds and Lido Annual Review 2022/23,2023-0717/06-s188739-hampstead-heath-bathing-ponds-and-lido-annual-review-2022-23.pdf,3,
+2022/23,lido,employee,567108,2023-07-17,Bathing Ponds and Lido Annual Review 2022/23,2023-0717/06-s188739-hampstead-heath-bathing-ponds-and-lido-annual-review-2022-23.pdf,3,
+2022/23,lido,operational,216362,2023-07-17,Bathing Ponds and Lido Annual Review 2022/23,2023-0717/06-s188739-hampstead-heath-bathing-ponds-and-lido-annual-review-2022-23.pdf,3,
+2022/23,lido,total_expenditure,783470,2023-07-17,Bathing Ponds and Lido Annual Review 2022/23,2023-0717/06-s188739-hampstead-heath-bathing-ponds-and-lido-annual-review-2022-23.pdf,3,
+2022/23,lido,subsidy,98922,2023-07-17,Bathing Ponds and Lido Annual Review 2022/23,2023-0717/06-s188739-hampstead-heath-bathing-ponds-and-lido-annual-review-2022-23.pdf,3,
+2025/26,ponds+lido,seasonal_lifeguards_overspend,266000,2026-07-14,Revenue Outturn 2025/26 Appendix 2,2026-0714/10-s235513-hampstead-heath-outturn-2025-26-appendix-2.pdf,1,Variance vs final budget; offset by extra swimming income
+2025/26,lido,water_overspend,50000,2026-07-14,Revenue Outturn 2025/26 Appendix 2,2026-0714/10-s235513-hampstead-heath-outturn-2025-26-appendix-2.pdf,2,Variance vs final budget
