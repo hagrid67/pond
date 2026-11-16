@@ -15,6 +15,9 @@ April–March.
 | `swimming-capital.csv` | Capital projects: Swimming Facilities Safety, Access & Security Improvements, and Lido photovoltaic panels |
 | `swimming-maintenance.csv` | Cyclical Works Programme (CWP) items for Lido and bathing pond buildings, and maintenance cited in outturn reports |
 
+[commentary.md](commentary.md) has working notes: summary tables, hypotheses
+about the contradictions, and the planned set of charts.
+
 ## `swimming-income.csv` figures
 
 | `figure` | Meaning |

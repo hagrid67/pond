@@ -1,6 +1,10 @@
-"""Draw a Sankey diagram of the Hampstead Heath operating budget.
+"""Charts of Hampstead Heath finances from City of London committee papers.
 
-Data: 2025/26 projected outturn from the Hampstead Heath Operating Budget table
+--chart sankey (default): Sankey diagram of the Hampstead Heath operating budget.
+--chart income: evolving Lido/Ponds income budgets, projections and actuals per
+fiscal year, from finance/swimming-income.csv, flagging contradictory restatements.
+
+Sankey data: 2025/26 projected outturn from the Hampstead Heath Operating Budget table
 (Finance Progress Report Q3, Appendix 1), page 147 of the HHHWQP Committee
 reports pack for 3 Feb 2026 (col-pdfs/hhhwqp/2026-0203/reports-pack.pdf).
 
@@ -9,15 +13,25 @@ to expenditure categories on the right, broken down by subtotal level.
 """
 
 import argparse
+import csv
+from collections import defaultdict
 from dataclasses import dataclass, field
+from datetime import date
 from pathlib import Path
 
+import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.lines import Line2D
 from matplotlib.patches import PathPatch, Rectangle
 from matplotlib.path import Path as MplPath
+from matplotlib.ticker import FuncFormatter
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT = REPO_ROOT / 'charts' / 'hh-budget-sankey-2025-26.png'
+DEFAULT_INCOME_DATA = REPO_ROOT / 'finance' / 'swimming-income.csv'
+DEFAULT_INCOME_OUTPUT = REPO_ROOT / 'charts' / 'swimming-income-forecasts.png'
+DEFAULT_FIGSIZES = {'sankey': (18.0, 10.0), 'income': (14.0, 13.0)}
 SOURCE_NOTE = (
     'Source: City of London, Hampstead Heath, Highgate Wood & Queen\'s Park Committee, 3 Feb 2026 — '
     'Hampstead Heath Operating Budget 2025/26 (reports pack p147), projected outturn.'
@@ -254,6 +268,190 @@ def draw_sankey(income: Node, expenditure: Node, figsize: tuple[float, float], t
     return fig
 
 
+# --- Swimming income forecasts vs outcomes ---------------------------------------------------
+
+FACILITIES = ('lido', 'ponds', 'combined')
+FACILITY_TITLES = {'lido': 'Parliament Hill Lido', 'ponds': 'Bathing Ponds', 'combined': 'Lido + Ponds combined'}
+FINAL_FIGURES = ('annual_review_actual', 'actual', 'outturn_derived')
+# Plot order within a report: budget first, then year-to-date, projection, and final figures.
+FIGURE_ORDER = {'latest_budget': 0, 'actual_to_date': 1, 'projected_outturn': 2,
+                'annual_review_actual': 3, 'actual': 4, 'outturn_derived': 5}
+FIGURE_STYLES = {
+    'latest_budget': dict(marker='s', s=60, label='Budget (hollow)'),
+    'actual_to_date': dict(marker='^', s=38, label='Actual to date (part year)'),
+    'projected_outturn': dict(marker='o', s=55, label='Projected outturn'),
+    'annual_review_actual': dict(marker='D', s=95, label='Actual: annual swimming review'),
+    'actual': dict(marker='D', s=95, label='Actual: later revenue report'),
+    'outturn_derived': dict(marker='P', s=120, label='Outturn derived from budget + variance'),
+}
+CONTRADICTION_TOLERANCE = 0.05
+INCOME_SOURCE_NOTE = (
+    'Source: Hampstead Heath, Highgate Wood & Queen\'s Park Committee papers 2020–2026 (finance/swimming-income.csv). '
+    'Points within a year are ordered by report date; colour = report date.'
+)
+
+
+@dataclass(frozen=True)
+class Estimate:
+    fiscal_year: str
+    facility: str
+    figure: str
+    value: int
+    report_date: date
+
+    @property
+    def is_final(self) -> bool:
+        return self.figure in FINAL_FIGURES
+
+
+def load_income(path: Path) -> list[Estimate]:
+    with path.open(newline='', encoding='utf-8') as handle:
+        return [
+            Estimate(row['fiscal_year'], 'combined' if row['facility'] == 'ponds+lido' else row['facility'],
+                     row['figure'], int(row['value_gbp']), date.fromisoformat(row['report_date']))
+            for row in csv.DictReader(handle) if row['figure'] in FIGURE_ORDER
+        ]
+
+
+def with_combined(estimates: list[Estimate]) -> list[Estimate]:
+    """Add combined figures summing Lido and Ponds from the same report, unless stated directly."""
+    stated = {(e.fiscal_year, e.figure, e.report_date) for e in estimates if e.facility == 'combined'}
+    parts: dict[tuple, dict[str, int]] = defaultdict(dict)
+    for e in estimates:
+        if e.facility in ('lido', 'ponds'):
+            parts[(e.fiscal_year, e.figure, e.report_date)][e.facility] = e.value
+    combined = [
+        Estimate(year, 'combined', figure, values['lido'] + values['ponds'], report_date)
+        for (year, figure, report_date), values in parts.items()
+        if len(values) == 2 and (year, figure, report_date) not in stated
+    ]
+    return estimates + combined
+
+
+def drop_repeats(estimates: list[Estimate]) -> list[Estimate]:
+    """Keep only the first report of an identical restated figure."""
+    seen = set()
+    kept = []
+    for e in sorted(estimates, key=lambda item: item.report_date):
+        key = (e.fiscal_year, e.facility, e.figure, e.value)
+        if key not in seen:
+            seen.add(key)
+            kept.append(e)
+    return kept
+
+
+def find_contradictions(estimates: list[Estimate]) -> dict[Estimate, str]:
+    """Flag final figures that disagree with an earlier final figure, or fall below a year-to-date actual."""
+    groups: dict[tuple[str, str], list[Estimate]] = defaultdict(list)
+    for e in estimates:
+        groups[(e.facility, e.fiscal_year)].append(e)
+    flags = {}
+    for items in groups.values():
+        items.sort(key=lambda item: (item.report_date, FIGURE_ORDER[item.figure]))
+        finals = [e for e in items if e.is_final]
+        for index, final in enumerate(finals):
+            reasons = []
+            for earlier in finals[:index]:
+                if abs(final.value - earlier.value) > CONTRADICTION_TOLERANCE * earlier.value:
+                    reasons.append(f'≠ {format_k(earlier.value)} ({earlier.report_date:%b %Y})')
+            year_to_date = [e for e in items if e.figure == 'actual_to_date' and e.report_date <= final.report_date]
+            highest = max(year_to_date, key=lambda item: item.value, default=None)
+            if highest is not None and final.value < (1 - CONTRADICTION_TOLERANCE) * highest.value:
+                reasons.append(f'< YTD {format_k(highest.value)} ({highest.report_date:%b %Y})')
+            if reasons:
+                flags[final] = '; '.join(reasons)
+    return flags
+
+
+def format_k(value: float) -> str:
+    return f'£{value / 1000:,.0f}k'
+
+
+def fiscal_start(fiscal_year: str) -> int:
+    return int(fiscal_year[:4])
+
+
+def draw_income_forecasts(
+    estimates: list[Estimate], facilities: list[str], show_ytd: bool, figsize: tuple[float, float],
+) -> plt.Figure:
+    unique = drop_repeats(estimates)
+    flags = find_contradictions(unique)
+    shown = [e for e in unique if show_ytd or e.figure != 'actual_to_date']
+    first_year = min(fiscal_start(e.fiscal_year) for e in shown)
+    years = list(range(first_year, max(fiscal_start(e.fiscal_year) for e in shown) + 1))
+    dates = [mdates.date2num(e.report_date) for e in shown]
+    norm = plt.Normalize(min(dates), max(dates))
+    cmap = plt.get_cmap('viridis')
+    fig, axes = plt.subplots(len(facilities), 1, figsize=figsize, sharex=True, squeeze=False,
+                             layout='constrained')
+    for ax, facility in zip(axes[:, 0], facilities):
+        groups: dict[str, list[Estimate]] = defaultdict(list)
+        for e in shown:
+            if e.facility == facility:
+                groups[e.fiscal_year].append(e)
+        for fiscal_year, items in groups.items():
+            items.sort(key=lambda item: (item.report_date, FIGURE_ORDER[item.figure]))
+            offsets = np.linspace(-0.32, 0.32, len(items)) if len(items) > 1 else [0.0]
+            xs = [fiscal_start(fiscal_year) + offset for offset in offsets]
+            trail = [(x, e.value / 1000) for x, e in zip(xs, items) if e.figure != 'actual_to_date']
+            if len(trail) > 1:
+                ax.plot(*zip(*trail), color='#999999', linewidth=1, zorder=1)
+            # Label the last projection when the year has no final figure yet.
+            unfinished = not any(e.is_final for e in items)
+            last_projection = next((e for e in reversed(items) if e.figure == 'projected_outturn'), None)
+            labelled = 0
+            for x, e in zip(xs, items):
+                style = dict(FIGURE_STYLES[e.figure])
+                style.pop('label')
+                color = cmap(norm(mdates.date2num(e.report_date)))
+                hollow = e.figure == 'latest_budget'
+                ax.scatter(x, e.value / 1000, facecolors='none' if hollow else [color],
+                           edgecolors=[color] if hollow else 'black', linewidths=1.6 if hollow else 0.6,
+                           zorder=3, **style)
+                if e.is_final or (unfinished and e is last_projection):
+                    # Alternate above/below so adjacent actuals in the same year stay legible.
+                    below = labelled % 2 == 1 and e not in flags
+                    ax.annotate(format_k(e.value), (x, e.value / 1000), xytext=(0, -11 if below else 9),
+                                textcoords='offset points', ha='center', va='top' if below else 'baseline',
+                                fontsize=8, fontweight='bold')
+                    labelled += 1
+                if e in flags:
+                    ax.scatter(x, e.value / 1000, marker='x', s=190, color='#d62728', linewidths=2.2, zorder=4)
+                    ax.annotate(flags[e], (x, e.value / 1000), xytext=(8, -14), textcoords='offset points',
+                                fontsize=7.5, color='#d62728', ha='left',
+                                bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor='none', alpha=0.85))
+        for year in years:
+            if f'{year}/{(year + 1) % 100:02d}' not in groups:
+                ax.text(year, 0.04, 'no figures\nfound', transform=ax.get_xaxis_transform(), ha='center',
+                        va='bottom', fontsize=8, color='#888888', style='italic')
+        ax.set_title(FACILITY_TITLES[facility], fontweight='bold', loc='left')
+        ax.set_ylabel('Income (£k)')
+        ax.set_ylim(bottom=0)
+        ax.yaxis.set_major_formatter(FuncFormatter(lambda value, _: f'£{value:,.0f}k'))
+        ax.grid(True, axis='y', linestyle=':', alpha=0.6)
+        for year in years[:-1]:
+            ax.axvline(year + 0.5, color='#e2e2e2', linewidth=0.8, zorder=0)
+    last = axes[-1, 0]
+    last.set_xticks(years)
+    last.set_xticklabels([f'{year}/{(year + 1) % 100:02d}' for year in years])
+    last.set_xlim(years[0] - 0.5, years[-1] + 0.5)
+    last.set_xlabel('Fiscal year (April–March)')
+    handles = [Line2D([], [], linestyle='none', markerfacecolor='none' if key == 'latest_budget' else '#888888',
+                      markeredgecolor='#555555', marker=style['marker'], markersize=8, label=style['label'])
+               for key, style in FIGURE_STYLES.items() if show_ytd or key != 'actual_to_date']
+    handles.append(Line2D([], [], linestyle='none', marker='x', color='#d62728', markersize=10, markeredgewidth=2,
+                          label='Contradicts earlier figure'))
+    legend = fig.legend(handles=handles, loc='outside lower center', fontsize=8.5, frameon=False, ncol=4,
+                        title=INCOME_SOURCE_NOTE, title_fontsize=8)
+    legend.get_title().set(style='italic', color='#444444')
+    colorbar = fig.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap), ax=axes[:, 0], pad=0.01, aspect=40)
+    colorbar.set_label('Report date')
+    colorbar.ax.yaxis.set_major_formatter(mdates.DateFormatter('%b %Y'))
+    fig.suptitle('Hampstead Heath swimming income: budgets, forecasts and actuals by report',
+                 fontsize=14, fontweight='bold')
+    return fig
+
+
 def parse_figsize(value: str) -> tuple[float, float]:
     try:
         width, height = (float(part) for part in value.split(','))
@@ -263,30 +461,45 @@ def parse_figsize(value: str) -> tuple[float, float]:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('--chart', choices=('sankey', 'income'), default='sankey',
+                        help='sankey: 2025/26 budget Sankey (default); income: Lido/Ponds income forecasts vs actuals')
     parser.add_argument('--depth', type=int, default=3,
-                        help='Levels of breakdown on each side of the centre (default: 3)')
+                        help='Sankey: levels of breakdown on each side of the centre (default: 3)')
     parser.add_argument('--min-share', type=float, default=0.025,
-                        help='Merge sibling items below this share of the total into "Other" (default: 0.025)')
-    parser.add_argument('--figsize', type=parse_figsize, default=(18.0, 10.0), metavar='WIDTH,HEIGHT')
-    parser.add_argument('--output', type=Path, default=DEFAULT_OUTPUT)
+                        help='Sankey: merge sibling items below this share of the total into "Other" (default: 0.025)')
+    parser.add_argument('--data', type=Path, default=DEFAULT_INCOME_DATA,
+                        help='Income: CSV of income figures (default: finance/swimming-income.csv)')
+    parser.add_argument('--facilities', nargs='+', choices=FACILITIES, default=list(FACILITIES),
+                        help='Income: panels to draw (default: lido ponds combined)')
+    parser.add_argument('--no-ytd', dest='ytd', action='store_false',
+                        help='Income: hide part-year actual-to-date points (still used to flag contradictions)')
+    parser.add_argument('--figsize', type=parse_figsize, metavar='WIDTH,HEIGHT',
+                        help='Figure size in inches (default: 18,10 sankey; 14,13 income)')
+    parser.add_argument('--output', type=Path, help='Output PNG (default depends on --chart)')
     parser.add_argument('--show', action='store_true', help='Open an interactive window')
     args = parser.parse_args()
+    figsize = args.figsize or DEFAULT_FIGSIZES[args.chart]
 
-    income, expenditure = income_tree(), expenditure_tree()
-    errors = validate(income) + validate(expenditure)
-    if errors:
-        raise SystemExit('Budget hierarchy does not match published subtotals:\n' + '\n'.join(errors))
-    total = income.value
-    fig = draw_sankey(
-        simplify(income, args.depth, total, args.min_share),
-        simplify(expenditure, args.depth, total, args.min_share),
-        args.figsize,
-        f'Hampstead Heath budget 2025/26 (projected outturn) — {format_gbp(total)}',
-    )
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(args.output, dpi=150)
-    print(f'Saved chart to {args.output}')
+    if args.chart == 'income':
+        output = args.output or DEFAULT_INCOME_OUTPUT
+        fig = draw_income_forecasts(with_combined(load_income(args.data)), args.facilities, args.ytd, figsize)
+    else:
+        output = args.output or DEFAULT_OUTPUT
+        income, expenditure = income_tree(), expenditure_tree()
+        errors = validate(income) + validate(expenditure)
+        if errors:
+            raise SystemExit('Budget hierarchy does not match published subtotals:\n' + '\n'.join(errors))
+        total = income.value
+        fig = draw_sankey(
+            simplify(income, args.depth, total, args.min_share),
+            simplify(expenditure, args.depth, total, args.min_share),
+            figsize,
+            f'Hampstead Heath budget 2025/26 (projected outturn) — {format_gbp(total)}',
+        )
+    output.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output, dpi=150, bbox_inches='tight' if args.chart == 'income' else None)
+    print(f'Saved chart to {output}')
     if args.show:
         plt.show()
 
