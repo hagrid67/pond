@@ -53,6 +53,13 @@ Per-facility staff and running costs appear only in the annual reviews
   project; subsidy 317.
 - **Lido:** staff 567, running costs 216; subsidy 99.
 
+The 2022/23 Ponds expenditure (1,140) includes the 351 "one off payment to
+support access project at ponds", a contribution to the capital project, counted
+as operating expenditure in the annual review table. Excluding it, Ponds running
+costs were 789 against income of 823: a surplus of 34, not a subsidy of 317. The
+2022/23 revenue outturn separately records 257 of local-risk funding used to
+part-fund the capital project, so these two figures may overlap.
+
 Later years report only variances, e.g. 266 on seasonal lifeguards and 50 on Lido
 water in 2025/26.
 

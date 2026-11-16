@@ -509,7 +509,7 @@ def income_by_year(income_rows: list[dict[str, str]], facility: str) -> dict[str
 # --- Costs vs income (--chart costs) ----------------------------------------------------------
 
 COST_COMPONENTS = (('employee', 'Staff', COLOR_STAFF), ('operational', 'Running costs', COLOR_RUNNING),
-                   ('one_off', 'One-off: access project', COLOR_ONE_OFF))
+                   ('one_off', 'One-off capital contribution (access project) included in opex', COLOR_ONE_OFF))
 
 
 def costs_by_year(cost_rows: list[dict[str, str]], facility: str) -> dict[str, dict[str, int]]:
@@ -556,6 +556,17 @@ def draw_costs(cost_rows, income_rows, figsize) -> plt.Figure:
                 ax.annotate(f'subsidy £{subsidy / 1000:,.0f}k ({subsidy / (bottom * 1000):.0%})', (year, bottom),
                             xytext=(0, 14), textcoords='offset points', ha='center', fontsize=7.5,
                             color=COLOR_SUBSIDY)
+            if 'one_off' in parts:
+                # The annual review counts a capital contribution as operating expenditure; show the effect.
+                one_off = parts['one_off'] / 1000
+                net = (actual or 0) / 1000 - (bottom - one_off)
+                ax.annotate(f'£{one_off:,.0f}k capital contribution to the\naccess project counted as\n'
+                            f'operating expenditure. Without it:\n'
+                            f'{"surplus" if net >= 0 else "subsidy"} £{abs(net):,.0f}k',
+                            (year + 0.3, bottom - one_off / 2), xytext=(18, 0), textcoords='offset points',
+                            va='center', fontsize=7.5, color=COLOR_ONE_OFF,
+                            bbox=dict(boxstyle='round,pad=0.3', facecolor='white', edgecolor=COLOR_ONE_OFF),
+                            arrowprops=dict(arrowstyle='->', color=COLOR_ONE_OFF))
             if review is not None:
                 ax.scatter(year, review / 1000, marker='D', s=70, color='black', zorder=4,
                            label='Income: annual swimming review')
@@ -634,7 +645,7 @@ def draw_per_swim(cost_rows, income_rows, swim_rows, figsize) -> plt.Figure:
                 ax.bar(x, recurring, 0.6, color=COLOR_STAFF, label='Cost per swim')
                 if item['one_off']:
                     ax.bar(x, item['one_off'], 0.6, bottom=recurring, color=COLOR_ONE_OFF,
-                           label='One-off access project per swim')
+                           label='One-off capital contribution (access project) per swim, included in opex')
                 ax.annotate(f'£{item["cost"]:.2f}', (x, item['cost']), xytext=(0, 3), textcoords='offset points',
                             ha='center', fontsize=8.5, fontweight='bold')
             top = max(value for value in (item['cost'], item['income']) if value is not None)

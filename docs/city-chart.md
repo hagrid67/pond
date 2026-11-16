@@ -146,6 +146,10 @@ only the shared `--figsize`, `--output` and `--show` options (`costs` and
   - white circle: latest projection.
 - **Subsidy:** the hatched area between income and cost, labelled with £ and % of
   cost (from the annual reviews).
+- **Capital in operating costs:** the 2022/23 Ponds bar includes the £351k one-off
+  contribution to the access capital project, which the annual review counts as
+  operating expenditure. A callout labels it and gives the result without it
+  (a £34k surplus instead of a £317k subsidy).
 - **2023/24 onwards:** marked "cost breakdown no longer published", but income is
   still shown.
 
