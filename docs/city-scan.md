@@ -14,6 +14,9 @@ It doesn't call the website or an LLM, so results are repeatable.
 # Only the July 2026 outturn report and appendices
 ./ve312pond/bin/python scripts/city-scan.py --glob '2026-0714/10-*.pdf' --show-pages
 
+# Include text read by OCR from images embedded in pages (tables pasted as pictures)
+./ve312pond/bin/python scripts/city-scan.py --ocr --glob '2026-1027/12-*.pdf' --pattern 'charges for use of facilities'
+
 # Custom regex, full page text of matches, and a CSV of every matching line
 ./ve312pond/bin/python scripts/city-scan.py --topic swimming --pattern 'sauna' --show-pages --csv /tmp/hits.csv
 ```
@@ -25,6 +28,7 @@ It doesn't call the website or an LLM, so results are repeatable.
 | `--pattern` | — | Extra case-insensitive regex (repeatable) |
 | `--glob` | `*/*.pdf` | Which PDFs to scan, relative to the folder (one sub-folder per meeting) |
 | `--agenda` | off | List agenda items from the first pages, flagging `*` items |
+| `--ocr [ENGINE]` | off | Also OCR embedded images; `tesseract` (default) or `rapidocr` |
 | `--show-pages` | off | Print the full text of each matching page |
 | `--max-lines` | `3` | Matching lines shown per page |
 | `--csv` | — | Write every match (file, meeting date, page, topic, line) |
@@ -35,13 +39,33 @@ is newer than the cached text. The first run over the 2026 packs takes about 30 
 Layout mode keeps table columns aligned, e.g. page 147 of
 `2026-0203/reports-pack.pdf`. Whitespace is collapsed before matching.
 
+## OCR of image tables
+
+Some reports paste tables in as images, e.g. the notes to the accounts in the
+draft annual report (`2026-1027/12-s238631-…pdf`, p39). `--ocr` reads every
+image embedded in a page that is at least 300×60 px (skipping icons and rules)
+and appends the text to that page, under a `[OCR image N, engine]` heading. It
+runs only on the images, not the whole rendered page. OCR results are cached
+separately in `<folder>/text/<meeting>/<pdf-stem>.ocr-<engine>.txt`.
+
+| Engine | Install | Notes |
+| --- | --- | --- |
+| `tesseract` (default) | `sudo apt install tesseract-ocr`; called as a command, no Python package | Fast (50-page report in ~8 s). Keeps `£` and `–` and lays out columns itself (`--psm 6`, `preserve_interword_spaces`). |
+| `rapidocr` | `rapidocr-onnxruntime` (in `requirements.txt`) | No system install; ~4× slower. Reads `£` as `f` and drops `–`; lines are rebuilt from word boxes. |
+
+On the p39 "Income from charitable activities" table, both engines read all 18
+figures correctly; every column sums to its printed total. Image-only pages with
+no embedded image (e.g. a whole page scanned as vector graphics) are still
+missed, since pages are not rendered.
+
 ## Limits
 
 - **Agenda `*` items:** these are "to follow" reports. They may appear only in a
   supplementary pack or as a separate document. `city-download.py` now fetches the
   separate documents too, so scan `*/*.pdf` rather than just the packs.
-- **Text-free pages:** scanned images and charts have no extractable text, so
-  they can't match. About 5–30% of pages in the 2026 packs are like this.
+- **Text-free pages:** scanned images and charts have no extractable text and
+  only match with `--ocr`. About 5–30% of pages in the 2026 packs are like
+  this; photos, maps and charts give noisy OCR text.
 - **What regex can't do:** it finds where something is mentioned. Pulling
   figures out of a table across years in different layouts, or summarising
   narrative, needs format-specific parsing or an LLM step.

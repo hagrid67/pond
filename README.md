@@ -144,7 +144,9 @@ Committee into a folder per meeting, e.g. `col-pdfs/hhhwqp/2026-0203/` holding
 See [docs/city-download.md](docs/city-download.md) for options and details.
 
 Search the downloaded packs for budget tables, swimming income and other topics
-(regex based; page text is cached under `col-pdfs/<committee>/text/`):
+(regex based; page text is cached under `col-pdfs/<committee>/text/`). Add
+`--ocr` to also read tables embedded as images (needs `sudo apt install
+tesseract-ocr`, or use `--ocr rapidocr`):
 
 ```bash
 ./ve312pond/bin/python scripts/city-scan.py --agenda
