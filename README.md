@@ -142,6 +142,15 @@ for other committees:
 
 See [docs/city-download.md](docs/city-download.md) for options and details.
 
+Draw a Sankey diagram of the Hampstead Heath 2025/26 operating budget (projected
+outturn) to `charts/hh-budget-sankey-2025-26.png`:
+
+```bash
+./ve312pond/bin/python scripts/city-chart.py
+```
+
+See [docs/city-chart.md](docs/city-chart.md).
+
 ## Seasonal booking charts
 
 Generate the original pond demand heatmap, daily/weekly occupancy chart, and a
