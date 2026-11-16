@@ -11,6 +11,7 @@ committee papers. Choose one with `--chart`:
 | `per-swim` | Cost and income per swim where swim counts were published | `charts/swimming-per-swim.png` |
 | `capital` | Capital project budget, estimate and spend by report date | `charts/swimming-capital.png` |
 | `maintenance` | Planned cyclical works for swimming buildings, 2021/22 bids vs 2026/27 list | `charts/swimming-maintenance.png` |
+| `staff` | Heath staff costs (salaries, NI, pension) with swimming staff costs, share and estimate | `charts/heath-staff-costs.png` |
 
 `--figsize WIDTH,HEIGHT`, `--output PATH` and `--show` apply to both.
 
@@ -131,6 +132,7 @@ only the shared `--figsize`, `--output` and `--show` options (`costs` and
 ./ve312pond/bin/python scripts/city-chart.py --chart per-swim
 ./ve312pond/bin/python scripts/city-chart.py --chart capital
 ./ve312pond/bin/python scripts/city-chart.py --chart maintenance
+./ve312pond/bin/python scripts/city-chart.py --chart staff
 ```
 
 ### Costs against income (`--chart costs`)
@@ -183,3 +185,17 @@ only the shared `--figsize`, `--output` and `--show` options (`costs` and
   labelled with £ and item counts.
 - **Not shown:** maintenance cited in outturn reports (for example the 2024/25
   Men's Pond jetty).
+
+### Heath staff costs and swimming share (`--chart staff`)
+
+- **Bars:** Hampstead Heath charity staff costs by year from the accounts
+  (`heath-costs.csv`), stacked as salaries, employer NI and employer pension, and
+  labelled with the total and average headcount. Restated values from later
+  accounts are used.
+- **Swimming staff:** the solid red line is swimming staff costs (Ponds + Lido
+  employee costs from the annual swimming reviews, 2020/21–2022/23). The dotted line
+  on the right axis is their share of Heath staff costs.
+- **Estimate for later years:**
+  - dashed line: the last published swimming staff cost scaled with Heath staff
+    cost growth;
+  - shaded band: the range given by the lowest and highest observed share.

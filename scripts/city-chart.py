@@ -7,6 +7,7 @@ fiscal year, from finance/swimming-income.csv, flagging contradictory restatemen
 --chart per-swim: cost and income per swim where swim counts were published.
 --chart capital: budget timeline of the swimming facilities safety/access capital project.
 --chart maintenance: planned cyclical works for swimming buildings, 2021/22 bids vs 2026/27 list.
+--chart staff: Heath staff costs (salaries, NI, pension) with swimming staff costs and an estimate.
 
 Sankey data: 2025/26 projected outturn from the Hampstead Heath Operating Budget table
 (Finance Progress Report Q3, Appendix 1), page 147 of the HHHWQP Committee
@@ -41,10 +42,11 @@ CHART_OUTPUTS = {
     'per-swim': 'swimming-per-swim.png',
     'capital': 'swimming-capital.png',
     'maintenance': 'swimming-maintenance.png',
+    'staff': 'heath-staff-costs.png',
 }
 DEFAULT_FIGSIZES = {
     'sankey': (18.0, 10.0), 'income': (14.0, 13.0), 'costs': (14.0, 10.0), 'per-swim': (12.0, 9.0),
-    'capital': (14.0, 10.0), 'maintenance': (12.0, 6.5),
+    'capital': (14.0, 10.0), 'maintenance': (12.0, 6.5), 'staff': (14.0, 8.0),
 }
 SOURCE_NOTE = (
     'Source: City of London, Hampstead Heath, Highgate Wood & Queen\'s Park Committee, 3 Feb 2026 — '
@@ -833,6 +835,99 @@ def draw_maintenance(rows, figsize) -> plt.Figure:
     return fig
 
 
+# --- Heath staff costs with swimming share (--chart staff) ------------------------------------
+
+STAFF_COMPONENTS = (('salaries', 'Salaries and wages', '#4c72b0'), ('national_insurance', 'Employer NI', '#55a868'),
+                    ('employer_pension', 'Employer pension', '#8172b3'))
+
+
+def staff_series(heath_rows, cost_rows) -> dict:
+    """Heath staff components and headcount per year, swimming staff costs, and estimates for later years."""
+    heath: dict[str, dict[str, int]] = defaultdict(dict)
+    for row in heath_rows:
+        if row['figure'] == 'accounts_actual':
+            # Later accounts restate earlier years (e.g. headcount); keep the latest report's figure.
+            heath[row['fiscal_year']][row['component']] = int(row['value'])
+    swim: dict[str, int] = defaultdict(int)
+    for row in cost_rows:
+        if row['category'] == 'employee':
+            swim[row['fiscal_year']] += int(row['value_gbp'])
+    shares = {year: swim[year] / heath[year]['total_staff_costs'] for year in swim if year in heath}
+    last = max(shares)
+    estimates = {}
+    for year in sorted(heath):
+        if year > last:
+            total = heath[year]['total_staff_costs']
+            estimates[year] = {
+                'central': swim[last] * total / heath[last]['total_staff_costs'],
+                'low': min(shares.values()) * total, 'high': max(shares.values()) * total,
+            }
+    return {'heath': dict(heath), 'swim': dict(swim), 'shares': shares, 'estimates': estimates}
+
+
+def draw_staff(heath_rows, cost_rows, figsize) -> plt.Figure:
+    data = staff_series(heath_rows, cost_rows)
+    heath, swim, shares, estimates = data['heath'], data['swim'], data['shares'], data['estimates']
+    years = sorted(heath)
+    xs = [int(year[:4]) for year in years]
+    fig, ax = plt.subplots(figsize=figsize, layout='constrained')
+    bottoms = [0.0] * len(years)
+    for key, label, color in STAFF_COMPONENTS:
+        values = [heath[year].get(key, 0) / 1000 for year in years]
+        ax.bar(xs, values, 0.62, bottom=bottoms, color=color, alpha=0.55, label=f'Heath: {label}')
+        bottoms = [b + v for b, v in zip(bottoms, values)]
+    for x, year, top in zip(xs, years, bottoms):
+        headcount = heath[year].get('average_headcount')
+        ax.annotate(f'£{top:,.0f}k' + (f'\n{headcount} staff' if headcount else ''), (x, top), xytext=(0, 3),
+                    textcoords='offset points', ha='center', fontsize=8)
+    actual_years = sorted(shares)
+    ax_x = [int(year[:4]) for year in actual_years]
+    ax.plot(ax_x, [swim[year] / 1000 for year in actual_years], color='#c44e52', marker='D', markersize=8,
+            linewidth=2.2, label='Swimming staff costs (annual swimming reviews)', zorder=5)
+    for x, year in zip(ax_x, actual_years):
+        ax.annotate(f'£{swim[year] / 1000:,.0f}k', (x, swim[year] / 1000), xytext=(0, -15),
+                    textcoords='offset points', ha='center', fontsize=8.5, fontweight='bold', color='#c44e52',
+                    bbox=dict(boxstyle='round,pad=0.15', facecolor='white', edgecolor='none', alpha=0.85))
+    est_years = sorted(estimates)
+    est_x = [int(ax_x[-1])] + [int(year[:4]) for year in est_years]
+    last = actual_years[-1]
+    lows = [swim[last] / 1000] + [estimates[year]['low'] / 1000 for year in est_years]
+    highs = [swim[last] / 1000] + [estimates[year]['high'] / 1000 for year in est_years]
+    centrals = [swim[last] / 1000] + [estimates[year]['central'] / 1000 for year in est_years]
+    ax.fill_between(est_x, lows, highs, color='#c44e52', alpha=0.3, zorder=4, edgecolor='#c44e52', linewidth=0.8,
+                    label=f'Estimate: observed share range {min(shares.values()):.0%}–{max(shares.values()):.0%}')
+    ax.plot(est_x, centrals, color='#c44e52', linestyle='--', linewidth=1.8, marker='o', markerfacecolor='white',
+            label=f'Estimate: {last} swimming staff scaled with Heath staff costs')
+    for x, year in zip(est_x[1:], est_years):
+        e = estimates[year]
+        ax.annotate(f'~£{e["central"] / 1000:,.0f}k\n(£{e["low"] / 1000:,.0f}–{e["high"] / 1000:,.0f}k)',
+                    (x, e['high'] / 1000), xytext=(0, 4), textcoords='offset points', ha='center', fontsize=7.5,
+                    color='#c44e52', bbox=dict(boxstyle='round,pad=0.15', facecolor='white', edgecolor='none', alpha=0.85))
+    ax_share = ax.twinx()
+    ax_share.plot(ax_x, [shares[year] * 100 for year in actual_years], color='#333333', marker='s', markersize=6,
+                  linestyle=':', label='Swimming share of Heath staff costs (right axis)')
+    for x, year in zip(ax_x, actual_years):
+        ax_share.annotate(f'{shares[year]:.1%}', (x, shares[year] * 100), xytext=(10, 0), textcoords='offset points',
+                          va='center', fontsize=8, color='#333333')
+    ax_share.set_ylim(0, 60)
+    ax_share.set_ylabel('Swimming share of Heath staff costs (%)')
+    ax_share.yaxis.set_major_formatter(FuncFormatter(lambda value, _: f'{value:.0f}%'))
+    ax.set_ylim(0, max(bottoms) * 1.18)
+    ax.set_ylabel('£k per year')
+    money_axis(ax)
+    ax.set_xticks(xs, [year_label(x) for x in xs])
+    ax.set_xlabel('Fiscal year (April–March)')
+    handles, labels = ax.get_legend_handles_labels()
+    share_handles, share_labels = ax_share.get_legend_handles_labels()
+    legend = fig.legend(handles + share_handles, labels + share_labels, loc='outside lower center', ncol=3,
+                        fontsize=8.5, frameon=False, title=FINANCE_NOTE + ' Heath staff costs from the charity '
+                        'accounts (finance/heath-costs.csv); 2025/26 draft; 2024/25 headcount restated (78 → 88).',
+                        title_fontsize=8)
+    legend.get_title().set(style='italic', color='#444444')
+    fig.suptitle('Hampstead Heath staff costs and the swimming share', fontsize=14, fontweight='bold')
+    return fig
+
+
 def parse_figsize(value: str) -> tuple[float, float]:
     try:
         width, height = (float(part) for part in value.split(','))
@@ -873,6 +968,9 @@ def main() -> None:
                             read_rows(FINANCE_DIR / 'swim-counts.csv'), figsize)
     elif args.chart == 'capital':
         fig = draw_capital(read_rows(FINANCE_DIR / 'swimming-capital.csv'), figsize)
+    elif args.chart == 'staff':
+        fig = draw_staff(read_rows(FINANCE_DIR / 'heath-costs.csv'), read_rows(FINANCE_DIR / 'swimming-costs.csv'),
+                         figsize)
     elif args.chart == 'maintenance':
         fig = draw_maintenance(read_rows(FINANCE_DIR / 'swimming-maintenance.csv'), figsize)
     else:

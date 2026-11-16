@@ -159,7 +159,7 @@ Swimming income, costs, capital and maintenance figures extracted from these pap
 Chart how the income budgets, forecasts and actuals changed between reports
 (contradictions flagged) with
 `./ve312pond/bin/python scripts/city-chart.py --chart income`. Also
-`--chart costs`, `per-swim`, `capital` and `maintenance`; see
+`--chart costs`, `per-swim`, `capital`, `maintenance` and `staff`; see
 [docs/city-chart.md](docs/city-chart.md).
 
 Draw a Sankey diagram of the Hampstead Heath 2025/26 operating budget (projected

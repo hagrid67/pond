@@ -84,7 +84,7 @@ Heath staff costs rose 28% from 2017/18 to 2025/26. Most of the rise is in
 increase.
 
 **Rough estimate of later swimming staff costs** (no breakdown published after
-2022/23):
+2022/23; charted by `city-chart.py --chart staff`):
 
 - **Scaling** the 2022/23 swimming staff cost (1,320) by Heath staff growth gives
   1,423 (2023/24), 1,399 (2024/25) and 1,560 (2025/26).

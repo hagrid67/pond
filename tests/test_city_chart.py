@@ -60,3 +60,14 @@ def test_maintenance_items_are_grouped_by_building() -> None:
     assert city_chart.maintenance_building('Kenwood - Ladies Bathing Pond Building - POOL LIFT') == "Ladies' Pond"
     assert city_chart.maintenance_building('Hampstead Heath - TEST OF ALL INLET/OUT PIPES & VALVES (PONDS)') == (
         'All ponds: infrastructure')
+
+
+def test_staff_series_estimates_swimming_staff_from_heath_growth() -> None:
+    finance = city_chart.FINANCE_DIR
+    data = city_chart.staff_series(city_chart.read_rows(finance / 'heath-costs.csv'),
+                                   city_chart.read_rows(finance / 'swimming-costs.csv'))
+    assert data['heath']['2024/25']['average_headcount'] == 88  # restated value from the later accounts
+    assert round(data['shares']['2022/23'], 3) == 0.263
+    estimate = data['estimates']['2025/26']
+    assert (round(estimate['central'] / 1000), round(estimate['low'] / 1000), round(estimate['high'] / 1000)) == (
+        1560, 1325, 1691)
