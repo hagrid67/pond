@@ -225,8 +225,8 @@ def main() -> None:
                 print(text)
             rows.extend({
                 'filename': name, 'meeting_date': dates.get(name, ''), 'page': page_number,
-                'topic': name, 'line': line,
-            } for name, line in matches)
+                'topic': topic, 'line': line,
+            } for topic, line in matches)
     if args.csv:
         with args.csv.open('w', newline='', encoding='utf-8') as handle:
             writer = csv.DictWriter(handle, fieldnames=['filename', 'meeting_date', 'page', 'topic', 'line'])
