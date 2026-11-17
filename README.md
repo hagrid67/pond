@@ -90,7 +90,10 @@ them. The annual chart uses the `adult_season_12m_gbp` and
 options. Proposed-price labels identify any seasonal venue within a shared facility
 group, without implying that all venues in the group have the same opening period.
 The Heath's current markers, proposed diamonds and arrows are drawn larger and thicker
-than the benchmark venues, with bold labels, so they stand out.
+than the benchmark venues, with bold labels, so they stand out. The one-off chart also
+draws faint dashed vertical and horizontal lines through the proposed 2028 Ponds and
+Lido prices (the Lido lines fainter), labelled so that points to the left have cheaper
+adult prices and points below have cheaper concession prices.
 
 ```bash
 ./ve312pond/bin/python scripts/benchmark-chart.py

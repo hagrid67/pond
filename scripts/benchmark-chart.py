@@ -66,6 +66,11 @@ HEATH_MARKER_SIZE = 230
 HEATH_PROPOSED_MARKER_SIZE = 180
 HEATH_LINE_WIDTH = 2.8
 HEATH_LABEL_FONTSIZE = 9.5
+# One-off chart: dashed guides through each facility's proposed 2028 price; the ponds are the focus.
+GUIDE_YEAR = 2028
+GUIDE_ALPHAS = {'Ponds': 0.55, 'Parliament Hill Lido': 0.28}
+# Side of the plot for each facility's "cheaper concession" label, chosen to avoid the Heath markers.
+GUIDE_CONCESSION_LABEL_SIDE = {'Ponds': 'right', 'Parliament Hill Lido': 'left'}
 # One pond season ticket covers all three ponds, so seasonal Mixed Pond users can swim year-round.
 SHARED_SEASON_TICKET_VENUES = frozenset(HEATH_FACILITY_VENUES['Ponds'])
 # The sheet's annual price is a year-round leisure membership with access to other centres' pools/gyms,
@@ -302,6 +307,23 @@ def build_labels(points: pd.DataFrame, tolerance: float = NEAR_PRICE_TOLERANCE) 
     return labels
 
 
+def draw_price_guides(ax, proposed: pd.DataFrame) -> None:
+    """Dashed lines through each proposed GUIDE_YEAR price, labelled with the cheaper side."""
+    for row in proposed.loc[proposed['year'] == GUIDE_YEAR].itertuples():
+        alpha = GUIDE_ALPHAS.get(row.facility, 0.3)
+        colour = HEATING_COLOURS[row.heating]
+        style = {'color': colour, 'linestyle': '--', 'linewidth': 1.4, 'alpha': alpha, 'zorder': 1}
+        ax.axvline(row.adult, **style)
+        ax.axhline(row.concession, **style)
+        text_style = {'color': colour, 'alpha': min(1.0, alpha + 0.25), 'fontsize': 8, 'style': 'italic'}
+        ax.text(row.adult, 0.008, f'← cheaper adult than {row.facility} {GUIDE_YEAR} (£{row.adult:.2f})  ',
+                transform=ax.get_xaxis_transform(), ha='right', va='bottom', **text_style)
+        left = GUIDE_CONCESSION_LABEL_SIDE.get(row.facility) == 'left'
+        ax.text(0.005 if left else 0.995, row.concession,
+                f'↓ cheaper concession than {row.facility} {GUIDE_YEAR} (£{row.concession:.2f})',
+                transform=ax.get_yaxis_transform(), ha='left' if left else 'right', va='top', **text_style)
+
+
 def plot_benchmark_scatter(
     points: pd.DataFrame, excluded: list[str], output_path: Path, sheet_title: str,
     proposed: pd.DataFrame | None = None, use_geometric: bool = False,
@@ -360,6 +382,9 @@ def plot_benchmark_scatter(
                 })
             all_x += future['adult'].tolist()
             all_y += future['concession'].tolist()
+
+    if not annual and proposed is not None and not proposed.empty:
+        draw_price_guides(ax, proposed)
 
     if annualised is not None and not annualised.empty:
         ax.scatter(annualised['annualised_adult'], annualised['annualised_concession'], s=60,

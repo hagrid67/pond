@@ -631,3 +631,22 @@ def test_annualised_points_skip_year_round_memberships() -> None:
     data[benchmark_chart.ANNUAL_CONCESSION_COLUMN] = '£352.80'
     assert 'Hillingdon Lido' in benchmark_chart.YEAR_ROUND_MEMBERSHIP_VENUES
     assert benchmark_chart.prepare_annualised_points(data).empty
+
+
+def test_price_guides_mark_2028_prices_with_fainter_lido_lines() -> None:
+    import matplotlib.pyplot as plt
+
+    proposed = pd.DataFrame([
+        {'facility': 'Ponds', 'year': 2027, 'adult': 6.25, 'concession': 3.37, 'heating': 'Unheated'},
+        {'facility': 'Ponds', 'year': 2028, 'adult': 7.5, 'concession': 3.75, 'heating': 'Unheated'},
+        {'facility': 'Parliament Hill Lido', 'year': 2028, 'adult': 13.2, 'concession': 6.6, 'heating': 'Unheated'},
+    ])
+    fig, ax = plt.subplots()
+    benchmark_chart.draw_price_guides(ax, proposed)
+
+    guides = {(tuple(line.get_xdata()), tuple(line.get_ydata())): line.get_alpha() for line in ax.get_lines()}
+    assert guides[((7.5, 7.5), (0, 1))] > guides[((13.2, 13.2), (0, 1))]
+    assert guides[((0, 1), (3.75, 3.75))] > guides[((0, 1), (6.6, 6.6))]
+    assert len(guides) == 4  # 2027 prices get no guides
+    assert any('cheaper concession than Ponds 2028 (£3.75)' in text.get_text() for text in ax.texts)
+    plt.close(fig)
