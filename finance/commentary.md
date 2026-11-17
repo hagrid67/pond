@@ -114,8 +114,8 @@ increase.
 - **Central funding:** the 2025/26 outturn shows only 40 of central contingency
   funding for "July 2024 pay award and increases in employer national insurance
   contributions".
-- **Swimming's part:** the scaled estimate implies roughly a quarter of the NI
-  increase (≈30) fell on swimming staff.
+- **Swimming's part:** at a 26% share, roughly a quarter of the ≈119 attributable to the NI
+  change (≈30 a year) falls on swimming staff.
 
 ### Lifeguard overspend and the estimate band
 
