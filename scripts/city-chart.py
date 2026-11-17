@@ -56,7 +56,7 @@ SOURCE_NOTE = (
 )
 SANKEY_FONTSIZE_OUTER, SANKEY_FONTSIZE_INNER, SANKEY_FONTSIZE_HIGHLIGHT = 11, 10.5, 13.5
 # Labels drawn larger and bold: swimming income, the City's contribution and staff costs.
-SANKEY_HIGHLIGHTS = {'Lido', 'Ponds', 'City of London funding', 'Employees'}
+SANKEY_HIGHLIGHTS = {'Lido', 'Ponds', 'City of London funding', 'Employees', 'Swimming staff (HMPA estimate)'}
 
 
 @dataclass
@@ -217,12 +217,10 @@ def band(ax, waypoints: list[tuple[float, float]], height: float, color: str) ->
 
 
 SWIMMING_STAFF_COLOR = '#1f77b4'
-# Extra distance (in columns) beyond the outer expenditure column, for emphasis.
-SWIMMING_STAFF_OFFSET = 1.3
 SWIMMING_STAFF_NOTE = (
     'HMPA estimate (not a City of London figure): swimming staff costs scaled from the 2022/23 annual swimming '
-    'review with Heath staff costs (charity accounts), range = lowest observed share to central + 2025/26 '
-    'seasonal lifeguard overspend; see charts/heath-staff-costs.png.'
+    'review with Heath staff costs (charity accounts), split at the upper estimate (central + 2025/26 '
+    'seasonal lifeguard overspend); see charts/heath-staff-costs.png.'
 )
 
 
@@ -233,38 +231,42 @@ def swimming_staff_estimate(year: str = '2025/26') -> dict:
     return {'year': year, **estimate}
 
 
-def draw_swimming_staff_step(ax, placed: dict, outer_right: int, width: float, estimate: dict) -> float:
-    """Draw an HMPA-estimate step out of the Employees node; return the right margin needed."""
-    employees = next((p for p in placed.values() if p.node.label == 'Employees' and p.column == outer_right), None)
+SWIMMING_STAFF_LABEL = 'Swimming staff (HMPA estimate)'
+
+
+def split_employees(expenditure: Node, swimming: int) -> None:
+    """Replace the Employees breakdown with swimming (HMPA estimate) and other staff."""
+    def find(node: Node) -> Node | None:
+        if node.label == 'Employees':
+            return node
+        return next((found for child in node.children if (found := find(child))), None)
+
+    employees = find(expenditure)
     if employees is None:
-        return 1.35
-    per_pound = employees.height / employees.node.value
-    high, central, low = (estimate[key] * per_pound for key in ('high', 'central', 'low'))
-    x0, x1 = outer_right + width / 2, outer_right + SWIMMING_STAFF_OFFSET
-    top = employees.top
-    # Lighter outer band = upper estimate; darker inner band = lower estimate.
-    band(ax, [(x0, top), (x1 - width / 2, top)], high, SWIMMING_STAFF_COLOR)
-    band(ax, [(x0, top), (x1 - width / 2, top)], low, SWIMMING_STAFF_COLOR)
-    ax.add_patch(Rectangle((x1 - width / 2, top - high), width, high - low, facecolor=SWIMMING_STAFF_COLOR,
-                           alpha=0.35, edgecolor=SWIMMING_STAFF_COLOR, hatch='///', linewidth=0))
-    ax.add_patch(Rectangle((x1 - width / 2, top - low), width, low, facecolor=SWIMMING_STAFF_COLOR, alpha=0.95,
-                           edgecolor='none'))
-    for y in (top - low, top - central):
-        ax.plot([x1 - width, x1 + width / 2], [y, y], color='black', linewidth=1.2, zorder=5)
-    label_x = x1 + width / 2 + 0.08
-    middle = top - high / 2
-    ax.text(label_x, middle + 0.012, f'Swimming staff costs {estimate["year"]}\nHMPA estimate  {format_gbp(estimate["high"])}',
-            ha='left', va='bottom', fontsize=SANKEY_FONTSIZE_HIGHLIGHT, fontweight='bold', color=SWIMMING_STAFF_COLOR)
-    ax.text(label_x, middle, f'Range {format_gbp(estimate["low"])}–{format_gbp(estimate["high"])}:\n'
-            f'• {format_gbp(estimate["low"])}  lowest observed share (solid)\n'
-            f'• {format_gbp(estimate["central"])}  scaled with Heath staff costs\n'
-            f'• {format_gbp(estimate["high"])}  + £{estimate["overspend"] / 1000:,.0f}k lifeguard overspend (lighter)',
-            ha='left', va='top', fontsize=9, color='#333333')
-    return SWIMMING_STAFF_OFFSET + 2.2
+        raise ValueError('No Employees node in the expenditure tree')
+    total = employees.value
+    employees.children = [
+        Node(SWIMMING_STAFF_LABEL, amount=swimming, color=SWIMMING_STAFF_COLOR),
+        Node('Other staff', amount=total - swimming),
+    ]
+
+
+def mark_swimming_range(ax, place, width: float, estimate: dict) -> None:
+    """Shade the part of the swimming staff bar above the lower estimate and tick the lower/central values."""
+    per_pound = place.height / place.node.value
+    low, central = estimate['low'] * per_pound, estimate['central'] * per_pound
+    x = place.column - width / 2
+    ax.add_patch(Rectangle((x, place.top - place.height), width, place.height - low, facecolor='white',
+                           alpha=0.55, edgecolor='none', zorder=3))
+    # Solid from the top down to the lower estimate; lighter below it, up to the upper estimate.
+    for height in (low, central):
+        y = place.top - height
+        ax.plot([x - width * 0.4, x + width], [y, y], color='black', linewidth=1.2, zorder=4)
 
 
 def draw_sankey(income: Node, expenditure: Node, figsize: tuple[float, float], title: str,
                 swimming_staff: dict | None = None) -> plt.Figure:
+    """swimming_staff: estimate dict when Employees has been split with split_employees()."""
     total = income.value
     columns = {0: [Node('Hampstead Heath', amount=total, color='#444444')]}
     columns.update(columns_of(income, -1))
@@ -319,20 +321,27 @@ def draw_sankey(income: Node, expenditure: Node, figsize: tuple[float, float], t
         if is_outer and place.column in (outer_left, outer_right):
             left = place.column == outer_left
             highlight = node.label in SANKEY_HIGHLIGHTS
-            ax.text(place.column + (-1 if left else 1) * (width / 2 + 0.04), y,
-                    f'{node.label.replace(chr(10), " ")}  {format_gbp(node.value)}',
-                    ha='right' if left else 'left', va='center',
+            label_x = place.column + (-1 if left else 1) * (width / 2 + 0.04)
+            swimming = swimming_staff is not None and node.label == SWIMMING_STAFF_LABEL
+            ax.text(label_x, y + (0.012 if swimming else 0), f'{node.label.replace(chr(10), " ")}  {format_gbp(node.value)}',
+                    ha='right' if left else 'left', va='bottom' if swimming else 'center',
                     fontsize=SANKEY_FONTSIZE_HIGHLIGHT if highlight else SANKEY_FONTSIZE_OUTER,
-                    fontweight='bold' if highlight else 'normal')
+                    fontweight='bold' if highlight else 'normal', color=SWIMMING_STAFF_COLOR if swimming else 'black')
+            if swimming:
+                mark_swimming_range(ax, place, width, swimming_staff)
+                e = swimming_staff
+                ax.text(label_x, y, f'Range {format_gbp(e["low"])}–{format_gbp(e["high"])} (ticks):\n'
+                        f'{format_gbp(e["low"])} lowest observed share; {format_gbp(e["central"])} scaled with Heath\n'
+                        f'staff costs; {format_gbp(e["high"])} = central + £{e["overspend"] / 1000:,.0f}k lifeguard overspend',
+                        ha='left', va='top', fontsize=9, color='#333333')
         else:
-            ax.text(place.column, y, text, ha='center', va='center', fontsize=SANKEY_FONTSIZE_INNER,
-                    fontweight='bold' if place.column == 0 else 'normal',
+            highlight = node.label in SANKEY_HIGHLIGHTS
+            ax.text(place.column, y, text, ha='center', va='center',
+                    fontsize=SANKEY_FONTSIZE_HIGHLIGHT if highlight else SANKEY_FONTSIZE_INNER,
+                    fontweight='bold' if place.column == 0 or highlight else 'normal',
                     bbox=dict(boxstyle='round,pad=0.25', facecolor='white', edgecolor=color, alpha=0.9))
 
-    right_margin = 1.35
-    if swimming_staff:
-        right_margin = draw_swimming_staff_step(ax, placed, outer_right, width, swimming_staff)
-    ax.set_xlim(outer_left - 1.35, outer_right + right_margin)
+    ax.set_xlim(outer_left - 1.35, outer_right + 1.6)
     ax.set_ylim(-0.02, 1.02)
     ax.axis('off')
     ax.text(outer_left - 0.5, 1.03, 'Income', ha='center', va='bottom', fontsize=12, fontweight='bold')
@@ -1041,7 +1050,7 @@ def main() -> None:
     parser.add_argument('--min-share', type=float, default=0.025,
                         help='Sankey: merge sibling items below this share of the total into "Other" (default: 0.025)')
     parser.add_argument('--no-swimming-estimate', dest='swimming_estimate', action='store_false',
-                        help='Sankey: omit the HMPA swimming staff cost estimate step')
+                        help='Sankey: do not split Employees into swimming (HMPA estimate) and other staff')
     parser.add_argument('--data', type=Path, default=DEFAULT_INCOME_DATA,
                         help='Income: CSV of income figures (default: finance/swimming-income.csv)')
     parser.add_argument('--facilities', nargs='+', choices=FACILITIES, default=list(FACILITIES),
@@ -1078,12 +1087,15 @@ def main() -> None:
         if errors:
             raise SystemExit('Budget hierarchy does not match published subtotals:\n' + '\n'.join(errors))
         total = income.value
+        swimming_staff = swimming_staff_estimate() if args.swimming_estimate else None
+        if swimming_staff:
+            split_employees(expenditure, round(swimming_staff['high']))
         fig = draw_sankey(
             simplify(income, args.depth, total, args.min_share),
             simplify(expenditure, args.depth, total, args.min_share),
             figsize,
             f'Hampstead Heath budget 2025/26 (projected outturn) — {format_gbp(total)}',
-            swimming_staff=swimming_staff_estimate() if args.swimming_estimate else None,
+            swimming_staff=swimming_staff,
         )
     output.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(output, dpi=150, bbox_inches=None if args.chart == 'sankey' else 'tight')

@@ -78,3 +78,13 @@ def test_sankey_swimming_staff_estimate_matches_staff_chart() -> None:
     assert estimate['year'] == '2025/26'
     assert (round(estimate['low'] / 1000), round(estimate['central'] / 1000), round(estimate['high'] / 1000)) == (
         1325, 1560, 1826)
+
+
+def test_split_employees_into_swimming_and_other_staff() -> None:
+    expenditure = city_chart.expenditure_tree()
+    city_chart.split_employees(expenditure, 1_826_000)
+    display = city_chart.simplify(expenditure, 3, expenditure.value, 0.025)
+    employees = next(node for node in display.children[0].children if node.label == 'Employees')
+    assert [(child.label, child.value) for child in employees.children] == [
+        (city_chart.SWIMMING_STAFF_LABEL, 1_826_000), ('Other staff', 3_964_000)]
+    assert display.value == 12_917_000
