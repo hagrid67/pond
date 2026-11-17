@@ -4,10 +4,16 @@
 Default target:
   Parent folder: SwimForum-2026 (1ES43t99ghz8EaoWF5vw2CuRtVwrf0zFM)
   Subfolder:     charts (created automatically if it does not exist)
+
+Only charts modified since the last upload (charts/upload-timestamp) are uploaded,
+unless --force is given.
 """
 
 import argparse
+import os
 import re
+import time
+from datetime import datetime
 from pathlib import Path
 
 from google.auth.transport.requests import Request
@@ -20,6 +26,8 @@ DEFAULT_PARENT_FOLDER_ID = '1ES43t99ghz8EaoWF5vw2CuRtVwrf0zFM'
 DEFAULT_SUBFOLDER_NAME = 'charts'
 SCOPES = ['https://www.googleapis.com/auth/drive']
 FOLDER_MIME_TYPE = 'application/vnd.google-apps.folder'
+# Written in the charts folder after each successful upload; its mtime is the upload start time.
+TIMESTAMP_NAME = 'upload-timestamp'
 
 
 def extract_folder_id(folder_id_or_url: str) -> str:
@@ -90,6 +98,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         '--reauth',
         action='store_true',
         help='Force a new OAuth authorization instead of using the cached token.',
+    )
+    parser.add_argument(
+        '--force',
+        action='store_true',
+        help=f'Upload every chart, not just those changed since the last upload ({TIMESTAMP_NAME}).',
     )
     parser.add_argument(
         '--auth-only',
@@ -248,6 +261,24 @@ def upload_charts(
     return uploaded
 
 
+def charts_to_upload(charts_dir: Path, force: bool = False) -> list[Path]:
+    """PNG charts modified since the last upload timestamp (all of them if forced or never uploaded)."""
+    charts = sorted(charts_dir.glob('*.png'))
+    stamp = charts_dir / TIMESTAMP_NAME
+    if force or not stamp.exists():
+        return charts
+    last = stamp.stat().st_mtime
+    return [chart for chart in charts if chart.stat().st_mtime > last]
+
+
+def write_upload_timestamp(charts_dir: Path, started: float) -> Path:
+    """Record the upload start time, so charts regenerated during the upload are picked up next time."""
+    stamp = charts_dir / TIMESTAMP_NAME
+    stamp.write_text(datetime.fromtimestamp(started).isoformat(timespec='seconds') + '\n', encoding='utf-8')
+    os.utime(stamp, (started, started))
+    return stamp
+
+
 def upload_chart_files(
     files: list[Path],
     parent_folder_id: str = DEFAULT_PARENT_FOLDER_ID,
@@ -283,13 +314,22 @@ def main(argv: list[str] | None = None) -> None:
     if args.auth_only:
         print(f'Authentication complete; token saved to {args.token}')
         return
+    started = time.time()
+    files = charts_to_upload(args.charts_dir, force=args.force)
+    if not files:
+        stamp = args.charts_dir / TIMESTAMP_NAME
+        print(f'No charts changed since the last upload ({stamp.read_text(encoding="utf-8").strip()}); '
+              'use --force to upload all.')
+        return
     service = build('drive', 'v3', credentials=creds)
     upload_charts(
         service=service,
         charts_dir=args.charts_dir,
         parent_folder_id=parent_folder_id,
         subfolder_name=args.subfolder,
+        files=files,
     )
+    print(f'Recorded upload time in {write_upload_timestamp(args.charts_dir, started)}')
 
 
 if __name__ == '__main__':

@@ -49,3 +49,20 @@ def test_auth_only_does_not_upload(tmp_path: Path) -> None:
 
     build_service.assert_not_called()
     upload.assert_not_called()
+
+
+def test_charts_to_upload_uses_timestamp_unless_forced(tmp_path: Path) -> None:
+    import os
+
+    old, new = tmp_path / 'old.png', tmp_path / 'new.png'
+    old.write_bytes(b'png')
+    new.write_bytes(b'png')
+    os.utime(old, (1000, 1000))
+    os.utime(new, (3000, 3000))
+    # Never uploaded: everything is selected.
+    assert upload_charts_drive.charts_to_upload(tmp_path) == [new, old]
+
+    stamp = upload_charts_drive.write_upload_timestamp(tmp_path, 2000)
+    assert stamp.name == 'upload-timestamp' and stamp.stat().st_mtime == 2000
+    assert upload_charts_drive.charts_to_upload(tmp_path) == [new]
+    assert upload_charts_drive.charts_to_upload(tmp_path, force=True) == [new, old]

@@ -105,6 +105,14 @@ Google Drive. This uses the separate Drive upload token at
 To refresh that token without uploading any files, run
 `./ve312pond/bin/python scripts/upload-charts-drive.py --reauth --auth-only`.
 
+To upload charts from `charts/` directly, run
+`./ve312pond/bin/python scripts/upload-charts-drive.py`. It uploads only charts
+modified since the last upload and then records the upload start time in
+`charts/upload-timestamp` (git-ignored). Add `--force` to re-upload every chart. If
+nothing has changed it says so and uploads nothing. Uploads made with
+`price-chart.py --upload` send just the charts that run generated and don't update
+the timestamp.
+
 The table starts at the first row with at least three filled cells and ends at the
 next blank row; the `Average` row is kept separate from the venue data. Add
 `--columns N` to also print the first `N` columns of the table.
