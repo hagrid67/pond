@@ -14,6 +14,7 @@ April–March.
 | `swimming-costs.csv` | Per-facility employee, operational and total costs and subsidy (annual reviews 2018/19–2022/23), plus later cost variances |
 | `swimming-capital.csv` | Capital projects: Swimming Facilities Safety, Access & Security Improvements, and Lido photovoltaic panels |
 | `heath-costs.csv` | Hampstead Heath-wide staff costs: salaries, NI, pension, totals and average headcount from the annual accounts (2017/18–2025/26), plus Direct/Indirect Employees budgets, projections and actuals from revenue reports |
+| `endowment.csv` | Hampstead Heath Trust Fund endowment value, investment income, gains and the permitted contribution to running costs (2021/22–2026/27) |
 | `swim-counts.csv` | Swims per year at the Ponds and Lido, where reported (used for cost and income per swim) |
 | `swimming-maintenance.csv` | Cyclical Works Programme (CWP) items for Lido and bathing pond buildings, and maintenance cited in outturn reports |
 

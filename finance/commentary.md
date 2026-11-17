@@ -183,6 +183,40 @@ increase.
   a sergeant, a Health & Safety Manager and an arborist). It also notes plans to
   review the swimming staffing model and "regularise casual working".
 
+## Endowment and investment income
+
+The Hampstead Heath Trust Fund was endowed with £15m in 1989. Its income
+contributes to the Heath's running costs, up to a maximum set by the transfer
+order. Figures in £k (`endowment.csv`):
+
+| Year | Endowment at year end | Investment gains | Income received | Contribution to running costs | Budget |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 2021/22 | | | 2,025 | | |
+| 2022/23 | | | 1,544 | 1,376 | |
+| 2023/24 | 36,853 | 2,051 | 1,361 | 1,175 | 2,256 |
+| 2024/25 | 39,353 (restated 40,459) | 2,704 | 1,599 | 1,395 | 2,493 (outturn proj. 1,505) |
+| 2025/26 (draft) | 44,213 | 3,553 | 1,898 | 1,467 | 1,459 |
+| 2026/27 | | | | | 1,503 |
+
+- **The endowment has nearly trebled in value**, from £15m to £44.2m at 31 March
+  2026, but the Heath receives only a capped annual contribution, about £1.4–1.5m
+  (about 3.3% of the endowment). The 2025/26 investment gains (£3.55m) were more
+  than twice the contribution.
+- **Surplus income stays in the endowment:** £916k of income accumulated above
+  the permitted contribution in earlier years was reclassified from general funds
+  to endowment in 2025/26 on legal advice. Another £231k surplus was added that
+  year.
+- **Budgets overstated income:** the 2023/24 and 2024/25 budgets (£2.26m, £2.49m)
+  were well above what was received. 2024/25 was projected £988k short. The
+  2025/26 budget was cut by £1.034m to £1.459m "in line with actual income returns".
+- **Comparison with swimming:** the annual Trust contribution (about £1.47m) is
+  similar to the estimated swimming staff cost (£1.3–1.8m) and to Ponds or Lido
+  income alone. Total swimming income (about £2.4m) is larger.
+- **Funding model:** in February 2025 the City replaced the "deficit funding"
+  model with a grant funding model for its Natural Environment charities, which
+  can carry forward accumulated grant. The City's revenue and capital grants to
+  the Heath were £8.25m in 2025/26 (£6.23m in 2024/25).
+
 ## Capital: Swimming Facilities – Safety, Access & Security Improvements
 
 - **May 2021:** 755 funding awarded.
