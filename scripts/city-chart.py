@@ -216,7 +216,55 @@ def band(ax, waypoints: list[tuple[float, float]], height: float, color: str) ->
     ax.add_patch(PathPatch(MplPath(vertices, codes), facecolor=color, edgecolor='none', alpha=0.35))
 
 
-def draw_sankey(income: Node, expenditure: Node, figsize: tuple[float, float], title: str) -> plt.Figure:
+SWIMMING_STAFF_COLOR = '#1f77b4'
+# Extra distance (in columns) beyond the outer expenditure column, for emphasis.
+SWIMMING_STAFF_OFFSET = 1.3
+SWIMMING_STAFF_NOTE = (
+    'HMPA estimate (not a City of London figure): swimming staff costs scaled from the 2022/23 annual swimming '
+    'review with Heath staff costs (charity accounts), range = lowest observed share to central + 2025/26 '
+    'seasonal lifeguard overspend; see charts/heath-staff-costs.png.'
+)
+
+
+def swimming_staff_estimate(year: str = '2025/26') -> dict:
+    """Swimming staff cost estimate for `year`, as drawn by --chart staff."""
+    data = staff_series(read_rows(FINANCE_DIR / 'heath-costs.csv'), read_rows(FINANCE_DIR / 'swimming-costs.csv'))
+    estimate = data['estimates'][year]
+    return {'year': year, **estimate}
+
+
+def draw_swimming_staff_step(ax, placed: dict, outer_right: int, width: float, estimate: dict) -> float:
+    """Draw an HMPA-estimate step out of the Employees node; return the right margin needed."""
+    employees = next((p for p in placed.values() if p.node.label == 'Employees' and p.column == outer_right), None)
+    if employees is None:
+        return 1.35
+    per_pound = employees.height / employees.node.value
+    high, central, low = (estimate[key] * per_pound for key in ('high', 'central', 'low'))
+    x0, x1 = outer_right + width / 2, outer_right + SWIMMING_STAFF_OFFSET
+    top = employees.top
+    # Lighter outer band = upper estimate; darker inner band = lower estimate.
+    band(ax, [(x0, top), (x1 - width / 2, top)], high, SWIMMING_STAFF_COLOR)
+    band(ax, [(x0, top), (x1 - width / 2, top)], low, SWIMMING_STAFF_COLOR)
+    ax.add_patch(Rectangle((x1 - width / 2, top - high), width, high - low, facecolor=SWIMMING_STAFF_COLOR,
+                           alpha=0.35, edgecolor=SWIMMING_STAFF_COLOR, hatch='///', linewidth=0))
+    ax.add_patch(Rectangle((x1 - width / 2, top - low), width, low, facecolor=SWIMMING_STAFF_COLOR, alpha=0.95,
+                           edgecolor='none'))
+    for y in (top - low, top - central):
+        ax.plot([x1 - width, x1 + width / 2], [y, y], color='black', linewidth=1.2, zorder=5)
+    label_x = x1 + width / 2 + 0.08
+    middle = top - high / 2
+    ax.text(label_x, middle + 0.012, f'Swimming staff costs {estimate["year"]}\nHMPA estimate  {format_gbp(estimate["high"])}',
+            ha='left', va='bottom', fontsize=SANKEY_FONTSIZE_HIGHLIGHT, fontweight='bold', color=SWIMMING_STAFF_COLOR)
+    ax.text(label_x, middle, f'Range {format_gbp(estimate["low"])}–{format_gbp(estimate["high"])}:\n'
+            f'• {format_gbp(estimate["low"])}  lowest observed share (solid)\n'
+            f'• {format_gbp(estimate["central"])}  scaled with Heath staff costs\n'
+            f'• {format_gbp(estimate["high"])}  + £{estimate["overspend"] / 1000:,.0f}k lifeguard overspend (lighter)',
+            ha='left', va='top', fontsize=9, color='#333333')
+    return SWIMMING_STAFF_OFFSET + 2.2
+
+
+def draw_sankey(income: Node, expenditure: Node, figsize: tuple[float, float], title: str,
+                swimming_staff: dict | None = None) -> plt.Figure:
     total = income.value
     columns = {0: [Node('Hampstead Heath', amount=total, color='#444444')]}
     columns.update(columns_of(income, -1))
@@ -281,14 +329,18 @@ def draw_sankey(income: Node, expenditure: Node, figsize: tuple[float, float], t
                     fontweight='bold' if place.column == 0 else 'normal',
                     bbox=dict(boxstyle='round,pad=0.25', facecolor='white', edgecolor=color, alpha=0.9))
 
-    ax.set_xlim(outer_left - 1.35, outer_right + 1.35)
+    right_margin = 1.35
+    if swimming_staff:
+        right_margin = draw_swimming_staff_step(ax, placed, outer_right, width, swimming_staff)
+    ax.set_xlim(outer_left - 1.35, outer_right + right_margin)
     ax.set_ylim(-0.02, 1.02)
     ax.axis('off')
     ax.text(outer_left - 0.5, 1.03, 'Income', ha='center', va='bottom', fontsize=12, fontweight='bold')
     ax.text(outer_right + 0.5, 1.03, 'Expenditure', ha='center', va='bottom', fontsize=12, fontweight='bold')
     fig.suptitle(title, fontsize=14, fontweight='bold')
-    fig.text(0.5, 0.012, SOURCE_NOTE, ha='center', fontsize=9, style='italic', color='#444444')
-    fig.tight_layout(rect=(0, 0.045, 1, 0.97))
+    note = SOURCE_NOTE + (f'\n{SWIMMING_STAFF_NOTE}' if swimming_staff else '')
+    fig.text(0.5, 0.012, note, ha='center', fontsize=9, style='italic', color='#444444')
+    fig.tight_layout(rect=(0, 0.065 if swimming_staff else 0.045, 1, 0.97))
     return fig
 
 
@@ -988,6 +1040,8 @@ def main() -> None:
                         help='Sankey: levels of breakdown on each side of the centre (default: 3)')
     parser.add_argument('--min-share', type=float, default=0.025,
                         help='Sankey: merge sibling items below this share of the total into "Other" (default: 0.025)')
+    parser.add_argument('--no-swimming-estimate', dest='swimming_estimate', action='store_false',
+                        help='Sankey: omit the HMPA swimming staff cost estimate step')
     parser.add_argument('--data', type=Path, default=DEFAULT_INCOME_DATA,
                         help='Income: CSV of income figures (default: finance/swimming-income.csv)')
     parser.add_argument('--facilities', nargs='+', choices=FACILITIES, default=list(FACILITIES),
@@ -1029,6 +1083,7 @@ def main() -> None:
             simplify(expenditure, args.depth, total, args.min_share),
             figsize,
             f'Hampstead Heath budget 2025/26 (projected outturn) — {format_gbp(total)}',
+            swimming_staff=swimming_staff_estimate() if args.swimming_estimate else None,
         )
     output.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(output, dpi=150, bbox_inches=None if args.chart == 'sankey' else 'tight')

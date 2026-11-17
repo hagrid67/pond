@@ -71,3 +71,10 @@ def test_staff_series_estimates_swimming_staff_from_heath_growth() -> None:
     estimate = data['estimates']['2025/26']
     assert (round(estimate['central'] / 1000), round(estimate['low'] / 1000), round(estimate['high'] / 1000)) == (
         1560, 1325, 1826)
+
+
+def test_sankey_swimming_staff_estimate_matches_staff_chart() -> None:
+    estimate = city_chart.swimming_staff_estimate()
+    assert estimate['year'] == '2025/26'
+    assert (round(estimate['low'] / 1000), round(estimate['central'] / 1000), round(estimate['high'] / 1000)) == (
+        1325, 1560, 1826)

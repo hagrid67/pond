@@ -34,6 +34,7 @@ Appendix 1).
 | --- | --- | --- |
 | `--depth` | `3` | Breakdown levels each side of the centre |
 | `--min-share` | `0.025` | Merge two or more siblings below this share of the total into "Other …" |
+| `--no-swimming-estimate` | off | Omit the HMPA swimming staff cost estimate step |
 | `--figsize` | `18,10` | Figure size in inches |
 
 ### Layout
@@ -45,6 +46,15 @@ child is at least 90% of the parent). Shorter branches continue as plain bands
 to the outer column. Labels for Lido, Ponds, City of London funding and Employees
 (`SANKEY_HIGHLIGHTS`) are larger and bold. The footnote explains that City of
 London funding is the table's Total Net Expenditure.
+
+**HMPA swimming staff estimate.** An extra step comes off the Employees node and
+sits further right for emphasis. It shows the 2025/26 swimming staff costs
+estimated by `--chart staff` (`swimming_staff_estimate()`): headline £1.83m, the
+central estimate plus the £266k seasonal lifeguard overspend. The band's width
+follows the same £-to-height scale as the rest of the chart. The solid part runs to
+the lower estimate (£1.32m, lowest observed share) and the lighter part to the
+upper (£1.83m), with a tick at the central £1.56m. It is labelled as an HMPA
+estimate, not a City of London figure, and the footnote summarises the method.
 
 ### How the table is encoded
 
