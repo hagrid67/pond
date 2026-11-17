@@ -60,6 +60,12 @@ HEATH_FACILITY_VENUES = {
     'Ponds': ("Kenwood Ladies' Pond", "Highgate Men's Pond", 'Hampstead Mixed Pond'),
     'Parliament Hill Lido': ('Parliament Hill Lido',),
 }
+HEATH_VENUES = frozenset(venue for venues in HEATH_FACILITY_VENUES.values() for venue in venues)
+# Heath current and proposed prices are drawn larger and bolder so they stand out from the benchmarks.
+HEATH_MARKER_SIZE = 230
+HEATH_PROPOSED_MARKER_SIZE = 180
+HEATH_LINE_WIDTH = 2.8
+HEATH_LABEL_FONTSIZE = 9.5
 # One pond season ticket covers all three ponds, so seasonal Mixed Pond users can swim year-round.
 SHARED_SEASON_TICKET_VENUES = frozenset(HEATH_FACILITY_VENUES['Ponds'])
 # The sheet's annual price is a year-round leisure membership with access to other centres' pools/gyms,
@@ -291,6 +297,7 @@ def build_labels(points: pd.DataFrame, tolerance: float = NEAR_PRICE_TOLERANCE) 
             for adult, venues in label['members'] for venue in venues
         ]
         label['text'] = '\n'.join(lines)
+        label['heath'] = any(HEATH_VENUES & set(venues) for _, venues in label['members'])
         label['x'] = sum(adult for adult, _ in label['members']) / len(label['members'])
     return labels
 
@@ -311,13 +318,18 @@ def plot_benchmark_scatter(
             color=colour, edgecolor='black', linewidth=0.6, alpha=0.9, zorder=3,
             label=f'{heating} ({sum(len(v) for v in subset["venues"])} venues)',
         )
+    heath = points.loc[points['venues'].map(lambda venues: bool(HEATH_VENUES & set(venues)))]
+    if not heath.empty:
+        ax.scatter(heath['adult'], heath['concession'], s=HEATH_MARKER_SIZE,
+                   color=[HEATING_COLOURS[h] for h in heath['heating']], edgecolor='black',
+                   linewidth=HEATH_LINE_WIDTH, zorder=5, label='Hampstead Heath ponds and lido (current)')
 
     labels = build_labels(points)
     mean_name = 'geometric' if use_geometric else 'linear'
     all_x, all_y = points['adult'].tolist(), points['concession'].tolist()
     if proposed is not None and not proposed.empty:
-        ax.scatter([], [], marker='D', s=60, facecolor='white', edgecolor='#555555', linewidth=1.8,
-                   label=f'Proposed Heath prices (2027 = {mean_name} mean)')
+        ax.scatter([], [], marker='D', s=HEATH_PROPOSED_MARKER_SIZE, facecolor='white', edgecolor='#555555',
+                   linewidth=HEATH_LINE_WIDTH, label=f'Proposed Heath prices (2027 = {mean_name} mean)')
         for facility, group in proposed.groupby('facility', sort=False):
             if not isinstance(facility, str):
                 raise ValueError(f'Invalid proposed facility {facility!r}: expected a venue name.')
@@ -326,8 +338,8 @@ def plot_benchmark_scatter(
             coords = list(zip(group['adult'], group['concession']))
             for start, end in zip(coords, coords[1:]):
                 ax.annotate('', xy=end, xytext=start, zorder=2, arrowprops={
-                    'arrowstyle': '->', 'color': colour, 'linestyle': '--',
-                    'linewidth': 1.2, 'shrinkA': 6, 'shrinkB': 6,
+                    'arrowstyle': '-|>', 'color': colour, 'linestyle': '--', 'mutation_scale': 22,
+                    'linewidth': HEATH_LINE_WIDTH, 'shrinkA': 9, 'shrinkB': 9,
                 })
                 # Sample the arrow so adjust_text keeps labels off it.
                 for step in range(1, ARROW_SAMPLES):
@@ -335,14 +347,14 @@ def plot_benchmark_scatter(
                     all_x.append(start[0] + frac * (end[0] - start[0]))
                     all_y.append(start[1] + frac * (end[1] - start[1]))
             future = group.loc[group['year'].isin(PROPOSED_YEARS)]
-            ax.scatter(future['adult'], future['concession'], marker='D', s=60, facecolor='white',
-                       edgecolor=colour, linewidth=1.8, zorder=3)
+            ax.scatter(future['adult'], future['concession'], marker='D', s=HEATH_PROPOSED_MARKER_SIZE,
+                       facecolor='white', edgecolor=colour, linewidth=HEATH_LINE_WIDTH, zorder=5)
             for row in future.itertuples():
                 suffix = f' ({mean_name})' if row.year == 2027 else ''
                 note = proposal_notes.get(facility, '') if proposal_notes is not None else ''
                 note_suffix = f'\n{note}' if note else ''
                 labels.append({
-                    'x': row.adult, 'y': row.concession, 'heating': row.heating,
+                    'x': row.adult, 'y': row.concession, 'heating': row.heating, 'heath': True,
                     'text': (f'{facility} {row.year} proposed{suffix}\n'
                              f'£{row.adult:.2f} / £{row.concession:.2f}{note_suffix}'),
                 })
@@ -374,7 +386,9 @@ def plot_benchmark_scatter(
 
     # Annual heated and unheated groups can share prices; start their labels on opposite sides.
     texts = [
-        ax.text(label['x'], label['y'], label['text'], fontsize=8,
+        ax.text(label['x'], label['y'], label['text'],
+                fontsize=HEATH_LABEL_FONTSIZE if label.get('heath') else 8,
+                fontweight='bold' if label.get('heath') else 'normal',
                 color=HEATING_COLOURS[label['heating']], alpha=label.get('alpha', 1.0),
                 ha='center' if not annual else ('right' if label['heating'] == 'Heated' else 'left'),
                 va='center', zorder=4)

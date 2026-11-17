@@ -89,6 +89,8 @@ them. The annual chart uses the `adult_season_12m_gbp` and
 `concession_season_12m_gbp` columns from both price CSVs, with the same interpolation
 options. Proposed-price labels identify any seasonal venue within a shared facility
 group, without implying that all venues in the group have the same opening period.
+The Heath's current markers, proposed diamonds and arrows are drawn larger and thicker
+than the benchmark venues, with bold labels, so they stand out.
 
 ```bash
 ./ve312pond/bin/python scripts/benchmark-chart.py
