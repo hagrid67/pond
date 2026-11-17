@@ -53,7 +53,7 @@ staff (HMPA estimate) £1.83m** and **Other staff £3.96m**. The swimming figure
 the 2025/26 upper estimate from `--chart staff` (`swimming_staff_estimate()`): the
 central estimate plus the £266k seasonal lifeguard overspend. On the swimming bar,
 the solid part runs to the lower estimate (£1.32m, lowest observed share), with
-ticks at £1.32m and the central £1.56m; a note beside it gives the range. It is
+ticks at all three estimates (£1.32m, central £1.56m and upper £1.83m); a note beside it gives the range. It is
 labelled as an HMPA estimate, not a City of London figure, and the footnote
 summarises the method. The estimate comes from the accounts' staff costs, so it
 is only approximately comparable with the budget table's Employees line.

@@ -259,7 +259,7 @@ def mark_swimming_range(ax, place, width: float, estimate: dict) -> None:
     ax.add_patch(Rectangle((x, place.top - place.height), width, place.height - low, facecolor='white',
                            alpha=0.55, edgecolor='none', zorder=3))
     # Solid from the top down to the lower estimate; lighter below it, up to the upper estimate.
-    for height in (low, central):
+    for height in (low, central, place.height):
         y = place.top - height
         ax.plot([x - width * 0.4, x + width], [y, y], color='black', linewidth=1.2, zorder=4)
 
