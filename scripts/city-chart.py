@@ -55,8 +55,8 @@ SOURCE_NOTE = (
     'income, which the City of London covers.'
 )
 SANKEY_FONTSIZE_OUTER, SANKEY_FONTSIZE_INNER, SANKEY_FONTSIZE_HIGHLIGHT = 11, 10.5, 13.5
-# Labels drawn larger and bold: swimming income and the City's contribution.
-SANKEY_HIGHLIGHTS = {'Lido', 'Ponds', 'City of London funding'}
+# Labels drawn larger and bold: swimming income, the City's contribution and staff costs.
+SANKEY_HIGHLIGHTS = {'Lido', 'Ponds', 'City of London funding', 'Employees'}
 
 
 @dataclass
