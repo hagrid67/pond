@@ -99,6 +99,37 @@ increase.
   - the swimming reviews may define staff costs differently from the accounts
     (e.g. recharged staff).
 
+### Pay levels (what is and isn't published)
+
+- **Committee papers:** no lifeguard or other Heath pay rates, grades or medians.
+  The accounts give only:
+  - average headcount (above);
+  - the number of staff whose pay (excluding employer NI and pension) exceeded
+    £60,000: 2 in 2018/19–2020/21, 1 in 2021/22, and none from 2023/24.
+- **Average cost per head (accounts, rough; casual staff are counted in an
+  unstated way):**
+  - 2025/26: £4.54m salaries ÷ 93 staff ≈ £48.8k salary per head (£63.7k with
+    NI and pension);
+  - 2022/23: £3.97m ÷ 83 ≈ £47.8k (£60.4k).
+- **New security posts:** the October 2026 approval of £347k a year for 9 FTE
+  (constables, a sergeant, a Health & Safety Manager and an arborist) is about
+  £38.6k per FTE, net of offset savings on security contractors.
+- **City of London pay (corporate, not Heath-specific):**
+  - Real Living Wage employer; London Living Wage £14.80/hour from 22 Oct 2025
+    (Pay Policy Statement 2026-27, §3.3.1).
+  - 2025/26 grade structure with inner London weighting (£6,920):
+    - Grade A/B from about £32.1k (£17.59/hour);
+    - Grade C about £38.1k;
+    - Grade D about £44.1k;
+    - up to Grade J about £103k.
+
+    Source: "main pay and grading structure appendix B", rates from 1 July 2025;
+    grade boundaries read approximately from the table.
+  - Highest-to-median pay ratio 1:6 (Oct 2025).
+  - No lifeguard advert or grade was found online. Casual and seasonal
+    lifeguards are probably at or near the bottom grades and the London Living
+    Wage, but this is unverified.
+
 ### Employer NI and pension
 
 - **April 2025 employer NI change:** from 6 April 2025 the rate rose from 13.8%
