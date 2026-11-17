@@ -42,7 +42,9 @@ Income flows from the left into a central "Hampstead Heath" node and out to
 expenditure on the right. Columns move outward from subtotals to line items. A
 node's children are hidden when they add no detail (a single child, or one
 child is at least 90% of the parent). Shorter branches continue as plain bands
-to the outer column.
+to the outer column. Labels for Lido, Ponds and City of London funding
+(`SANKEY_HIGHLIGHTS`) are larger and bold. The footnote explains that City of
+London funding is the table's Total Net Expenditure.
 
 ### How the table is encoded
 

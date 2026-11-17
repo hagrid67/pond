@@ -50,8 +50,13 @@ DEFAULT_FIGSIZES = {
 }
 SOURCE_NOTE = (
     'Source: City of London, Hampstead Heath, Highgate Wood & Queen\'s Park Committee, 3 Feb 2026 — '
-    'Hampstead Heath Operating Budget 2025/26 (reports pack p147), projected outturn.'
+    'Hampstead Heath Operating Budget 2025/26 (reports pack p147), projected outturn.\n'
+    'City of London funding is the table\'s "Total Net Expenditure": the costs not met by the Heath\'s own '
+    'income, which the City of London covers.'
 )
+SANKEY_FONTSIZE_OUTER, SANKEY_FONTSIZE_INNER, SANKEY_FONTSIZE_HIGHLIGHT = 11, 10.5, 13.5
+# Labels drawn larger and bold: swimming income and the City's contribution.
+SANKEY_HIGHLIGHTS = {'Lido', 'Ponds', 'City of London funding'}
 
 
 @dataclass
@@ -99,7 +104,7 @@ def income_tree() -> Node:
     recharges = group('Recharge income', [leaf('Corporate & Democratic Core', 160_000)],
                       published=160_000, color='#9467bd')
     # The table's Total Net Expenditure is the shortfall funded by the City of London.
-    city = group('City of London funding\n(net expenditure)', [leaf('City of London funding', 7_058_000)],
+    city = group('City of London funding', [leaf('City of London funding', 7_058_000)],
                  published=7_058_000, color='#7f7f7f')
     return group('Income', [operating, central, recharges, city], published=12_917_000)
 
@@ -265,22 +270,25 @@ def draw_sankey(income: Node, expenditure: Node, figsize: tuple[float, float], t
         y = place.top - place.height / 2
         if is_outer and place.column in (outer_left, outer_right):
             left = place.column == outer_left
+            highlight = node.label in SANKEY_HIGHLIGHTS
             ax.text(place.column + (-1 if left else 1) * (width / 2 + 0.04), y,
                     f'{node.label.replace(chr(10), " ")}  {format_gbp(node.value)}',
-                    ha='right' if left else 'left', va='center', fontsize=9)
+                    ha='right' if left else 'left', va='center',
+                    fontsize=SANKEY_FONTSIZE_HIGHLIGHT if highlight else SANKEY_FONTSIZE_OUTER,
+                    fontweight='bold' if highlight else 'normal')
         else:
-            ax.text(place.column, y, text, ha='center', va='center', fontsize=8.5,
+            ax.text(place.column, y, text, ha='center', va='center', fontsize=SANKEY_FONTSIZE_INNER,
                     fontweight='bold' if place.column == 0 else 'normal',
                     bbox=dict(boxstyle='round,pad=0.25', facecolor='white', edgecolor=color, alpha=0.9))
 
-    ax.set_xlim(outer_left - 1.1, outer_right + 1.1)
+    ax.set_xlim(outer_left - 1.35, outer_right + 1.35)
     ax.set_ylim(-0.02, 1.02)
     ax.axis('off')
     ax.text(outer_left - 0.5, 1.03, 'Income', ha='center', va='bottom', fontsize=12, fontweight='bold')
     ax.text(outer_right + 0.5, 1.03, 'Expenditure', ha='center', va='bottom', fontsize=12, fontweight='bold')
     fig.suptitle(title, fontsize=14, fontweight='bold')
-    fig.text(0.5, 0.015, SOURCE_NOTE, ha='center', fontsize=8.5, style='italic', color='#444444')
-    fig.tight_layout(rect=(0, 0.03, 1, 0.97))
+    fig.text(0.5, 0.012, SOURCE_NOTE, ha='center', fontsize=9, style='italic', color='#444444')
+    fig.tight_layout(rect=(0, 0.045, 1, 0.97))
     return fig
 
 
