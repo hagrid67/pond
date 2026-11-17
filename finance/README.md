@@ -44,6 +44,25 @@ note, otherwise as in `swimming-income.csv`. The accounts cover staff directly
 working for the Hampstead Heath charity; they agree with the revenue reports'
 Direct Employees actuals within about £25k.
 
+## What the staff cost figures include
+
+- **Heath staff costs (`heath-costs.csv`, accounts):** amounts paid to City of
+  London employees directly working for the Hampstead Heath charity (salaries,
+  employer NI, employer pension).
+  - **Casual and seasonal lifeguards are included.** The Q3 2025/26 report explains
+    the Direct Employees overspend as "more casual lifeguards needed", and the
+    accounts' totals match the Direct Employees actuals (2022/23: £5,010,498 vs
+    £5,010,658; 2023/24: £5,404,040 vs £5,404,039).
+  - **Not included:** contracted or agency services (e.g. Parkguard security
+    officers), which are bought in under supplies and services; central support
+    staff recharged to the charity; and Indirect Employees (training, recruitment).
+  - The headcount is an average number of people directly working for the charity.
+    The papers don't say how casual staff are counted in it.
+- **Swimming staff costs (`swimming-costs.csv`, annual swimming reviews 2020/21–2022/23):**
+  "Employee Costs" for the Ponds and Lido. The reviews don't define the term.
+  They describe permanent, fixed-term and casual lifeguards and stewards, so the
+  figures are assumed to cover all of them, but this isn't confirmed.
+
 ## Known contradictions and gaps
 
 - **2022/23 split:** the annual review gives Ponds £823,352 and Lido £684,548.

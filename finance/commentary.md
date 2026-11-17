@@ -99,6 +99,59 @@ increase.
   - the swimming reviews may define staff costs differently from the accounts
     (e.g. recharged staff).
 
+### Employer NI and pension
+
+- **April 2025 employer NI change:** from 6 April 2025 the rate rose from 13.8%
+  to 15% and the secondary threshold fell from £9,100 to £5,000 per employee.
+  Heath employer NI rose from 409 to 560 (+37%) while salaries rose 7.7%. About
+  119 a year is attributable to the NI change, i.e. NI above what pay growth
+  alone would give.
+- **NI as a share of salaries:** 9.7–10.0% from 2017/18 to 2024/25 (10.2% in
+  2022/23, when the 1.25-point Health and Social Care Levy applied from April to
+  November 2022), then 12.3% in 2025/26.
+- **Pension:** employer pension also rose, from 16.4% of salaries in 2024/25 to
+  18.2% in 2025/26.
+- **Central funding:** the 2025/26 outturn shows only 40 of central contingency
+  funding for "July 2024 pay award and increases in employer national insurance
+  contributions".
+- **Swimming's part:** the scaled estimate implies roughly a quarter of the NI
+  increase (≈30) fell on swimming staff.
+
+### Lifeguard overspend and the estimate band
+
+- **The overspend:** the 2025/26 outturn reports a 266 overspend on seasonal
+  lifeguards. The chart adds it to the 2025/26 central estimate (1,560 → ~1,826)
+  and raises the band's upper edge to match.
+- **Possible double-counting:** the overspend is already inside the Heath total
+  that the central estimate is scaled from. Adding it in full treats it as wholly
+  extra to swimming, so it's an upper bound.
+- **2026/27 forecast:** Heath Direct Employees is forecast to overspend by 198
+  (5,736 against 5,538) because "increase in summer visitors at the LIDO has
+  resulted in more lifeguards and stewards needed", offset by gardener and
+  property technician vacancies.
+
+### Summer 2026: Lido security
+
+- **The incidents:** a large fight at Parliament Hill Lido on 25 May 2026 (staff
+  injured, one arrest, one person hospitalised with a bottle injury), and another
+  fight on 28 May in the queue.
+- **Measures:** ID checks; no under-16s without a responsible adult; random bag
+  searches; and extra security hired when it is 25°C or above. Two Parkguard
+  security officers were appointed from 22 May to early September 2026.
+- **Cost:**
+  - estimated at £15,000–£20,000 for 2026/27 (July 2026 Assistant Director's
+    report, p7);
+  - reported in October as c. £24,000 of "additional out-of-budget cost" for
+    22 May – 6 September (p8);
+  - 92 prohibited items were seized, including 70 glass containers.
+- **Not staff costs:** these are contracted security, so they appear neither in
+  staff costs nor in the staff chart. They are recorded in `swimming-costs.csv`.
+- **Longer term:** the October 2026 finance report notes 810 (347 a year, from
+  1 December 2026) approved from the City's Estate Security Reserve for 9 FTE
+  security and safety-related posts across North London Open Spaces (6 constables,
+  a sergeant, a Health & Safety Manager and an arborist). It also notes plans to
+  review the swimming staffing model and "regularise casual working".
+
 ## Capital: Swimming Facilities – Safety, Access & Security Improvements
 
 - **May 2021:** 755 funding awarded.

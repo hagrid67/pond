@@ -198,4 +198,14 @@ only the shared `--figsize`, `--output` and `--show` options (`costs` and
 - **Estimate for later years:**
   - dashed line: the last published swimming staff cost scaled with Heath staff
     cost growth;
-  - shaded band: the range given by the lowest and highest observed share.
+  - shaded band: the range given by the lowest and highest observed share. Its
+    upper edge is raised to the central estimate plus any swimming-specific
+    overspend in `swimming-costs.csv` (`seasonal_lifeguards_overspend`, e.g. £266k
+    in 2025/26), drawn as a dark red arrow. This is an upper bound, because the
+    overspend is already part of the Heath total the estimate is scaled from.
+- **NI callout:** for years in `NI_CHANGES` (currently 2025/26) a callout describes
+  the employer NI change. It quantifies the change from the accounts: the NI
+  increase compared with salary growth, and the part not explained by pay growth.
+- **Coverage:** see [finance/README.md](../finance/README.md#what-the-staff-cost-figures-include)
+  for what the staff costs include (casual lifeguards: yes; contracted security:
+  no).

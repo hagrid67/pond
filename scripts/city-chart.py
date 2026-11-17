@@ -837,6 +837,9 @@ def draw_maintenance(rows, figsize) -> plt.Figure:
 
 # --- Heath staff costs with swimming share (--chart staff) ------------------------------------
 
+NI_CHANGES = {
+    '2025/26': 'Employer NI from 6 Apr 2025: rate 13.8% → 15%,\nsecondary threshold £9,100 → £5,000 per employee',
+}
 STAFF_COMPONENTS = (('salaries', 'Salaries and wages', '#4c72b0'), ('national_insurance', 'Employer NI', '#55a868'),
                     ('employer_pension', 'Employer pension', '#8172b3'))
 
@@ -849,18 +852,25 @@ def staff_series(heath_rows, cost_rows) -> dict:
             # Later accounts restate earlier years (e.g. headcount); keep the latest report's figure.
             heath[row['fiscal_year']][row['component']] = int(row['value'])
     swim: dict[str, int] = defaultdict(int)
+    overspends: dict[str, int] = defaultdict(int)
     for row in cost_rows:
         if row['category'] == 'employee':
             swim[row['fiscal_year']] += int(row['value_gbp'])
+        elif row['category'] == 'seasonal_lifeguards_overspend':
+            overspends[row['fiscal_year']] += int(row['value_gbp'])
     shares = {year: swim[year] / heath[year]['total_staff_costs'] for year in swim if year in heath}
     last = max(shares)
     estimates = {}
     for year in sorted(heath):
         if year > last:
             total = heath[year]['total_staff_costs']
+            central = swim[last] * total / heath[last]['total_staff_costs']
+            # A swimming-specific overspend (e.g. extra lifeguards) can push costs above the scaled
+            # estimate, so the band's upper edge allows for it.
+            overspend = overspends.get(year, 0)
             estimates[year] = {
-                'central': swim[last] * total / heath[last]['total_staff_costs'],
-                'low': min(shares.values()) * total, 'high': max(shares.values()) * total,
+                'central': central, 'low': min(shares.values()) * total,
+                'high': max(max(shares.values()) * total, central + overspend), 'overspend': overspend,
             }
     return {'heath': dict(heath), 'swim': dict(swim), 'shares': shares, 'estimates': estimates}
 
@@ -895,14 +905,40 @@ def draw_staff(heath_rows, cost_rows, figsize) -> plt.Figure:
     highs = [swim[last] / 1000] + [estimates[year]['high'] / 1000 for year in est_years]
     centrals = [swim[last] / 1000] + [estimates[year]['central'] / 1000 for year in est_years]
     ax.fill_between(est_x, lows, highs, color='#c44e52', alpha=0.3, zorder=4, edgecolor='#c44e52', linewidth=0.8,
-                    label=f'Estimate: observed share range {min(shares.values()):.0%}–{max(shares.values()):.0%}')
+                    label=f'Estimate range: observed share {min(shares.values()):.0%}–{max(shares.values()):.0%} '
+                          '(upper edge raised by any reported lifeguard overspend)')
     ax.plot(est_x, centrals, color='#c44e52', linestyle='--', linewidth=1.8, marker='o', markerfacecolor='white',
             label=f'Estimate: {last} swimming staff scaled with Heath staff costs')
     for x, year in zip(est_x[1:], est_years):
         e = estimates[year]
         ax.annotate(f'~£{e["central"] / 1000:,.0f}k\n(£{e["low"] / 1000:,.0f}–{e["high"] / 1000:,.0f}k)',
-                    (x, e['high'] / 1000), xytext=(0, 4), textcoords='offset points', ha='center', fontsize=7.5,
+                    (x, e['low'] / 1000), xytext=(0, -4), textcoords='offset points', ha='center', va='top',
+                    fontsize=7.5,
                     color='#c44e52', bbox=dict(boxstyle='round,pad=0.15', facecolor='white', edgecolor='none', alpha=0.85))
+    for x, year in zip(est_x[1:], est_years):
+        e = estimates[year]
+        if e['overspend']:
+            ax.annotate('', (x, (e['central'] + e['overspend']) / 1000), xytext=(x, e['central'] / 1000),
+                        arrowprops=dict(arrowstyle='->', color='#8b0000', linewidth=2), zorder=6)
+            ax.annotate(f'+£{e["overspend"] / 1000:,.0f}k seasonal lifeguard\noverspend (outturn) → '
+                        f'~£{(e["central"] + e["overspend"]) / 1000:,.0f}k', (x, (e['central'] + e['overspend']) / 1000),
+                        xytext=(-14, 38), textcoords='offset points', ha='right', va='bottom', fontsize=7.5,
+                        color='#8b0000', zorder=6, arrowprops=dict(arrowstyle='-', color='#8b0000', linewidth=0.8),
+                        bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor='#8b0000', alpha=0.9))
+    for x, year in zip(xs, years):
+        if year in NI_CHANGES:
+            previous = years[years.index(year) - 1]
+            ni, ni_before = heath[year]['national_insurance'], heath[previous]['national_insurance']
+            pay_growth = heath[year]['salaries'] / heath[previous]['salaries']
+            policy = ni - ni_before * pay_growth
+            ni_mid = (heath[year]['salaries'] + ni / 2) / 1000
+            ax.annotate(f'{NI_CHANGES[year]}\nHeath employer NI +£{(ni - ni_before) / 1000:,.0f}k '
+                        f'(+{ni / ni_before - 1:.0%}) while salaries rose {pay_growth - 1:.1%}:\n'
+                        f'≈£{policy / 1000:,.0f}k a year attributable to the NI change',
+                        (x + 0.31, ni_mid), xytext=(x - 1.6, max(bottoms) * 1.1), textcoords='data',
+                        ha='right', va='center', fontsize=7.5, color='#2d6a3e',
+                        bbox=dict(boxstyle='round,pad=0.3', facecolor='white', edgecolor='#55a868'),
+                        arrowprops=dict(arrowstyle='->', color='#55a868', connectionstyle='arc3,rad=-0.2'))
     ax_share = ax.twinx()
     ax_share.plot(ax_x, [shares[year] * 100 for year in actual_years], color='#333333', marker='s', markersize=6,
                   linestyle=':', label='Swimming share of Heath staff costs (right axis)')
@@ -912,7 +948,7 @@ def draw_staff(heath_rows, cost_rows, figsize) -> plt.Figure:
     ax_share.set_ylim(0, 60)
     ax_share.set_ylabel('Swimming share of Heath staff costs (%)')
     ax_share.yaxis.set_major_formatter(FuncFormatter(lambda value, _: f'{value:.0f}%'))
-    ax.set_ylim(0, max(bottoms) * 1.18)
+    ax.set_ylim(0, max(bottoms) * 1.22)
     ax.set_ylabel('£k per year')
     money_axis(ax)
     ax.set_xticks(xs, [year_label(x) for x in xs])

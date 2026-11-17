@@ -70,4 +70,4 @@ def test_staff_series_estimates_swimming_staff_from_heath_growth() -> None:
     assert round(data['shares']['2022/23'], 3) == 0.263
     estimate = data['estimates']['2025/26']
     assert (round(estimate['central'] / 1000), round(estimate['low'] / 1000), round(estimate['high'] / 1000)) == (
-        1560, 1325, 1691)
+        1560, 1325, 1826)
