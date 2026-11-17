@@ -246,7 +246,7 @@ The Lido photovoltaic panels project grew from 294 (Oct 2025) to 454 (Oct 2026).
 | 2025/26 | Ponds | 430,610 | – | £2.65 (projection) |
 
 The 2018/19 Ponds income of 10p per swim reflects the voluntary-payment era
-(about 6% compliance). The planned repair lists total £184k (2021/22 bids) and
+(about 6% compliance). The planned repair lists total £184k (2021/22 deferred and reserve lists, not funded that year) and
 £597k (2026/27), of which the Lido accounts for £75k and £510k.
 
 ## Planned chart set

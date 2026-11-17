@@ -6,8 +6,9 @@ fiscal year, from finance/swimming-income.csv, flagging contradictory restatemen
 --chart costs: Lido/Ponds staff, running and one-off costs against income (subsidy shaded).
 --chart per-swim: cost and income per swim where swim counts were published.
 --chart capital: budget timeline of the swimming facilities safety/access capital project.
---chart maintenance: planned cyclical works for swimming buildings, 2021/22 bids vs 2026/27 list.
+--chart maintenance: cyclical works for swimming buildings, 2021/22 deferred/reserve lists vs 2026/27 list.
 --chart staff: Heath staff costs (salaries, NI, pension) with swimming staff costs and an estimate.
+--chart cwp: Cyclical Works Programme list by site, with a project breakdown pie for each site.
 
 Sankey data: 2025/26 projected outturn from the Hampstead Heath Operating Budget table
 (Finance Progress Report Q3, Appendix 1), page 147 of the HHHWQP Committee
@@ -19,6 +20,7 @@ to expenditure categories on the right, broken down by subtotal level.
 
 import argparse
 import csv
+import re
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import date
@@ -43,10 +45,12 @@ CHART_OUTPUTS = {
     'capital': 'swimming-capital.png',
     'maintenance': 'swimming-maintenance.png',
     'staff': 'heath-staff-costs.png',
+    'cwp': 'cwp-2026-27.png',
 }
 DEFAULT_FIGSIZES = {
     'sankey': (18.0, 10.0), 'income': (14.0, 13.0), 'costs': (14.0, 10.0), 'per-swim': (12.0, 9.0),
     'capital': (14.0, 10.0), 'maintenance': (12.0, 6.5), 'staff': (14.0, 8.0),
+    'cwp': (22.0, 15.0),
 }
 SOURCE_NOTE = (
     'Source: City of London, Hampstead Heath, Highgate Wood & Queen\'s Park Committee, 3 Feb 2026 — '
@@ -886,7 +890,7 @@ def draw_maintenance(rows, figsize) -> plt.Figure:
         ys = [len(buildings) - 1 - b + (0.5 - index) * height for b in range(len(buildings))]
         values = [totals[(building, year)] / 1000 for building in buildings]
         ax.barh(ys, values, height, color=colors[index % 2],
-                label=f'{year} CWP ({"bids" if index == 0 else "project list"}): '
+                label=f'{year} CWP ({"deferred & reserve lists, not funded that year" if index == 0 else "project list"}): '
                       f'£{sum(values):,.0f}k total')
         for y, value, building in zip(ys, values, buildings):
             n = counts[(building, year)]
@@ -898,7 +902,7 @@ def draw_maintenance(rows, figsize) -> plt.Figure:
     ax.set_xlim(0, max(totals.values()) / 1000 * 1.3)
     ax.legend(loc='lower right', fontsize=9)
     ax.set_xlabel('Planned Cyclical Works Programme spend (£k). Largest 2026/27 item: '
-                  'Lido landlord\'s lighting & power rewire £180k (£30k in the 2021/22 bids). '
+                  'Lido landlord\'s lighting & power rewire £180k (£30k on the 2021/22 reserve list). '
                   'Source: finance/swimming-maintenance.csv.', fontsize=8.5)
     fig.suptitle('Planned repairs and maintenance for swimming buildings', fontsize=14, fontweight='bold')
     return fig
@@ -1033,6 +1037,145 @@ def draw_staff(heath_rows, cost_rows, figsize) -> plt.Figure:
     return fig
 
 
+# --- Cyclical Works Programme pies (--chart cwp) ----------------------------------------------
+
+# (site, substrings matched against the item text in order); unmatched items go to Misc.
+CWP_SITES = (
+    ("Men's Pond", ('Mens Bathing', "Men's Bathing", 'Highgate Ponds')),
+    ("Ladies' Pond", ('Ladies Bathing',)),
+    ('Mixed Pond', ('Mixed Bathing',)),
+    ('Lido', ('Lido',)),
+    ('Bowling Green', ('Bowling Green',)),
+    ('General/Infrastructure', ('General/Infrastructure',)),
+    ('Playground', ('Playground',)),
+    ('Athletics Track', ("Athletic",)),
+    ('Football Changing Rooms', ('Football Changing',)),
+    ('Golders Hill Park', ('Golders Hill Park',)),
+)
+CWP_MISC = 'Misc'
+CWP_SWIMMING = ("Men's Pond", "Ladies' Pond", 'Mixed Pond', 'Lido')
+CWP_COLORS = {
+    "Men's Pond": '#1f77b4', "Ladies' Pond": '#17becf', 'Mixed Pond': '#9edae5', 'Lido': '#08519c',
+    'Bowling Green': '#bcbd22', 'General/Infrastructure': '#7f7f7f', 'Playground': '#e377c2',
+    'Athletics Track': '#d62728', 'Football Changing Rooms': '#2ca02c', 'Golders Hill Park': '#ff7f0e',
+    CWP_MISC: '#c7c7c7',
+}
+CWP_MIN_SLICE = 0.06
+CWP_STATUS = {
+    '2026/27': 'Planned programme for April 2026–March 2027 (Year 3 of the City Surveyor\'s five-year CWP); '
+               'not actual spend.',
+    '2020/21': 'Planned "actual list" bid (Sept 2019); some items recur on later lists, so not all were delivered.',
+}
+
+
+def cwp_site(item: str) -> str:
+    for site, keys in CWP_SITES:
+        if any(key in item for key in keys):
+            return site
+    return CWP_MISC
+
+
+CWP_BUILDING_NOISE = re.compile(
+    r"Parliament Hill Fields|Highgate Ponds|Kenwood|Buildings Complex|Complex|Mens Bathing|Men's Bathing|"
+    r"Ladies Bathing|Bowling Green|Athletic's Track|Traditional Playground Building|Football Changing Rooms & "
+    r'RSPB Project Centre "The Hive"|Lido|Staff Yard')
+
+
+def cwp_short_name(item: str) -> str:
+    """The work described by an item, with only the part of its location not implied by the site."""
+    parts = [part.strip() for part in item.split(' - ') if part.strip()]
+    work = parts[-1]
+    if len(parts) > 2 and not any(word in parts[-2] for word in ('General', 'Infrastructure')):
+        building = re.sub(r'\s+', ' ', CWP_BUILDING_NOISE.sub('', parts[-2])).strip(' -&')
+        if building:
+            work = f'{building}: {work}'
+    return work[:1].upper() + work[1:].lower()
+
+
+def spread_labels(positions: list[float], gap: float) -> list[float]:
+    """Push sorted label heights apart so neighbours are at least `gap` apart."""
+    order = sorted(range(len(positions)), key=lambda i: positions[i], reverse=True)
+    result = list(positions)
+    for previous, current in zip(order, order[1:]):
+        result[current] = min(result[current], result[previous] - gap)
+    return result
+
+
+def cwp_items(rows, year: str) -> list[dict]:
+    items = [{'site': cwp_site(row['item']), 'name': cwp_short_name(row['item']), 'value': int(row['value_gbp'])}
+             for row in rows if row['fiscal_year'] == year and row['list'] in ('project_list', 'actual_list')]
+    return [item for item in items if item['value'] > 0]
+
+
+def draw_cwp(rows, year: str, figsize) -> plt.Figure:
+    items = cwp_items(rows, year)
+    total = sum(item['value'] for item in items)
+    sites = [site for site, _ in CWP_SITES] + [CWP_MISC]
+    totals = {site: sum(i['value'] for i in items if i['site'] == site) for site in sites}
+    present = [site for site in sites if totals[site]]
+    fig = plt.figure(figsize=figsize, layout='constrained')
+    grid = fig.add_gridspec(4, 5, width_ratios=[1.5, 1.5, 1, 1, 1])
+    ax = fig.add_subplot(grid[:, :2])
+    # Swimming sites first, largest first, so the exploded wedges sit together on the right.
+    present = sorted(present, key=lambda s: (s not in CWP_SWIMMING, -totals[s]))
+    wedges, _ = ax.pie([totals[s] for s in present], colors=[CWP_COLORS[s] for s in present], startangle=90,
+                       counterclock=False, explode=[0.08 if s in CWP_SWIMMING else 0 for s in present],
+                       wedgeprops=dict(edgecolor='white', linewidth=1.2))
+    anchors = []
+    for wedge in wedges:
+        angle = np.deg2rad((wedge.theta1 + wedge.theta2) / 2)
+        anchors.append((np.cos(angle), np.sin(angle)))
+    label_y = [1.25 * y for _, y in anchors]
+    for side in (1, -1):
+        indices = [i for i, (x, _) in enumerate(anchors) if (x >= 0) == (side == 1)]
+        spread = spread_labels([label_y[i] for i in indices], 0.17)
+        for i, y in zip(indices, spread):
+            label_y[i] = y
+    for (x, y), site, text_y in zip(anchors, present, label_y):
+        swimming = site in CWP_SWIMMING
+        ax.annotate(f'{site}\n{format_gbp(totals[site])} ({totals[site] / total:.0%})', (0.95 * x, 0.95 * y),
+                    xytext=(1.3 * (1 if x >= 0 else -1) * max(abs(x), 0.55), text_y),
+                    ha='left' if x >= 0 else 'right', va='center',
+                    fontsize=12 if swimming else 10.5, fontweight='bold' if swimming else 'normal',
+                    arrowprops=dict(arrowstyle='-', color='#888888', linewidth=0.8))
+    swim_total = sum(totals[s] for s in CWP_SWIMMING)
+    missing = [s for s in sites if not totals[s]]
+    ax.set_title(f'By site — total {format_gbp(total)}\nSwimming (exploded): {format_gbp(swim_total)} '
+                 f'({swim_total / total:.0%})' + (f'; no items: {", ".join(missing)}' if missing else ''),
+                 fontsize=13, fontweight='bold', pad=40)
+    order = [s for s in CWP_SWIMMING if totals[s]] + sorted(
+        (s for s in present if s not in CWP_SWIMMING), key=lambda s: -totals[s])
+    slots = [(r, c) for r in range(4) for c in range(2, 5)]
+    for site, (r, c) in zip(order, slots):
+        sub = fig.add_subplot(grid[r, c])
+        site_items = sorted((i for i in items if i['site'] == site), key=lambda i: -i['value'])
+        # Swimming sites list more of their items.
+        minimum, limit = (0.025, 10) if site in CWP_SWIMMING else (CWP_MIN_SLICE, 7)
+        shown = [i for i in site_items if i['value'] >= minimum * totals[site]][:limit]
+        rest = [i for i in site_items if i not in shown]
+        values = [i['value'] for i in shown] + ([sum(i['value'] for i in rest)] if rest else [])
+        labels = [f'{i["name"][:46]} {format_gbp(i["value"])}' for i in shown]
+        if rest:
+            labels.append(f'{len(rest)} other item{"s" if len(rest) > 1 else ""} {format_gbp(values[-1])}')
+        base = CWP_COLORS[site]
+        shades = [plt.matplotlib.colors.to_rgba(base, alpha=1 - 0.55 * k / max(1, len(values) - 1))
+                  for k in range(len(values))]
+        sub.pie(values, colors=shades, startangle=90, counterclock=False, radius=0.8,
+                wedgeprops=dict(edgecolor='white', linewidth=0.8))
+        sub.legend([plt.Rectangle((0, 0), 1, 1, color=color) for color in shades], labels, loc='upper center',
+                   bbox_to_anchor=(0.5, 0.08), fontsize=7.6, frameon=False, handlelength=0.8)
+        sub.set_title(f'{site}: {format_gbp(totals[site])} ({len(site_items)} item{"s" if len(site_items) > 1 else ""})',
+                      fontsize=10.5, fontweight='bold', color=base if site in CWP_SWIMMING else 'black')
+    fig.suptitle(f'Hampstead Heath Cyclical Works Programme (CWP) {year} — planned repairs and maintenance',
+                 fontsize=16, fontweight='bold')
+    source = next(row for row in rows if row['fiscal_year'] == year and row['list'] in ('project_list', 'actual_list'))
+    status = CWP_STATUS.get(year, 'Planned list; not actual spend.')
+    fig.text(0.5, -0.01, f'Source: col-pdfs/hhhwqp/{source["source"]} (HHHWQP Committee, {source["report_date"]}), '
+             f'via finance/cwp.csv. {status} Lido includes the café; £0 items omitted. Sites assigned by keyword '
+             '(see finance/cwp.md).', ha='center', fontsize=9, style='italic', color='#444444', wrap=True)
+    return fig
+
+
 def parse_figsize(value: str) -> tuple[float, float]:
     try:
         width, height = (float(part) for part in value.split(','))
@@ -1051,6 +1194,8 @@ def main() -> None:
                         help='Sankey: merge sibling items below this share of the total into "Other" (default: 0.025)')
     parser.add_argument('--no-swimming-estimate', dest='swimming_estimate', action='store_false',
                         help='Sankey: do not split Employees into swimming (HMPA estimate) and other staff')
+    parser.add_argument('--cwp-year', default='2026/27',
+                        help='CWP: list year in finance/cwp.csv (2026/27 or 2020/21; default 2026/27)')
     parser.add_argument('--data', type=Path, default=DEFAULT_INCOME_DATA,
                         help='Income: CSV of income figures (default: finance/swimming-income.csv)')
     parser.add_argument('--facilities', nargs='+', choices=FACILITIES, default=list(FACILITIES),
@@ -1078,6 +1223,8 @@ def main() -> None:
     elif args.chart == 'staff':
         fig = draw_staff(read_rows(FINANCE_DIR / 'heath-costs.csv'), read_rows(FINANCE_DIR / 'swimming-costs.csv'),
                          figsize)
+    elif args.chart == 'cwp':
+        fig = draw_cwp(read_rows(FINANCE_DIR / 'cwp.csv'), args.cwp_year, figsize)
     elif args.chart == 'maintenance':
         fig = draw_maintenance(read_rows(FINANCE_DIR / 'swimming-maintenance.csv'), figsize)
     else:

@@ -10,7 +10,8 @@ committee papers. Choose one with `--chart`:
 | `costs` | Lido/Ponds staff, running and one-off costs against income, subsidy shaded | `charts/swimming-costs.png` |
 | `per-swim` | Cost and income per swim where swim counts were published | `charts/swimming-per-swim.png` |
 | `capital` | Capital project budget, estimate and spend by report date | `charts/swimming-capital.png` |
-| `maintenance` | Planned cyclical works for swimming buildings, 2021/22 bids vs 2026/27 list | `charts/swimming-maintenance.png` |
+| `maintenance` | Cyclical works for swimming buildings, 2021/22 deferred/reserve lists vs 2026/27 list | `charts/swimming-maintenance.png` |
+| `cwp` | Cyclical Works Programme 2026/27 by site (swimming exploded), with a project pie per site | `charts/cwp-2026-27.png` |
 | `staff` | Heath staff costs (salaries, NI, pension) with swimming staff costs, share and estimate | `charts/heath-staff-costs.png` |
 
 `--figsize WIDTH,HEIGHT`, `--output PATH` and `--show` apply to both.
@@ -195,7 +196,8 @@ only the shared `--figsize`, `--output` and `--show` options (`costs` and
 
 - **Data:** sums the `planned_cwp` items in `swimming-maintenance.csv` by building
   (Lido, Men's, Ladies', Mixed, all-ponds infrastructure).
-- **Comparison:** paired bars for the 2021/22 bids and the 2026/27 project list,
+- **Comparison:** paired bars for the 2021/22 deferred and reserve lists (projects not funded in
+  2021/22) and the 2026/27 project list,
   labelled with £ and item counts.
 - **Not shown:** maintenance cited in outturn reports (for example the 2024/25
   Men's Pond jetty).
@@ -223,3 +225,17 @@ only the shared `--figsize`, `--output` and `--show` options (`costs` and
 - **Coverage:** see [finance/README.md](../finance/README.md#what-the-staff-cost-figures-include)
   for what the staff costs include (casual lifeguards: yes; contracted security:
   no).
+
+### Cyclical Works Programme (`--chart cwp`)
+
+- **Data:** reads `finance/cwp.csv` (regenerate with
+  `./ve312pond/bin/python scripts/extract-cwp.py`).
+- **Main pie:** the 2026/27 project list by site; swimming sites (Lido and the three
+  ponds) are pulled out and labelled in bold.
+- **Small pies:** one per site, breaking it down into projects. Small items are
+  grouped as "n other items"; swimming sites list more of their items.
+- **Sites:** assigned from the item names by keyword (`CWP_SITES`); anything not
+  matched goes to Misc.
+- **Other years:** `--cwp-year 2020/21` charts the 2020/21 actual list. The 2021/22
+  lists are deferred/reserve lists, so they aren't charted.
+- **Notes:** see [finance/cwp.md](../finance/cwp.md).

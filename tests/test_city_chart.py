@@ -88,3 +88,14 @@ def test_split_employees_into_swimming_and_other_staff() -> None:
     assert [(child.label, child.value) for child in employees.children] == [
         (city_chart.SWIMMING_STAFF_LABEL, 1_826_000), ('Other staff', 3_964_000)]
     assert display.value == 12_917_000
+
+
+def test_cwp_sites_and_published_total() -> None:
+    assert city_chart.cwp_site('Highgate Ponds - Mens Bathing Pond Toilets - ROOF REPLACEMENT') == "Men's Pond"
+    assert city_chart.cwp_site('Parliament Hill Fields - Bowling Green Mens Pavilion - ROOF REPLACEMENT') == (
+        'Bowling Green')
+    assert city_chart.cwp_site('Kenwood - Ladies Bathing Pond Building - POOL LIFT REPLACEMENT') == "Ladies' Pond"
+    assert city_chart.cwp_site('Kenwood - Kenwood Yard - DRAINAGE OVERHAUL') == city_chart.CWP_MISC
+    items = city_chart.cwp_items(city_chart.read_rows(city_chart.FINANCE_DIR / 'cwp.csv'), '2026/27')
+    assert sum(item['value'] for item in items) == 1_510_000
+    assert sum(item['value'] for item in items if item['site'] == 'Lido') == 510_000
